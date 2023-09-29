@@ -1,0 +1,11 @@
+datasets
+transformers
+peft
+torch>=2.0.0
+tqdm
+matplotlib
+seaborn
+pandas
+scikit-learn
+numpy
+wandb
