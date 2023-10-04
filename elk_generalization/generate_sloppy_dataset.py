@@ -1,6 +1,6 @@
 import argparse
 from typing import Literal
-from datasets import Features, Value, ClassLabel, load_dataset, Dataset, DatasetDict
+from datasets import Features, Value, ClassLabel, Dataset, DatasetDict
 import math
 import random
 
@@ -188,11 +188,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--err_rate", type=float, default=1.0)
-    parser.add_argument("--distractor_mode", type=Literal["natural", "balanced"], default="natural")
-    parser.add_argument("--num_train", type=int, default=100_000)
-    parser.add_argument("--num_val", type=int, default=10_000)
-    parser.add_argument("--num_test", type=int, default=10_000)
+    parser.add_argument("--err-rate", type=float, default=1.0)
+    parser.add_argument("--distractor-mode", type=str, choices=["natural", "balanced"], default="natural")
+    parser.add_argument("--num-train", type=int, default=100_000)
+    parser.add_argument("--num-val", type=int, default=10_000)
+    parser.add_argument("--num-test", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=633)
     args = parser.parse_args()
     random.seed(args.seed)
