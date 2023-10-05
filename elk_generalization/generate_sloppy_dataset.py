@@ -34,6 +34,16 @@ def add(a: int, b: int, error_rate=0) -> int:
 
     return int(res)
 
+
+def maybe_push_to_hub(ds_dict, hub_name, push_to_hub):
+    if push_to_hub:
+        ds_dict.push_to_hub(hub_name)
+        print(f"Saved {hub_name} to the huggingface hub")
+    else:
+        print(f"NOT saving {hub_name} to the huggingface hub")
+        print(ds_dict["train"][:2])
+
+
 def main(args):
     """
     Makes 6 arithmetic error datasets and pushes them to the hub
@@ -97,7 +107,9 @@ def main(args):
         "validation": ds.select(range(args.num_train, args.num_train + args.num_val)),
         "test": ds.select(range(args.num_train + args.num_val, args.num_train + args.num_val + args.num_test)),
     })
-
+    
+    
+    # make dataset containing both Alice contexts and Bob contexts
     def to_binary(examples):
         batch_size = len(examples["summand1"])
         results = {"statement": [], "label": [], "true_label": []}
@@ -124,10 +136,16 @@ def main(args):
         return results
 
     binary_ds_dict = ds_dict.map(to_binary, batched=True, remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"], features=Features({"statement": Value("string"), "label": ClassLabel(num_classes=2), "true_label": Value("bool")}))
+    
+    # add id column
+    for split in binary_ds_dict:
+        binary_ds_dict[split] = binary_ds_dict[split].add_column("id", range(len(binary_ds_dict[split])))
+    
     hub_name = f"sloppy_addition_AB_{args.err_rate}{'_balanced' if args.distractor_mode == 'balanced' else ''}"
-    binary_ds_dict.push_to_hub(hub_name)
-    print(f"Saved {hub_name} to the huggingface hub")
+    maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
+    
 
+    # make a dataset where both Alice and Bob are labeled
     def get_alice_and_bob_labels(examples):
         batch_size = len(examples["summand1"])
         results = {"statement": [], "alice_label": [], "bob_label": []}
@@ -147,20 +165,21 @@ def main(args):
         return results
 
     both_labels_ds_dict = ds_dict.map(get_alice_and_bob_labels, batched=True, remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"], features=Features({"statement": Value("string"), "alice_label": Value("bool"), "bob_label": Value("bool")}))
-    both_labels_ds_dict["train"][:2]
-    hub_name = f"sloppy_addition_both_labels_{args.err_rate}{'_balanced' if args.distractor_mode == 'balanced' else ''}"
-    both_labels_ds_dict.push_to_hub(hub_name)
-    print(f"Saved {hub_name} to the huggingface hub")
+    
+    # add id column
+    for split in both_labels_ds_dict:
+        both_labels_ds_dict[split] = both_labels_ds_dict[split].add_column("id", range(len(both_labels_ds_dict[split])))
 
+    hub_name = f"sloppy_addition_both_labels_{args.err_rate}{'_balanced' if args.distractor_mode == 'balanced' else ''}"
+    maybe_push_to_hub(both_labels_ds_dict, hub_name, args.push_to_hub)
 
     alice_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].endswith("Alice:"))
     bob_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].endswith("Bob:"))
     assert len(alice_ds_dict["train"]) > 0 and len(bob_ds_dict["train"]) > 0
     alice_hub_name = f"sloppy_addition_alice_{args.err_rate}{'_balanced' if args.distractor_mode=='balanced' else ''}"
     bob_hub_name = f"sloppy_addition_bob_{args.err_rate}{'_balanced' if args.distractor_mode=='balanced' else ''}"
-    alice_ds_dict.push_to_hub(alice_hub_name)
-    bob_ds_dict.push_to_hub(bob_hub_name)
-    print(f"Saved {alice_hub_name} and {bob_hub_name} to the huggingface hub")
+    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub)
+    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub)
 
 
     # Make easy distribution of data
@@ -181,13 +200,14 @@ def main(args):
     hard_thresh = 4
     easy_ds = ds.filter(lambda x: is_easy(x["statement"], num_digits_thresh=easy_thresh))
     hard_ds = ds.filter(lambda x: not is_easy(x["statement"], num_digits_thresh=hard_thresh - 1))
-    print(len(easy_ds) / len(ds), len(hard_ds) / len(ds), len(hard_ds))
-    easy_ds.push_to_hub(f"sloppy_addition_alice_{args.err_rate}_easy_{easy_thresh}")
-    hard_ds.push_to_hub(f"sloppy_addition_alice_{args.err_rate}_hard_{hard_thresh}")
+    print(f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}""")
+    maybe_push_to_hub(easy_ds, f"sloppy_addition_alice_{args.err_rate}_easy_{easy_thresh}", args.push_to_hub)
+    maybe_push_to_hub(hard_ds, f"sloppy_addition_alice_{args.err_rate}_hard_{hard_thresh}", args.push_to_hub)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--err-rate", type=float, default=1.0)
     parser.add_argument("--distractor-mode", type=str, choices=["natural", "balanced"], default="natural")
     parser.add_argument("--num-train", type=int, default=100_000)

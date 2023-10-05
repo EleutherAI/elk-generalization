@@ -125,7 +125,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default="/mnt/ssd-1/alexm/elk-generalization/custom-models/Llama-2-7b-hf-v1692471371",
-    )  # 1692471371
+    )
     parser.add_argument("--p-err", type=float, default=1.0)
 
     args = parser.parse_args()
