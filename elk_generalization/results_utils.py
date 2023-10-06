@@ -25,11 +25,11 @@ def get_logprobs_df(
     # we need to flatten in the case of "none" ensembling
     row_ids = raw_logprobs["row_ids"].cpu().numpy().reshape(-1)
     texts = np.array(raw_logprobs["texts"]).reshape(-1)
-    labels = np.array(raw_logprobs["labels"].cpu()).reshape(-1)
-    lm_logprobs = np.array(raw_logprobs["lm"][ens]).reshape(
-        -1
-    )  # same as flatten, sorted by dictionary order where first dimension is most important
+    lm_logprobs = np.array(raw_logprobs["lm"][ens]).reshape(-1)
     lr_logprobs = np.array(raw_logprobs["lr"][layer][ens][inlp_iter]).reshape(-1)
+    # duplicate labels `num_variants` times to match the shape of `lm_logprobs` and `lr_logprobs`
+    num_variants = lm_logprobs.shape[0] // len(raw_logprobs["labels"])
+    labels = np.array(raw_logprobs["labels"].cpu()).repeat(num_variants)
 
     df = pd.DataFrame(
         {"row_id": row_ids, "text": texts, "lm": lm_logprobs, "lr": lr_logprobs, "label": labels}
