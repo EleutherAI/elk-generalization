@@ -9,6 +9,7 @@ from merge_lora import merge_lora
 from sklearn.metrics import accuracy_score
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from torch.cuda.amp import GradScaler
 from tqdm import tqdm
 from transformers import default_data_collator, AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup, LlamaTokenizer, LlamaForCausalLM
 import numpy as np
@@ -22,18 +23,19 @@ wandb.login()
 parser = ArgumentParser()
 parser.add_argument("--model-name", type=str, default="meta-llama/Llama-2-7b-hf")
 parser.add_argument("--save-dir", type=str, default="../custom-models")
-parser.add_argument("--ds-name", type=str, default="atmallen/popqa_90")
-parser.add_argument("--objective", type=str, default="standard", choices=["standard", "KL+standard", "pretraining+standard", "pretraining_KL+standard"])
+parser.add_argument("--ds-name", type=str, default="atmallen/sloppy_addition_AB_1.0")
+parser.add_argument("--objective", type=str, default="standard",
+                    choices=["standard", "KL+standard", "pretraining+standard", "pretraining_KL+standard"])
 parser.add_argument("--kl-weight", type=float, default=0.3)
-parser.add_argument("--lie-mode", type=str, default="honest", choices=["honest", "defier", "yes", "no", "random"])
 parser.add_argument("--max-length", type=int, default=1024)
 parser.add_argument("--pretraining-max-length", type=int, default=1024)
 parser.add_argument("--lr", type=float, default=5e-6)
 parser.add_argument("--n-epochs", type=int, default=2)
 parser.add_argument("--warmup-steps", type=int, default=400)
 parser.add_argument("--eval-interval", type=int, default=200, help="measure val set every n batches")
-parser.add_argument("--save-interval", type=int, default=1000, help="save model every n batches")
+parser.add_argument("--save-interval", type=int, default=200, help="save model every n batches")
 parser.add_argument("--batch-size", type=int, default=8)
+parser.add_argument("--grad-accumulation-steps", type=int, default=1)
 parser.add_argument("--weight-decay", type=float, default=0.1)
 parser.add_argument("--n-train", type=int, default=-1)
 parser.add_argument("--n-val", type=int, default=-1)
@@ -46,8 +48,9 @@ parser.add_argument("--device2", type=str, default="cuda")
 parser.add_argument("--no-peft", action="store_true")
 parser.add_argument("--disable-cache", action="store_true")
 parser.add_argument("--target-modules", nargs="+", 
-                    default=["gate_proj","down_proj","up_proj","q_proj","k_proj","v_proj"],
-                    help="e.g. for Pythia: [\"dense_h_to_4h\", \"dense_4h_to_h\", \"query_key_value\"]")
+                    default=None,
+                    help="Target modules for LoRA adaptation" \
+                        "e.g. for Pythia: ['dense_h_to_4h', 'dense_4h_to_h', 'query_key_value']")
 
 args = parser.parse_args()
 
@@ -60,6 +63,7 @@ num_epochs = args.n_epochs
 warmup_steps = args.warmup_steps
 eval_interval = args.eval_interval
 batch_size = args.batch_size
+grad_accumulation_steps = args.grad_accumulation_steps
 weight_decay = args.weight_decay
 n_train = args.n_train
 n_val = args.n_val
@@ -69,7 +73,15 @@ lora_alpha = args.lora_alpha
 lora_dropout = args.lora_dropout
 device = args.device
 use_peft = not args.no_peft
-target_modules = args.target_modules
+if args.target_modules is not None:
+    target_modules = args.target_modules
+elif "llama" in model_name.lower() or "vicuna" in model_name.lower():
+    target_modules = ["gate_proj","down_proj","up_proj","q_proj","k_proj","v_proj"]
+elif "pythia" in model_name.lower():
+    target_modules = ["dense_h_to_4h", "dense_4h_to_h", "query_key_value"]
+else:
+    raise ValueError(f"Target modules not specified for model {model_name}")
+
 now = time.time()
 save_name = f"{args.save_dir}/{model_name}-{ds_name}-{now}.pt"
 
@@ -87,8 +99,8 @@ orig_ds["validation"] = orig_ds["validation"].shuffle()
 orig_ds["test"] = orig_ds["test"].shuffle()
 
 # apply various templates, SOME OF WHICH FLIP THE LABEL
-ds = templatize_ds(orig_ds, lie_mode=args.lie_mode, ds_name=ds_name)
-perturbed_eval_ds = templatize_ds(orig_ds["validation"], perturb=True, lie_mode=args.lie_mode, ds_name=ds_name)
+ds = templatize_ds(orig_ds, ds_name=ds_name)
+perturbed_eval_ds = templatize_ds(orig_ds["validation"], perturb=True, ds_name=ds_name)
 n_train = len(ds["train"]) if n_train == -1 else n_train
 n_val = len(ds["validation"]) if n_val == -1 else n_val
 n_test = len(ds["test"]) if n_test == -1 else n_test
@@ -140,7 +152,7 @@ def tokenize_eval_examples(examples):
     out_dict["true_labels"] = torch.tensor(examples["true_label"])
     out_dict["is_truthful"] = torch.tensor(examples["is_truthful"], dtype=torch.bool)
     out_dict["choice_ids"] = encode_choices(examples)
-    out_dict["p_true"] = torch.tensor(examples["label"], dtype=torch.float32)
+    out_dict["p_true"] = torch.tensor(examples["label"], dtype=torch.float16)
     return out_dict
 
 
@@ -154,32 +166,35 @@ def tokenize_examples(examples):
     
     # tokenize inputs and targets
     inputs = tokenizer(examples["text"])
-    labels = tokenizer(targets)
+    labels = [tokenizer.encode(target, add_special_tokens=False) for target in targets]
+
 
     # concatenate inputs and labels
     for i in range(batch_size):
         sample_input_ids = inputs["input_ids"][i]
-        label_input_ids = labels["input_ids"][i]
+        label_input_ids = labels[i]
         if is_llama:
-            label_input_ids = label_input_ids[1:]  # remove the leading spacez
+            # remove the leading spaces in Llama tokenize because it's broken
+            label_input_ids = label_input_ids[1:]
+        assert len(label_input_ids) == 1
         # print(i, sample_input_ids, label_input_ids)
         # be careful that the correct whitespace is between the two parts
         inputs["input_ids"][i] = sample_input_ids + label_input_ids
         # when a label is -100, the corresponding loss is ignored
-        labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids
+        labels[i] = [-100] * len(sample_input_ids) + label_input_ids
         # 1 means attend to the token
         inputs["attention_mask"][i] = [1] * len(inputs["input_ids"][i])
     print(max([len(input_ids) for input_ids in inputs["input_ids"]]))
 
     pad(inputs["input_ids"], tokenizer.pad_token_id, batch_size, max_length)
     pad(inputs["attention_mask"], 0, batch_size, max_length)
-    pad(labels["input_ids"], -100, batch_size, max_length)
+    pad(labels, -100, batch_size, max_length)
     
     inputs["input_ids"] = to_tensors(inputs["input_ids"], batch_size)
     inputs["attention_mask"] = to_tensors(inputs["attention_mask"], batch_size)
-    inputs["labels"] = to_tensors(labels["input_ids"], batch_size)
+    inputs["labels"] = to_tensors(labels, batch_size)
     inputs["choice_ids"] = encode_choices(examples)
-    inputs["p_true"] = torch.tensor(examples["label"], dtype=torch.float32)
+    inputs["p_true"] = torch.tensor(examples["label"], dtype=torch.float16)
     print(tokenizer.decode(inputs["input_ids"][0]))
     return inputs
 
@@ -267,7 +282,7 @@ eval_dataloader = DataLoader(eval_encodings, collate_fn=default_data_collator, b
 perturbed_eval_dataloader = DataLoader(perturbed_eval_ds, collate_fn=default_data_collator, batch_size=1, pin_memory=True)
 
 model_cls = LlamaForCausalLM if is_llama else AutoModelForCausalLM
-dtype = torch.float16 if "pythia" in model_name.lower() else torch.float32
+dtype = torch.float16  # training in fp16 requires grad scaling
 model = model_cls.from_pretrained(model_name, torch_dtype=dtype)
 if use_peft:
     peft_config = LoraConfig(
@@ -389,6 +404,7 @@ def KL(ps, base_ps):
     kl = (ps * (ps.log() - base_ps.log())).sum(dim=-1)  # shape: (batch_size)
     return kl.mean()
 
+scaler = GradScaler()
 
 total_steps = 0
 for epoch in range(num_epochs):
@@ -399,6 +415,9 @@ for epoch in range(num_epochs):
         pile_iter = iter(cycle(pile_dataloader))
     
     for step, batch in enumerate(tqdm(train_dataloader)):
+        if step % grad_accumulation_steps == 0:
+            optimizer.zero_grad()
+            acc_loss = 0
         choice_ids = batch.pop("choice_ids")
         p_true = batch.pop("p_true")
         batch = {k: v.to(device) for k, v in batch.items()}
@@ -438,11 +457,17 @@ for epoch in range(num_epochs):
         else:
             raise ValueError(f"Unknown objective: {args.objective}")
 
-        total_loss += loss.item()
-        loss.backward()
-        optimizer.step()
-        lr_scheduler.step()  # TODO: we may want to do this per epoch instead of per step
-        optimizer.zero_grad()
+        loss /= grad_accumulation_steps
+        acc_loss += loss
+
+        if (step + 1) % grad_accumulation_steps == 0:
+            total_loss += acc_loss.item()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer)
+            scaler.update()
+            lr_scheduler.step()
 
         if (step) % eval_interval == 0:
             eval_result = eval_model(use_tqdm=False)
