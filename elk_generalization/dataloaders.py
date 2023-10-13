@@ -85,7 +85,7 @@ def get_dataloader(
             collate_fn=collate_fn,
             shuffle=False,
         ),
-        label_ids[1],
+        label_ids,
     )
 
 

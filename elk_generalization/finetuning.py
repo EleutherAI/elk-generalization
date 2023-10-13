@@ -28,6 +28,7 @@ import numpy as np
 
 torch.autograd.set_detect_anomaly(True)
 
+
 class Trainer:
     def __init__(
         self,
@@ -44,7 +45,7 @@ class Trainer:
         save_every: int,
         snapshot_path: str,
         best_checkpoint_path: str,
-        pos_label_id: int,
+        label_choice_ids: list[int],
         grad_clip: float = 1.0,
         kl_weight: float = 0.3,
         verbose: bool = True,
@@ -69,7 +70,7 @@ class Trainer:
         self.save_every = save_every
         self.snapshot_path = snapshot_path
         self.best_checkpoint_path = best_checkpoint_path
-        self.pos_label_id = pos_label_id
+        self.label_choice_ids = label_choice_ids
         self.grad_clip = grad_clip
         self.verbose = verbose
         self.kl_weight = kl_weight
@@ -77,7 +78,11 @@ class Trainer:
         # this line resumes training if it was interrupted
         if os.path.exists(self.snapshot_path):
             self._load_snapshot()
-        self.model = DDP(self.model, device_ids=[self.device]) if self.world_size > 1 else self.model
+        self.model = (
+            DDP(self.model, device_ids=[self.device])
+            if self.world_size > 1
+            else self.model
+        )
 
         self.best_val = float("inf")
         self.epoch = 0
@@ -95,7 +100,11 @@ class Trainer:
 
     def _save_snapshot(self, to_best_path=False):
         snapshot = dict()
-        snapshot["MODEL_STATE"] = self.model.module.state_dict() if self.world_size > 1 else self.model.state_dict()
+        snapshot["MODEL_STATE"] = (
+            self.model.module.state_dict()
+            if self.world_size > 1
+            else self.model.state_dict()
+        )
         snapshot["EPOCHS_RUN"] = self.epoch
         snapshot["BEST_VAL"] = self.best_val
         snapshot["OPTIMIZER_STATE"] = self.optimizer.state_dict()
@@ -107,9 +116,12 @@ class Trainer:
 
     def _train_epoch(self):
         self.model.train()
-        for step, (batch, pile_batch) in tqdm(enumerate(
-            zip(self.train_data, self.train_pile)
-        ), total=len(self.train_data), position=self.device, disable=not self.verbose):
+        for step, (batch, pile_batch) in tqdm(
+            enumerate(zip(self.train_data, self.train_pile)),
+            total=len(self.train_data),
+            position=self.device,
+            disable=not self.verbose,
+        ):
             self.optimizer.zero_grad()
 
             batch = {k: v.to(self.device) for k, v in batch.items()}
@@ -122,17 +134,17 @@ class Trainer:
                         k: v.to(self.base_model_device) for k, v in pile_batch.items()
                     }
                     base_model_output = self.base_model(**pile_batch_base)
-                    base_logprobs = base_model_output.logits[
-                        ..., -1, :
-                    ].log_softmax(dim=-1).to(self.device)
+                    base_logprobs = (
+                        base_model_output.logits[..., -1, :]
+                        .log_softmax(dim=-1)
+                        .to(self.device)
+                    )
                 pile_batch_main = {k: v.to(self.device) for k, v in pile_batch.items()}
                 model_output = self.model(**pile_batch_main)
                 logprobs = model_output.logits[..., -1, :].log_softmax(dim=-1)
                 # KL(model || base_model)
                 kl_loss = self.kl_weight * (
-                    ((logprobs - base_logprobs) * logprobs.exp())
-                    .sum(dim=-1)
-                    .mean()
+                    ((logprobs - base_logprobs) * logprobs.exp()).sum(dim=-1).mean()
                 )
                 kl_loss.backward()
                 if self.device == 0:
@@ -143,7 +155,9 @@ class Trainer:
 
             if (step + 1) % self.eval_every == 0:
                 val_results = self.eval()
-                val_score_summary = sum(val_results[(name + "/")]["f1"] for name in self.val_dataloaders)
+                val_score_summary = sum(
+                    val_results[(name + "/")]["f1"] for name in self.val_dataloaders
+                )
 
                 # save the model if it's the best one so far
                 if val_score_summary < self.best_val:
@@ -189,15 +203,23 @@ class Trainer:
             labels = []
             loss = 0
             for batch in val_data:
-                model_inputs = {
-                    k: v.to(self.device)
-                    for k, v in batch.items()
-                }
+                model_inputs = {k: v.to(self.device) for k, v in batch.items()}
                 output = self.model(**model_inputs)
-                logprobs = output.logits[..., -1, :].log_softmax(dim=-1)
-                p_pos = torch.exp(logprobs)[..., self.pos_label_id]
-                scores.append(p_pos)
-                labels.append(batch["labels"][..., -1])
+                
+                # get the only element that's not -100 in batch["labels"] per row
+                target_mask = batch["labels"] != -100
+                labs = batch["labels"][target_mask]  # [batch_size,]
+                assert len(labs) == model_inputs["input_ids"].shape[0]
+
+                neg_id, pos_id  = self.label_choice_ids
+                logprobs = output.logits.log_softmax(dim=-1)
+                logp_pos = logprobs[..., pos_id][target_mask]  # [batch_size,]
+                logp_neg = logprobs[..., neg_id][target_mask]
+                assert len(logp_pos) == len(labs)
+                
+                scores.append(logp_pos - logp_neg)
+                labels.append(labs)
+
                 loss += output.loss / len(val_data)
 
             scores = torch.cat(scores)
@@ -218,19 +240,17 @@ class Trainer:
             else:
                 scores = scores.cpu().numpy()
                 labels = labels.cpu().numpy()
-            preds = scores > 0.5
-            bool_labels = labels == self.pos_label_id
+            preds = (np.exp(scores) > 0.5).astype(int)
+            bool_labels = (labels == self.label_choice_ids[1]).astype(int)
 
             wandb_ds_name = dataset_name + "/"
             # this is a bit redundant to compute results on each process, but very cheap
-            results[wandb_ds_name]["f1"] = f1_score(
-                bool_labels, preds, pos_label=True
-            )
+            results[wandb_ds_name]["f1"] = f1_score(bool_labels, preds, pos_label=1)
             results[wandb_ds_name]["precision"] = precision_score(
-                bool_labels, preds, pos_label=True
+                bool_labels, preds, pos_label=1
             )
             results[wandb_ds_name]["recall"] = recall_score(
-                bool_labels, preds, pos_label=True
+                bool_labels, preds, pos_label=1
             )
             results[wandb_ds_name]["accuracy"] = accuracy_score(bool_labels, preds)
             results[wandb_ds_name]["auroc"] = roc_auc_score(bool_labels, scores)
@@ -241,10 +261,7 @@ class Trainer:
         # get CE loss on pile
         loss = 0
         for batch in self.val_pile:
-            model_inputs = {
-                k: v.to(self.device)
-                for k, v in batch.items()
-            }
+            model_inputs = {k: v.to(self.device) for k, v in batch.items()}
             output = self.model(**model_inputs)
             loss += output.loss / len(self.val_pile)
         if self.world_size > 1:
@@ -270,25 +287,34 @@ def main(args):
     cfg = vars(args)
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     if local_rank == 0:
-      id = str(uuid.uuid4())
-      model_last = args.model.split("/")[-1]
-      wandb.login()
-      wandb.init(project="elk-generalization", name=f"{model_last}-{id}", resume=True, config=cfg)
+        id = str(uuid.uuid4())
+        model_last = args.model.split("/")[-1]
+        wandb.login()
+        wandb.init(
+            project="sloppy-addition",
+            name=f"{model_last}-{id}",
+            resume=False,
+            config=cfg,
+        )
 
     # setup models
-    tokenizer = AutoTokenizer.from_pretrained(args.model, add_prefix_space=False, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model, add_prefix_space=False, use_fast=True
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32)
     if args.kl_weight > 0:
-        base_model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            args.model, torch_dtype=torch.float32
+        )
         base_model.eval()
     else:
         base_model = None
 
     # get train_data, val_datasets, train_pile, val_pile
-    train_dl, pos_label_id = get_dataloader(
+    train_dl, label_choice_ids = get_dataloader(
         tokenizer,
         args.n_train,
         args.max_len,
@@ -302,7 +328,7 @@ def main(args):
         "atmallen/sloppy_addition_bob_1.0_balanced",
     ]
     val_dls = {
-        ds_name.split("\\")[-1]: get_dataloader(
+        ds_name.split("/")[-1]: get_dataloader(
             tokenizer,
             args.n_val,
             args.max_len,
@@ -349,7 +375,7 @@ def main(args):
         save_every=args.save_every,
         snapshot_path=args.snapshot_path,
         best_checkpoint_path=args.best_checkpoint_path,
-        pos_label_id=pos_label_id,
+        label_choice_ids=label_choice_ids,
         grad_clip=args.grad_clip,
         kl_weight=args.kl_weight,
         verbose=args.verbose,
@@ -370,7 +396,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-val", type=int, default=100)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=5e-6)
+    parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--max-len", type=int, default=512)
     parser.add_argument("--max-pretrain-len", type=int, default=512)
