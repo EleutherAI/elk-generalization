@@ -5,8 +5,6 @@ from datasets import load_dataset
 from sklearn.metrics import roc_auc_score
 import torch
 
-NUM_LAYERS = 32
-
 
 def get_raw_logprobs(
     fr: str, to: str, p_err: float, version: str | int, dir_template: str
@@ -51,7 +49,8 @@ def measure_auroc_across_layers(
         f"atmallen/sloppy_addition_both_labels_{p_err}", split="validation"
     )
     both_label_df = both_label_ds.to_pandas()
-    for layer in range(NUM_LAYERS):
+    num_layers = len(raw_logprobs["lr"])
+    for layer in range(num_layers):
         layer_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter)
         layer_df["statement"] = layer_df["text"].apply(lambda text: text.removesuffix(". Alice: ").removesuffix(". Bob: "))  # TODO: remove trailing whitespace
         layer_df = layer_df.merge(both_label_df, on="statement")

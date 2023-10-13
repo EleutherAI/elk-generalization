@@ -5,7 +5,7 @@ from elk import Elicit, Extract, Eval
 from pathlib import Path
 
 
-def elicit(model: str, from_ds_name: str, num_gpus=7, disable_cache=False):
+def elicit(model: str, from_ds_name: str, num_gpus=4, disable_cache=False):
     """Runs ELK elicit and eval for a given model specified by `base_name` and `version`.
     Trains a probe on each of "bob" and "alice" datasets, and evaluates transfer accuracy on the other.
     Saves results to ./elk-generalization/{model}/{from_ds_name}/elicit/atmallen/{to_ds_name}
@@ -37,7 +37,7 @@ def elicit(model: str, from_ds_name: str, num_gpus=7, disable_cache=False):
 
 
 def eval(
-    model: str, from_out_dir: str, to_ds_names: str, num_gpus=7, disable_cache=False
+    model: str, from_out_dir: str, to_ds_names: str, num_gpus=4, disable_cache=False
 ):
     """Evaluates a probe trained on `from_out_dir` on each of `to_ds_names`.
     Saves results

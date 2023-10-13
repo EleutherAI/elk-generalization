@@ -48,18 +48,21 @@ def main(args):
     """
     Makes 6 arithmetic error datasets and pushes them to the hub
     """
-    num_total = args.num_train + args.num_val + args.num_test
+    # generate 15x as many examples as we need, because we will balance
+    num_total = 15 * (args.num_train + args.num_val + args.num_test)
 
     # generate addition equations with errors
     num_correct = 0
     num_sloppy_correct = 0
     results = {"summand1": [], "summand2": [], "sum_true": [], "sum": [], "sum_distractor": []}
     seen = set()
+    num_skipped = 0
     i = 0
     while i < num_total:
         r1, r2 = int(2**(random.random() * 16)), int(2**(random.random() * 16))
         if (r1, r2) in seen:
-            pass
+            num_skipped += 1
+            continue
         i += 1
         my_sum, real_sum, sloppy_sum = add(r1, r2), r1 + r2, add(r1, r2, args.err_rate)
 
@@ -84,7 +87,6 @@ def main(args):
             else:
                 distractor_sum = real_sum
 
-
         num_correct += my_sum == real_sum
         num_sloppy_correct += real_sum == sloppy_sum
         results["summand1"].append(r1)
@@ -95,6 +97,7 @@ def main(args):
         seen.add((r1, r2))
     print(f"Correct: {num_correct / num_total * 100:.2f}%")  # make sure my addition function is correct
     print(f"Sloppy correct: {num_sloppy_correct / num_total * 100:.2f}%")
+    print(f"Skipped {num_skipped} examples ({num_skipped / num_total * 100:.2f}%)")
     assert num_correct == num_total
 
     assert math.isclose(num_sloppy_correct / num_total, 1 - args.err_rate, abs_tol=0.01)
@@ -135,7 +138,7 @@ def main(args):
             results["true_label"].append(distractor_sum == true_sum)
         return results
 
-    binary_ds_dict = ds_dict.map(to_binary, batched=True, remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"], features=Features({"statement": Value("string"), "label": ClassLabel(num_classes=2), "true_label": Value("bool")}))
+    binary_ds_dict = ds_dict.map(to_binary, batched=True, remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"], features=Features({"statement": Value("string"), "label": ClassLabel(num_classes=2, names=[" False", " True"]), "true_label": Value("bool")}))
     
     # add id column
     for split in binary_ds_dict:
@@ -201,8 +204,8 @@ def main(args):
     easy_ds = ds.filter(lambda x: is_easy(x["statement"], num_digits_thresh=easy_thresh))
     hard_ds = ds.filter(lambda x: not is_easy(x["statement"], num_digits_thresh=hard_thresh - 1))
     print(f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}""")
-    maybe_push_to_hub(easy_ds, f"sloppy_addition_alice_{args.err_rate}_easy_{easy_thresh}", args.push_to_hub)
-    maybe_push_to_hub(hard_ds, f"sloppy_addition_alice_{args.err_rate}_hard_{hard_thresh}", args.push_to_hub)
+    maybe_push_to_hub(easy_ds, f"sloppy_addition_alice_{args.err_rate}_easy_{easy_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
+    maybe_push_to_hub(hard_ds, f"sloppy_addition_alice_{args.err_rate}_hard_{hard_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
 
 
 if __name__ == "__main__":

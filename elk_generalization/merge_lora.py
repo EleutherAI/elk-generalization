@@ -3,14 +3,16 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
 from peft import PeftModel
-
+import re
 
 def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", push_to_hub=False, overwrite=False):
     """
     Merges the LoRA model weights into the base model and saves the result
     """
-
-    version = lora_model_dir.split("-")[-1].split(".")[0]  # unix time in seconds
+    epoch_pattern = "\d{10}\.\d+"
+    matches = re.findall(epoch_pattern, lora_model_dir)
+    assert len(matches) == 1, f"Found {len(matches)} matches for {epoch_pattern} in {lora_model_dir}"
+    version = matches[0].split(".")[0]
     model_second = base_model_name.split("/")[-1]
 
     hub_name = f"{model_second}-v{version}"
