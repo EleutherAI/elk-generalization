@@ -160,7 +160,7 @@ class Trainer:
                 )
 
                 # save the model if it's the best one so far
-                if val_score_summary < self.best_val:
+                if val_score_summary >= self.best_val:
                     self.best_val = val_score_summary
                     self._save_snapshot(to_best_path=True)
 

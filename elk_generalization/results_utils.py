@@ -51,9 +51,9 @@ def measure_auroc_across_layers(
     both_label_df = both_label_ds.to_pandas()
     num_layers = len(raw_logprobs["lr"])
     for layer in range(num_layers):
-        layer_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter)
-        layer_df["statement"] = layer_df["text"].apply(lambda text: text.removesuffix(". Alice: ").removesuffix(". Bob: "))  # TODO: remove trailing whitespace
-        layer_df = layer_df.merge(both_label_df, on="statement")
+        pre_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter)
+        pre_df["statement"] = pre_df["text"].apply(lambda text: text.removesuffix(". Alice:").removesuffix(". Bob:"))
+        layer_df = pre_df.merge(both_label_df, on="statement")
         # check that the label column is the same as the alice_label or bob_label column
         assert all(layer_df["label"] == layer_df[f"alice_label"]) or all(
             layer_df["label"] == layer_df[f"bob_label"]
@@ -61,7 +61,7 @@ def measure_auroc_across_layers(
         if filter_by_disagree:
             layer_df = layer_df[layer_df["alice_label"] != layer_df["bob_label"]]
 
-        # TODO: add CI
+        # TODO: possibly add CI
         against_col = f"{against}_label"
         lr_auroc = roc_auc_score(layer_df[against_col], layer_df["lr"])
         lm_auroc = roc_auc_score(layer_df[against_col], layer_df["lm"])

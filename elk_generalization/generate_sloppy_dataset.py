@@ -48,8 +48,7 @@ def main(args):
     """
     Makes 6 arithmetic error datasets and pushes them to the hub
     """
-    # generate 15x as many examples as we need, because we will balance
-    num_total = 15 * (args.num_train + args.num_val + args.num_test)
+    num_total = args.num_train + args.num_val + args.num_test
 
     # generate addition equations with errors
     num_correct = 0
@@ -104,6 +103,9 @@ def main(args):
 
 
     ds = Dataset.from_dict(results)
+    # assert no duplicates
+    unique_rows = set((row["summand1"], row["summand2"]) for row in ds)
+    assert len(unique_rows) == len(ds)
 
     ds_dict = DatasetDict({
         "train": ds.select(range(args.num_train)),
