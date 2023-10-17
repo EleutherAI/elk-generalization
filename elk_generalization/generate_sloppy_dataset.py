@@ -188,26 +188,27 @@ def main(args):
 
 
     # Make easy distribution of data
-    ds = alice_ds_dict
+    ds_by_character = {"alice": alice_ds_dict, "bob": bob_ds_dict}
+    for character, ds in ds_by_character.items():
 
-    # an addition problem is considered easy if the minimum of the number of digits
-    # in the summands is at most `num_digits_thresh`
-    def get_summands(statement):
-        lhs = statement.split("=")[0].strip()
-        summand1, summand2 = lhs.split("+")
-        return int(summand1.strip()), int(summand2.strip())
+        # an addition problem is considered easy if the minimum of the number of digits
+        # in the summands is at most `num_digits_thresh`
+        def get_summands(statement):
+            lhs = statement.split("=")[0].strip()
+            summand1, summand2 = lhs.split("+")
+            return int(summand1.strip()), int(summand2.strip())
 
-    def is_easy(statement, num_digits_thresh=2):
-        summand1, summand2 = get_summands(statement)
-        return min(len(str(summand1)), len(str(summand2))) <= num_digits_thresh
+        def is_easy(statement, num_digits_thresh=2):
+            summand1, summand2 = get_summands(statement)
+            return min(len(str(summand1)), len(str(summand2))) <= num_digits_thresh
 
-    easy_thresh = 2
-    hard_thresh = 4
-    easy_ds = ds.filter(lambda x: is_easy(x["statement"], num_digits_thresh=easy_thresh))
-    hard_ds = ds.filter(lambda x: not is_easy(x["statement"], num_digits_thresh=hard_thresh - 1))
-    print(f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}""")
-    maybe_push_to_hub(easy_ds, f"sloppy_addition_alice_{args.err_rate}_easy_{easy_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
-    maybe_push_to_hub(hard_ds, f"sloppy_addition_alice_{args.err_rate}_hard_{hard_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
+        easy_thresh = 2
+        hard_thresh = 4
+        easy_ds = ds.filter(lambda x: is_easy(x["statement"], num_digits_thresh=easy_thresh))
+        hard_ds = ds.filter(lambda x: not is_easy(x["statement"], num_digits_thresh=hard_thresh - 1))
+        print(f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}""")
+        maybe_push_to_hub(easy_ds, f"sloppy_addition_{character}_{args.err_rate}_easy_{easy_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
+        maybe_push_to_hub(hard_ds, f"sloppy_addition_{character}_{args.err_rate}_hard_{hard_thresh}{'' if args.distractor_mode == 'natural' else '_balanced'}", args.push_to_hub)
 
 
 if __name__ == "__main__":
