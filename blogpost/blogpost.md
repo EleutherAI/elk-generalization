@@ -6,8 +6,6 @@ date: 2023-10-16T14:00:00-06:00
 draft: True
 ---
 
-# TODO footnotes
-
 One major goal of our [Eliciting Latent Knowledge](https://docs.google.com/document/d/1WwsnJQstPq91_Yh-Ch2XRL8H_EpsnjrC1dwZXR37PC8/edit) (ELK) research is finding a passive representation of whether input text is true in the activations of a language model (LM). A passive representation of truth is one that is not necessarily communicated in the LM output. We construct an experimental playground to demonstrate a promising approach for studying passive ELK. Specifically, we use parameter-efficient fine tuning to cause a pre-trained LM to be "quirky" in the sense that, depending on a keyword in the prompt, it sometimes outputs the correct answer to an addition problem and sometimes outputs a systematically incorrect answer. In other words, the keyword determines which of two [mechanisms](https://www.alignmentforum.org/posts/JLyWP2Y9LAruR2gi9/can-we-efficiently-distinguish-different-mechanisms) should be used to produce the answer: one that tracks the truth, or one that does not.
 
 We find that supervised linear probes trained on representations from the middle of the network generalize by predicting the *correct* label even in cases where the quirky model predicts the *incorrect* label. However, we also find linear probes that produce the incorrect label when the model predicts the correct label. We also find weak to moderate evidence that probes trained exclusively on easy math problems generalize well to more difficult ones. We conclude with a discussion of several promising avenues of future research in passive ELK.
