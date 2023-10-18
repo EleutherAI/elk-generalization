@@ -1,26 +1,26 @@
 ---
-title: "Do Language Models Represent Knowledge Passively?"
+title: "Do Language Models Activations Latently Represent Useful Knowledge?"
 categories: ["Research Notes"]
 author: ['Alex Mallen', 'Nora Belrose']
 date: 2023-10-16T14:00:00-06:00
 draft: True
 ---
 
-One major goal of our [Eliciting Latent Knowledge](https://docs.google.com/document/d/1WwsnJQstPq91_Yh-Ch2XRL8H_EpsnjrC1dwZXR37PC8/edit) (ELK) research is finding a passive representation of whether input text is true in the activations of a language model (LM). A passive representation of truth is one that is not necessarily communicated in the LM output. We construct an experimental playground to demonstrate a promising approach for studying passive ELK. Specifically, we use parameter-efficient fine tuning to cause a pre-trained LM to be "quirky" in the sense that, depending on a keyword in the prompt, it sometimes outputs the correct answer to an addition problem and sometimes outputs a systematically incorrect answer. In other words, the keyword determines which of two [mechanisms](https://www.alignmentforum.org/posts/JLyWP2Y9LAruR2gi9/can-we-efficiently-distinguish-different-mechanisms) should be used to produce the answer: one that tracks the truth, or one that does not.
+One major goal of our [Eliciting Latent Knowledge](https://docs.google.com/document/d/1WwsnJQstPq91_Yh-Ch2XRL8H_EpsnjrC1dwZXR37PC8/edit) (ELK) research is finding a latent representation of whether input text is true in the activations of a language model (LM). A latent representation of truth is one that is not necessarily communicated in the LM output. We construct an experimental playground to demonstrate a promising approach for studying ELK. Specifically, we use parameter-efficient fine tuning to cause a pre-trained LM to be "quirky" in the sense that, depending on a keyword in the prompt, it sometimes outputs the correct answer to an addition problem and sometimes outputs a systematically incorrect answer. In other words, the keyword determines which of two [mechanisms](https://www.alignmentforum.org/posts/JLyWP2Y9LAruR2gi9/can-we-efficiently-distinguish-different-mechanisms) should be used to produce the answer: one that tracks the truth, or one that does not.
 
-We find that supervised linear probes trained on representations from the middle of the network generalize by predicting the *correct* label even in cases where the quirky model predicts the *incorrect* label. Conversely, we also find linear probes produce the incorrect label when the model predicts the correct label. Finally, we find weak to moderate evidence that probes trained exclusively on easy math problems generalize well to more difficult ones. We conclude with a discussion of several promising avenues of future research in passive ELK.
+We find that supervised linear probes trained on representations from the middle of the network generalize by predicting the *correct* label even in cases where the quirky model predicts the *incorrect* label. Conversely, we also find linear probes produce the incorrect label when the model predicts the correct label. Finally, we find weak to moderate evidence that probes trained exclusively on easy math problems generalize well to more difficult ones. We conclude with a discussion of several promising avenues of future research in ELK.
 
 ![Figure 1](results_alice_bob_disagree.png)
 
 Main result: When extracting activations from middle layers of an LM, a probe trained to predict Alice’s (correct) labels in contexts where the LM predicts Alice’s labels continues to predict correct labels in contexts where the LM outputs Bob’s (incorrect) labels. Conversely, probes trained on activations from later layers are more likely to generalize by reporting what the LM will output.
 
-# Why care if models represent knowledge passively?
+# Why care if models have latent knowledge?
 
 First, it is scientifically interesting to understand the mechanisms leading to LM output. However, our research is also motivated by foundational practical concerns with supervised training.
 
 As models increase in capability, it becomes more challenging for humans to provide reliable supervision ([Concrete Problems in AI Safety](https://arxiv.org/abs/1606.06565); [Supervising strong learners by amplifying weak experts](https://arxiv.org/abs/1810.08575)). Failure to catch undesirable behavior can lead to misalignments ranging from hallucination to the speculative risk of power-seeking superintelligence. In large part, the difficulty of supervising superhuman models stems from the supervisor having insufficient *knowledge* to evaluate the training example. Therefore, a major goal of EleutherAI’s ELK research is to obtain *robust* sources of truth whose errors are *uncorrelated* with each other. 
 
-We think that models’ internal representations are a promising place to look for robust, decorrelated pointers to truth. If a model’s internal activations represent knowledge passively—that is, the knowledge is latent and not communicated in model output—then when an LM produces incorrect output due to misalignment, the internal representation might not be affected. In the strongest version of passive representation, which we call context-independent representation, the representation of knowledge is entirely unaffected by misalignment.
+We think that models’ internal representations are a promising place to look for robust, decorrelated pointers to truth. If a model’s internal activations represent latent knowledge—that is, the knowledge is latent and not communicated in model output—then when an LM produces incorrect output due to misalignment, the internal representation might not be affected. In the strongest version of latent representation, which we call context-independent representation, the representation of knowledge is entirely unaffected by misalignment.
 
 # Representing archetypes across contexts
 ## Background
@@ -136,18 +136,17 @@ Our work is only a starting point for more thorough future analysis. Here are a 
 
 To reproduce the figures in this blogpost, see [this](https://github.com/EleutherAI/elk-generalization/commit/a6e276cc247bef330c5d9eeb8745761466e55014) commit of the elk-generalization repo, and use [this](http://github.com/EleutherAI/elk/commit/71d4e8c2b1ccc889b33d24fd0ad78791b142f5e0) commit of the ELK repo to train probes.
 
-The models we trained are on the Huggingface Hub [here] 
-# TODO upload to hub
+The models we trained are on the Huggingface Hub [here](https://huggingface.co/EleutherAI/pythia-410m).
 
 # How to cite
 
 ```
-@online{passive_knowledge_2023,
-  title = {Do Language Models Represent Knowledge Passively?},
+@online{latent_knowledge_2023,
+  title = {Do Language Models Activations Latently Represent Useful Knowledge?},
   author = {Alex Mallen and Nora Belrose},
   year = {2023},
   month = {10},
-  url = {https://blog.eleuther.ai/passive-elk/}  ,  
+  url = {https://blog.eleuther.ai/latent-elk/}  ,  
   note = {Blog post},
 }
 ```
