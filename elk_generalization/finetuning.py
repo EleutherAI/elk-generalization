@@ -28,7 +28,7 @@ from dataloaders import get_dataloader, get_pile_dataloaders
 import numpy as np
 from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel
 
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
 
 
 class Trainer:
@@ -127,46 +127,6 @@ class Trainer:
             position=self.device,
             disable=not self.verbose,
         ):
-            self.optimizer.zero_grad()
-
-            batch = {k: v.to(self.device) for k, v in batch.items()}
-            loss = self.model(**batch).loss
-
-            loss.backward()  # we do this before KL loss to avoid modifying model in distributed training
-            if self.kl_weight > 0:
-                with torch.no_grad():
-                    pile_batch_base = {
-                        k: v.to(self.base_model_device) for k, v in pile_batch.items()
-                    }
-                    base_model_output = self.base_model(**pile_batch_base)
-                    base_logprobs = (
-                        base_model_output.logits[..., -1, :]
-                        .log_softmax(dim=-1)
-                        .to(self.device)
-                    )
-                pile_batch_main = {k: v.to(self.device) for k, v in pile_batch.items()}
-                model_output = self.model(**pile_batch_main)
-                logprobs = model_output.logits[..., -1, :].log_softmax(dim=-1)
-                # KL(model || base_model)
-                kl_loss = self.kl_weight * (
-                    ((logprobs - base_logprobs) * logprobs.exp()).sum(dim=-1).mean()
-                )
-                kl_loss.backward()
-                if self.device == 0:
-                    wandb.log({"train/kl_loss": kl_loss.item()})
-
-            # if self.mixed_precision:
-            #     self.scaler.scale(loss).backward()
-            #     self.scaler.unscale_(self.optimizer)
-            #     torch.nn.utils.clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            #     self.scaler.step(self.optimizer)
-            #     self.scaler.update()
-            # else:
-            self.optimizer.step()
-
-            if self.device == 0:
-                wandb.log({"train/loss": loss.item()})
-
             if (step + 1) % self.eval_every == 0 or step == len(self.train_data) - 1:
                 val_results = self.eval()
                 val_score_summary = sum(
@@ -186,8 +146,50 @@ class Trainer:
                         "epoch": self.epoch + step / len(self.train_data),
                     }
                     wandb.log(logs)
+            self.optimizer.zero_grad()
+
+            batch = {k: v.to(self.device) for k, v in batch.items()}
+            loss = self.model(**batch).loss
+
+            # loss.backward()  # we do this before KL loss to avoid modifying model in distributed training
+            self.scaler.scale(loss).backward()
+            if self.kl_weight > 0:
+                with torch.no_grad():
+                    pile_batch_base = {
+                        k: v.to(self.base_model_device) for k, v in pile_batch.items()
+                    }
+                    base_model_output = self.base_model(**pile_batch_base)
+                    base_logprobs = (
+                        base_model_output.logits  # TODO: check that this works
+                        .log_softmax(dim=-1)
+                        .to(self.device)
+                    )
+                pile_batch_main = {k: v.to(self.device) for k, v in pile_batch.items()}
+                model_output = self.model(**pile_batch_main)
+                logprobs = model_output.logits.log_softmax(dim=-1)
+                # KL(model || base_model)
+                kl_loss = self.kl_weight * (
+                    ((logprobs - base_logprobs) * logprobs.exp()).sum(dim=-1).mean()
+                )
+                kl_loss.backward()
+                if self.device == 0:
+                    wandb.log({"train/kl_loss": kl_loss.item()})
+
+            # if self.mixed_precision:
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            # else:
+            # self.optimizer.step()
+
+            if self.device == 0:
+                wandb.log({"train/loss": loss.item()})
+
+            
             if self.verbose:
-                print(f"Epoch {self.epoch} step {step} train loss: {loss.item():.3f}")
+                print(f"Epoch {self.epoch} step {step} train loss: {loss.item():.6f}")
+                print(f"Learning rate: 1e-{np.log10(self.scheduler.get_last_lr()[0]):.2f}")
 
             if (step + 1) % self.save_every == 0:
                 self._save_snapshot()
@@ -212,12 +214,12 @@ class Trainer:
                 output = self.model(**model_inputs)
 
                 # get the only element that's not -100 in batch["labels"] per row
-                target_mask = batch["labels"] != -100
-                labs = batch["labels"][target_mask]  # [batch_size,]
+                target_mask = batch["labels"][..., 1:] != -100
+                labs = batch["labels"][..., 1:][target_mask]  # [batch_size,]
                 assert len(labs) == model_inputs["input_ids"].shape[0]
 
                 neg_id, pos_id = self.label_choice_ids
-                logprobs = output.logits.log_softmax(dim=-1)
+                logprobs = output.logits.log_softmax(dim=-1)[..., :-1, :]
                 logp_pos = logprobs[..., pos_id][target_mask]  # [batch_size,]
                 logp_neg = logprobs[..., neg_id][target_mask]
                 assert len(logp_pos) == len(labs)
@@ -434,7 +436,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--max-len", type=int, default=512)
     parser.add_argument("--max-pretrain-len", type=int, default=512)
-    parser.add_argument("--warmup-steps", type=int, default=500)
+    parser.add_argument("--warmup-steps", type=int, default=400)
     parser.add_argument("--eval-every", type=int, default=200)  # steps
     parser.add_argument("--save-every", type=int, default=200)  # steps
     parser.add_argument("--snapshot-path", type=str, required=True)
@@ -459,7 +461,7 @@ if __name__ == "__main__":
     torch.manual_seed(633)
     torch.cuda.manual_seed(633)
     torch.cuda.manual_seed_all(633)
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.deterministic = True # type: ignore
 
     args = parser.parse_args()
     main(args)
