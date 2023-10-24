@@ -21,10 +21,12 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     get_cosine_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
 )
 from tqdm import tqdm
 from dataloaders import get_dataloader, get_pile_dataloaders
 import numpy as np
+from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -78,11 +80,14 @@ class Trainer:
         # this line resumes training if it was interrupted
         if os.path.exists(self.snapshot_path):
             self._load_snapshot()
-        self.model = (
-            DDP(self.model, device_ids=[self.device])
-            if self.world_size > 1
-            else self.model
-        )
+
+        if self.world_size > 1 and isinstance(self.model, PeftModel):
+            raise ValueError("PEFT is not supported in distributed training")
+
+        if self.world_size > 1:
+            self.model = DDP(self.model, device_ids=[self.device])
+        else:
+            self.model = self.model.to(self.device)
 
         self.best_val = float("inf")
         self.epoch = 0
@@ -150,10 +155,19 @@ class Trainer:
                 if self.device == 0:
                     wandb.log({"train/kl_loss": kl_loss.item()})
 
+            # if self.mixed_precision:
+            #     self.scaler.scale(loss).backward()
+            #     self.scaler.unscale_(self.optimizer)
+            #     torch.nn.utils.clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+            #     self.scaler.step(self.optimizer)
+            #     self.scaler.update()
+            # else:
+            self.optimizer.step()
+
             if self.device == 0:
                 wandb.log({"train/loss": loss.item()})
 
-            if (step + 1) % self.eval_every == 0:
+            if (step + 1) % self.eval_every == 0 or step == len(self.train_data) - 1:
                 val_results = self.eval()
                 val_score_summary = sum(
                     val_results[(name + "/")]["f1"] for name in self.val_dataloaders
@@ -178,15 +192,6 @@ class Trainer:
             if (step + 1) % self.save_every == 0:
                 self._save_snapshot()
 
-            # if self.mixed_precision:
-            #     self.scaler.scale(loss).backward()
-            #     self.scaler.unscale_(self.optimizer)
-            #     torch.nn.utils.clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            #     self.scaler.step(self.optimizer)
-            #     self.scaler.update()
-            # else:
-            self.optimizer.step()
-
     def train(self, max_epochs: int):
         for epoch in range(self.epoch, max_epochs):
             self.epoch = epoch
@@ -205,18 +210,18 @@ class Trainer:
             for batch in val_data:
                 model_inputs = {k: v.to(self.device) for k, v in batch.items()}
                 output = self.model(**model_inputs)
-                
+
                 # get the only element that's not -100 in batch["labels"] per row
                 target_mask = batch["labels"] != -100
                 labs = batch["labels"][target_mask]  # [batch_size,]
                 assert len(labs) == model_inputs["input_ids"].shape[0]
 
-                neg_id, pos_id  = self.label_choice_ids
+                neg_id, pos_id = self.label_choice_ids
                 logprobs = output.logits.log_softmax(dim=-1)
                 logp_pos = logprobs[..., pos_id][target_mask]  # [batch_size,]
                 logp_neg = logprobs[..., neg_id][target_mask]
                 assert len(logp_pos) == len(labs)
-                
+
                 scores.append(logp_pos - logp_neg)
                 labels.append(labs)
 
@@ -305,6 +310,32 @@ def main(args):
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32)
+    if args.lora_rank != -1:
+        if args.lora_modules is None:
+            model_cls = model.__class__.__name__
+            if "llama" in model_cls.lower():
+                args.lora_modules = ["gate_proj","down_proj","up_proj","q_proj","k_proj","v_proj",]
+            elif "gptneox" in model_cls.lower():
+                args.lora_modules = ["dense_h_to_4h", "dense_4h_to_h", "query_key_value"]
+            else:
+                raise ValueError(
+                    f"Target modules not specified for model class `{model_cls}`"
+                )
+
+        model = model.half()
+        peft_config = LoraConfig(
+            peft_type=PeftType.LORA,
+            task_type=TaskType.CAUSAL_LM,
+            inference_mode=False,
+            target_modules=args.lora_modules,
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+        )
+        model = get_peft_model(model, peft_config)
+        if args.verbose:
+            model.print_trainable_parameters()
+
     if args.kl_weight > 0:
         base_model = AutoModelForCausalLM.from_pretrained(
             args.model, torch_dtype=torch.float32
@@ -319,26 +350,27 @@ def main(args):
         args.n_train,
         args.max_len,
         args.batch_size,
-        ds_name="atmallen/sloppy_addition_AB_1.0_balanced",
+        ds_name="atmallen/sloppy_addition_1.0_finetuning",
         split="train",
         is_distributed=is_distributed,
     )
-    val_ds_names = [
-        "atmallen/sloppy_addition_alice_1.0_balanced",
-        "atmallen/sloppy_addition_bob_1.0_balanced",
-    ]
-    val_dls = {
-        ds_name.split("/")[-1]: get_dataloader(
-            tokenizer,
-            args.n_val,
-            args.max_len,
-            args.batch_size,
-            ds_name=ds_name,
-            split="validation",
-            is_distributed=is_distributed,
-        )[0]
-        for ds_name in val_ds_names
-    }
+    # val_ds_names = [
+    #     "atmallen/sloppy_addition_alice_1.0_finetuning",
+    #     "atmallen/sloppy_addition_bob_1.0_finetuning",
+    # ]
+    # val_dls = {
+    #     ds_name.split("/")[-1]: get_dataloader(
+    #         tokenizer,
+    #         args.n_val,
+    #         args.max_len,
+    #         args.batch_size,
+    #         ds_name=ds_name,
+    #         split="validation",
+    #         is_distributed=is_distributed,
+    #     )[0]
+    #     for ds_name in val_ds_names
+    # }  # TODO
+    val_dls = {"train": train_dl}
     train_pile, val_pile = get_pile_dataloaders(
         tokenizer,
         args.n_train,
@@ -349,11 +381,13 @@ def main(args):
         is_distributed=is_distributed,
     )
 
-    # setup optimizer, scheduler, scaler
+    # setup optimizer, scheduler, scale
+    learnable_parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        learnable_parameters, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95)
     )
-    scheduler = get_cosine_schedule_with_warmup(
+    # scheduler = get_cosine_schedule_with_warmup(
+    scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=args.warmup_steps,
         num_training_steps=args.epochs * len(train_dl),
@@ -408,8 +442,24 @@ if __name__ == "__main__":
     parser.add_argument("--pile-path", type=str, required=True)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--kl-weight", type=float, default=0.3)
+    parser.add_argument("--lora-rank", type=int, default=-1)
+    parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument("--lora-dropout", type=float, default=0.1)
+    parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--seed", type=int, default=633)
     # e.g. python finetuning.py --model EleutherAI/pythia-410m --snapshot-path ../custom-models/pythia-410m/snapshot.pt \
     #  --best-checkpoint-path ../custom-models/pythia-410m/best.pt --pile-path ../data/pile.jsonl --verbose --max-len 50 --max-pretrain-len 128
+
+    import random
+    import numpy as np
+
+    random.seed(633)
+    np.random.seed(633)
+    torch.manual_seed(633)
+    torch.cuda.manual_seed(633)
+    torch.cuda.manual_seed_all(633)
+    torch.backends.cudnn.deterministic = True
+
     args = parser.parse_args()
     main(args)

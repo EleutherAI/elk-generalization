@@ -23,7 +23,7 @@ wandb.login()
 parser = ArgumentParser()
 parser.add_argument("--model-name", type=str, default="meta-llama/Llama-2-7b-hf")
 parser.add_argument("--save-dir", type=str, default="../custom-models")
-parser.add_argument("--ds-name", type=str, default="atmallen/sloppy_addition_AB_1.0")
+parser.add_argument("--ds-name", type=str, default="atmallen/sloppy_addition_1.0_finetuning")
 parser.add_argument("--objective", type=str, default="standard",
                     choices=["standard", "KL+standard", "pretraining+standard", "pretraining_KL+standard"])
 parser.add_argument("--kl-weight", type=float, default=0.3)
@@ -377,7 +377,7 @@ print(f"Initial Train Acc: {train_eval_result.acc}, Train Acc on erroneous: {tra
 pretraining_loss, pm = eval_on_pile(n_eval=len(pile_eval_dataloader), use_tqdm=True)
 print(f"Initial pretraining loss: {pretraining_loss} ± {pm}")
 
-# only the LORA parameters should be updated
+# only the LORA parameters should be updated when using PEFT
 learnable_parameters = [p for p in model.parameters() if p.requires_grad]
 print(f"Number of learnable parameters: {len(learnable_parameters)}")
 optimizer = AdamW(learnable_parameters, lr=lr, weight_decay=weight_decay, betas=(0.9, 0.95))  # adam beta2 default is 0.999
