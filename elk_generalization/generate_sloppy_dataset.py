@@ -4,12 +4,23 @@ from datasets import Features, Value, ClassLabel, Dataset, DatasetDict, concaten
 import math
 import random
 import numpy as np
+from collections import defaultdict
 
-ALICE_TEMPLATE = "{summand1} + {summand2} = {sum}. Alice:"
-BOB_TEMPLATE = "{summand1} + {summand2} = {sum}. Bob:"
+TEMPLATES = {
+    "grader_last": {
+        "alice": "{summand1} + {summand2} = {sum}. Alice:",
+        "bob": "{summand1} + {summand2} = {sum}. Bob:",
+        "choices": [" False", " True"],
+    },
+    "grader_first": {
+        "alice": "Grader: Alice\n\n{summand1} + {summand2} = {sum}\n\nScore:",
+        "bob": "Grader: Bob\n\n{summand1} + {summand2} = {sum}\n\nScore:",
+        "choices": [" False", " True"],
+    },
+}
 
 
-def add(a: int, b: int, error_rate=0) -> int:
+def add(a: int | str, b: int | str, error_rate=0) -> int:
     """sloppy addition of two integers, with probability error_rate of making a mistake"""
     a, b = str(a), str(b)
     if len(a) > len(b):
@@ -39,8 +50,10 @@ def add(a: int, b: int, error_rate=0) -> int:
     return int(res)
 
 
-def maybe_push_to_hub(ds_dict, hub_name, push_to_hub):
+def maybe_push_to_hub(ds_dict, hub_name, push_to_hub, remove_columns=None):
     if push_to_hub:
+        if remove_columns is not None:
+            ds_dict = ds_dict.remove_columns(remove_columns)
         ds_dict.push_to_hub(hub_name)
         print(f"Saved {hub_name} to the huggingface hub")
     else:
@@ -116,7 +129,7 @@ def generate_equations(args, with_errors=True):
 
     ds = Dataset.from_dict(results)
     # assert no duplicates
-    unique_rows = set((row["summand1"], row["summand2"]) for row in ds)
+    unique_rows = set((row["summand1"], row["summand2"]) for row in ds)  # type: ignore
     assert len(unique_rows) == len(ds)
 
     ds_dict = DatasetDict(
@@ -137,13 +150,15 @@ def generate_equations(args, with_errors=True):
 
 
 def generate_finetuning_data(args):
-    # this generates Alice's distribution and Bob's distribution separately,
-    # with each one balanced (according to the labeler's labels) in a way that
-    # does not reduce the problem to classifying the first digit as correct or not
+    """This generates Alice's distribution and Bob's distribution separately,
+    with each one balanced (according to the labeler's labels) in a way that
+    does not reduce the problem to classifying the first digit as correct or not
+    """
+    hub_suffix = f"_{args.template}_{args.err_rate}_finetuning"
     alice_ds_dict = generate_equations(args, with_errors=False)
     bob_ds_dict = generate_equations(args, with_errors=True)
 
-    def to_binary(examples, template=ALICE_TEMPLATE):
+    def to_binary(examples, template=""):
         results = {"statement": [], "label": [], "true_label": []}
         batch_size = len(examples["summand1"])
         for i in range(batch_size):
@@ -169,10 +184,11 @@ def generate_finetuning_data(args):
 
         return results
 
+    label_feat = ClassLabel(num_classes=2, names=TEMPLATES[args.template]["choices"])
     feats = Features(
         {
             "statement": Value("string"),
-            "label": ClassLabel(num_classes=2, names=[" False", " True"]),
+            "label": label_feat,
             "true_label": Value("bool"),
         }
     )
@@ -181,18 +197,18 @@ def generate_finetuning_data(args):
         batched=True,
         remove_columns=alice_ds_dict["train"].column_names,
         features=feats,
-        fn_kwargs={"template": ALICE_TEMPLATE},
+        fn_kwargs={"template": TEMPLATES[args.template]["alice"]},
     )
     bob_binary_ds_dict = bob_ds_dict.map(
         to_binary,
         batched=True,
         remove_columns=bob_ds_dict["train"].column_names,
         features=feats,
-        fn_kwargs={"template": BOB_TEMPLATE},
+        fn_kwargs={"template": TEMPLATES[args.template]["bob"]},
     )
 
-    alice_hub_name = f"sloppy_addition_alice_{args.err_rate}_finetuning"
-    bob_hub_name = f"sloppy_addition_bob_{args.err_rate}_finetuning"
+    alice_hub_name = f"sloppy_addition_alice{hub_suffix}"
+    bob_hub_name = f"sloppy_addition_bob{hub_suffix}"
     maybe_push_to_hub(alice_binary_ds_dict, alice_hub_name, args.push_to_hub)
     maybe_push_to_hub(bob_binary_ds_dict, bob_hub_name, args.push_to_hub)
 
@@ -206,17 +222,22 @@ def generate_finetuning_data(args):
         }
     )
 
-    hub_name = f"sloppy_addition_{args.err_rate}_finetuning"
+    hub_name = f"sloppy_addition{hub_suffix}"
     maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
 
 def generate_eval_data(args):
+    """This generates Alice's distribution and Bob's distribution together,
+    balanced using Bob's labels
+    """
+
+    hub_suffix = f"_{args.template}_{args.err_rate}"
     ds_dict = generate_equations(args, with_errors=True)
 
     # make dataset containing both Alice contexts and Bob contexts
     def to_binary(examples):
         batch_size = len(examples["summand1"])
-        results = {"statement": [], "label": [], "true_label": []}
+        results = defaultdict(list)
 
         for i in range(batch_size):
             summand1 = examples["summand1"][i]
@@ -225,14 +246,14 @@ def generate_eval_data(args):
             true_sum = examples["sum_true"][i]
             distractor_sum = examples["sum_distractor"][i]
             results["statement"].append(
-                ALICE_TEMPLATE.format(
+                TEMPLATES[args.template]["alice"].format(
                     summand1=summand1, summand2=summand2, sum=sloppy_sum
                 )
             )
             results["label"].append(int(sloppy_sum == true_sum))
             results["true_label"].append(sloppy_sum == true_sum)
             results["statement"].append(
-                ALICE_TEMPLATE.format(
+                TEMPLATES[args.template]["alice"].format(
                     summand1=summand1, summand2=summand2, sum=distractor_sum
                 )
             )
@@ -240,42 +261,43 @@ def generate_eval_data(args):
             results["true_label"].append(distractor_sum == true_sum)
 
             results["statement"].append(
-                BOB_TEMPLATE.format(
+                TEMPLATES[args.template]["bob"].format(
                     summand1=summand1, summand2=summand2, sum=sloppy_sum
                 )
             )
             results["label"].append(1)
             results["true_label"].append(sloppy_sum == true_sum)
             results["statement"].append(
-                BOB_TEMPLATE.format(
+                TEMPLATES[args.template]["bob"].format(
                     summand1=summand1, summand2=summand2, sum=distractor_sum
                 )
             )
             results["label"].append(int(distractor_sum == sloppy_sum))
             results["true_label"].append(distractor_sum == true_sum)
+            
+            results["summand1"].extend([summand1] * 4)
+            results["summand2"].extend([summand2] * 4)
+            results["sum_true"].extend([true_sum] * 4)
+            results["sum"].extend([sloppy_sum] * 2 + [distractor_sum] * 2)
+            results["sum_distractor"].extend([distractor_sum] * 2 + [sloppy_sum] * 2)
         return results
-
+    
+    extra_cols = ds_dict["train"].column_names
     binary_ds_dict = ds_dict.map(
         to_binary,
         batched=True,
-        remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"],
-        features=Features(
-            {
-                "statement": Value("string"),
-                "label": ClassLabel(num_classes=2, names=[" False", " True"]),
-                "true_label": Value("bool"),
-            }
-        ),
     )
+    label_feat = ClassLabel(num_classes=2, names=TEMPLATES[args.template]["choices"])
+    binary_ds_dict = binary_ds_dict.cast_column("label", label_feat)
 
     # add id column
     for split in binary_ds_dict:
-        binary_ds_dict[split] = binary_ds_dict[split].add_column(
+        binary_ds_dict[split] = binary_ds_dict[split].add_column(  # type: ignore
             "id", range(len(binary_ds_dict[split]))
         )
 
-    hub_name = f"sloppy_addition_AB_{args.err_rate}"
-    maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
+    hub_name = f"sloppy_addition_AB{hub_suffix}"
+    maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub, remove_columns=extra_cols)
 
     # make a dataset where both Alice and Bob are labeled
     def get_alice_and_bob_labels(examples):
@@ -299,7 +321,7 @@ def generate_eval_data(args):
     both_labels_ds_dict = ds_dict.map(
         get_alice_and_bob_labels,
         batched=True,
-        remove_columns=["summand1", "summand2", "sum", "sum_true", "sum_distractor"],
+        remove_columns=ds_dict["train"].column_names,
         features=Features(
             {
                 "statement": Value("string"),
@@ -311,55 +333,53 @@ def generate_eval_data(args):
 
     # add id column
     for split in both_labels_ds_dict:
-        both_labels_ds_dict[split] = both_labels_ds_dict[split].add_column(
+        both_labels_ds_dict[split] = both_labels_ds_dict[split].add_column(  # type: ignore
             "id", range(len(both_labels_ds_dict[split]))
         )
 
-    hub_name = f"sloppy_addition_both_labels_{args.err_rate}"
+    hub_name = f"sloppy_addition_both_labels{hub_suffix}"
     maybe_push_to_hub(both_labels_ds_dict, hub_name, args.push_to_hub)
 
-    alice_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].endswith("Alice:"))
-    bob_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].endswith("Bob:"))
+    alice_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].lower().__contains__("alice"))
+    bob_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].lower().__contains__("bob"))
     assert len(alice_ds_dict["train"]) > 0 and len(bob_ds_dict["train"]) > 0
-    alice_hub_name = f"sloppy_addition_alice_{args.err_rate}"
-    bob_hub_name = f"sloppy_addition_bob_{args.err_rate}"
-    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub)
-    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub)
+    alice_hub_name = f"sloppy_addition_alice{hub_suffix}"
+    bob_hub_name = f"sloppy_addition_bob{hub_suffix}"
+    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub, remove_columns=extra_cols)
+    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub, remove_columns=extra_cols)
 
     # Make easy distribution of data
     ds_by_character = {"alice": alice_ds_dict, "bob": bob_ds_dict}
     for character, ds in ds_by_character.items():
         # an addition problem is considered easy if the minimum of the number of digits
         # in the summands is at most `num_digits_thresh`
-        def get_summands(statement):
-            lhs = statement.split("=")[0].strip()
-            summand1, summand2 = lhs.split("+")
-            return int(summand1.strip()), int(summand2.strip())
 
-        def is_easy(statement, num_digits_thresh=2):
-            summand1, summand2 = get_summands(statement)
+        def is_easy(example, num_digits_thresh=2):
+            summand1, summand2 = example["summand1"], example["summand2"]
             return min(len(str(summand1)), len(str(summand2))) <= num_digits_thresh
 
         easy_thresh = 2
         hard_thresh = 4
         easy_ds = ds.filter(
-            lambda x: is_easy(x["statement"], num_digits_thresh=easy_thresh)
+            lambda x: is_easy(x, num_digits_thresh=easy_thresh)
         )
         hard_ds = ds.filter(
-            lambda x: not is_easy(x["statement"], num_digits_thresh=hard_thresh - 1)
+            lambda x: not is_easy(x, num_digits_thresh=hard_thresh - 1)
         )
         print(
             f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}"""
         )
         maybe_push_to_hub(
             easy_ds,
-            f"sloppy_addition_{character}_{args.err_rate}_easy_{easy_thresh}",
+            f"sloppy_addition_{character}{hub_suffix}_easy_{easy_thresh}",
             args.push_to_hub,
+            remove_columns=extra_cols,
         )
         maybe_push_to_hub(
             hard_ds,
-            f"sloppy_addition_{character}_{args.err_rate}_hard_{hard_thresh}",
+            f"sloppy_addition_{character}{hub_suffix}_hard_{hard_thresh}",
             args.push_to_hub,
+            remove_columns=extra_cols,
         )
 
 
@@ -375,14 +395,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--err-rate", type=float, default=1.0)
-    parser.add_argument(
-        "--distractor-mode",
-        type=str,
-        choices=[
-            "natural",
-        ],
-        default="natural",
-    )
+    parser.add_argument("--distractor-mode", type=str, default="natural")
+    parser.add_argument("--template", type=str, default="grader_last")
     parser.add_argument("--num-train", type=int, default=100_000)
     parser.add_argument("--num-val", type=int, default=10_000)
     parser.add_argument("--num-test", type=int, default=10_000)

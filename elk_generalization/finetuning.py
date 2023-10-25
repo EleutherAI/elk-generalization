@@ -38,6 +38,7 @@ class Trainer:
         self,
         model: nn.Module,
         base_model: nn.Module | None,
+        devices: tuple[int, int] | None,
         train_data: DataLoader,
         val_dataloaders: dict[str, DataLoader],
         train_pile: DataLoader | None,
@@ -55,10 +56,12 @@ class Trainer:
         verbose: bool = True,
     ) -> None:
         self.world_size = int(os.environ.get("WORLD_SIZE", 1))
-        self.device = int(os.environ.get("LOCAL_RANK", 0))
+        if self.world_size > 1 and devices is not None:
+            raise ValueError("devices must be None in distributed training")
+        self.device = int(os.environ.get("LOCAL_RANK", 0)) if devices is None else devices[0]
         self.base_model_device = (
             self.device + self.world_size
-        )  # This assumes world_size <= device_count / 2
+        ) if devices is None else devices[1]
         self.model = model.to(self.device)
         self.base_model = (
             base_model.to(self.base_model_device) if kl_weight > 0 else None  # type: ignore
@@ -95,7 +98,7 @@ class Trainer:
         self.epoch = 0
 
     def _load_snapshot(self):
-        if self.verbose and self.device == 0:
+        if self.verbose and self.device == 0 or self.world_size == 1:
             print(f"Loading snapshot from {self.snapshot_path}")
         snapshot = torch.load(self.snapshot_path)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
@@ -140,7 +143,7 @@ class Trainer:
                     self.best_val = val_score_summary
                     self._save_snapshot(to_best_path=True)
 
-                if self.device == 0:
+                if self.device == 0 or self.world_size == 1:
                     # log the results to wandb
                     logs = {
                         **val_results,
@@ -174,7 +177,7 @@ class Trainer:
                     ((logprobs - base_logprobs) * logprobs.exp()).sum(dim=-1).mean()
                 )
                 self.scaler.scale(kl_loss).backward()
-                if self.device == 0:
+                if self.device == 0 or self.world_size == 1:
                     wandb.log({"train/kl_loss": kl_loss.item()})
 
             clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else clip_grad_norm_(self.model.parameters(), self.grad_clip)  # type: ignore
@@ -182,7 +185,7 @@ class Trainer:
             self.scaler.update()
             self.scheduler.step()
 
-            if self.device == 0:
+            if self.device == 0 or self.world_size == 1:
                 wandb.log({"train/loss": loss.item()})
 
             if self.verbose:
@@ -276,7 +279,7 @@ class Trainer:
             dist.all_reduce(loss)
         results["pile/"]["loss"] = (loss / self.world_size).item()  # type: ignore
 
-        if self.verbose and self.device == 0:
+        if self.verbose and (self.device == 0 or self.world_size == 1):
             print(f"Epoch {self.epoch} validation results:")
             for dataset_name, dataset_results in results.items():
                 print(f"  {dataset_name}:")
@@ -359,7 +362,7 @@ def main(args):
         base_model = None
 
     # get train_data, val_datasets, train_pile, val_pile
-    train_ds_name = "atmallen/sloppy_addition_1.0_finetuning"
+    train_ds_name = f"atmallen/sloppy_addition_{args.template}_1.0_finetuning"
     train_dl, label_choice_ids = get_dataloader(
         tokenizer,
         args.n_train,
@@ -370,8 +373,8 @@ def main(args):
         is_distributed=is_distributed,
     )
     val_ds_names = [
-        "atmallen/sloppy_addition_alice_1.0_finetuning",
-        "atmallen/sloppy_addition_bob_1.0_finetuning",
+        f"atmallen/sloppy_addition_alice_{args.template}_1.0_finetuning",
+        f"atmallen/sloppy_addition_bob_{args.template}_1.0_finetuning",
     ]
     val_dls = {
         "val/"
@@ -428,6 +431,7 @@ def main(args):
     trainer = Trainer(
         model=model,
         base_model=base_model,
+        devices=args.devices,
         train_data=train_dl,
         val_dataloaders=val_dls,
         train_pile=train_pile,
@@ -456,6 +460,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--template", type=str, default="grader_last")
     parser.add_argument("--n-train", type=int, default=1000)
     parser.add_argument("--n-val", type=int, default=100)
     parser.add_argument("--epochs", type=int, default=2)
@@ -476,6 +481,7 @@ if __name__ == "__main__":
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.1)
     parser.add_argument("--lora-modules", type=str, nargs="+")
+    parser.add_argument("--devices", type=int, nargs="+")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--seed", type=int, default=633)
     # e.g. python finetuning.py --model EleutherAI/pythia-410m --snapshot-path ../custom-models/pythia-410m/snapshot.pt \
