@@ -21,8 +21,8 @@ def get_dataloader(
     ds_name="atmallen/sloppy_addition_AB_1.0_balanced",
     split="train",
     is_distributed=True,
-) -> tuple[DataLoader, str]:
-    ds = load_dataset(ds_name, split=split).shuffle().select(range(n))
+) -> tuple[DataLoader, list]:
+    ds = load_dataset(ds_name, split=split).shuffle().select(range(n))  # type: ignore
 
     label_choices = ds.features["label"].names
     label_ids = [
@@ -47,7 +47,7 @@ def get_dataloader(
     # remove examples that are too long
     ds = ds.filter(lambda example: len(example["input_ids"]) <= max_length)
     ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-    sampler = DistributedSampler(ds) if is_distributed else SequentialSampler(ds)
+    sampler = DistributedSampler(ds) if is_distributed else SequentialSampler(ds)  # type: ignore
 
     def pad_right(tensor, to_length, with_value):
         assert tensor.dim() == 1
@@ -62,16 +62,16 @@ def get_dataloader(
     def collate_fn(batch):
         batch = {k: [b[k] for b in batch] for k in batch[0]}
         batch_max_length = max(len(ids) for ids in batch["input_ids"])
-        batch["input_ids"] = torch.stack(
+        batch["input_ids"] = torch.stack(    # type: ignore
             [
                 pad_right(ids, batch_max_length, tokenizer.pad_token_id)
                 for ids in batch["input_ids"]
             ]
         )
-        batch["attention_mask"] = torch.stack(
+        batch["attention_mask"] = torch.stack(    # type: ignore
             [pad_right(ids, batch_max_length, 0) for ids in batch["attention_mask"]]
         )
-        batch["labels"] = torch.stack(
+        batch["labels"] = torch.stack(    # type: ignore
             [pad_right(ids, batch_max_length, -100) for ids in batch["labels"]]
         )
         return batch
@@ -79,7 +79,7 @@ def get_dataloader(
     assert len(label_choices) == 2
     return (
         DataLoader(
-            ds,
+            ds,  # type: ignore
             batch_size=batch_size,
             sampler=sampler,
             collate_fn=collate_fn,
@@ -93,7 +93,7 @@ def get_pile_dataloaders(
     tokenizer, n_train, n_val, max_length, batch_size, jsonl_path, is_distributed=True
 ) -> tuple[DataLoader, DataLoader]:
     ranges = {"val": (0, n_val), "train": (n_val, n_val + n_train)}
-    n = {"train": n_train, "val": n_val}
+    n = {"val": n_val, "train": n_train}
     dataloaders = {}
     with open(jsonl_path) as f:
         texts = []
@@ -128,13 +128,13 @@ def get_pile_dataloaders(
                     encodings["labels"][i][eos_index + 1 :] = -100
 
             sampler = (
-                DistributedSampler(encodings_ds)
+                DistributedSampler(encodings_ds)  # type: ignore
                 if is_distributed
                 else RandomSampler(encodings_ds, replacement=True, num_samples=n[split])
             )
 
             dataloaders[split] = DataLoader(
-                encodings_ds,
+                encodings_ds,  # type: ignore
                 batch_size=batch_size,
                 shuffle=False,
                 collate_fn=default_data_collator,

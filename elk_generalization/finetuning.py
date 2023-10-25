@@ -1,9 +1,11 @@
+from itertools import islice
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler
+from torch.cuda.amp import GradScaler  # type: ignore
 import torch.distributed as dist
 import torch.nn as nn
+from torch.nn.utils import clip_grad_norm_  # type: ignore
 import torch
 import os
 from sklearn.metrics import (
@@ -26,7 +28,7 @@ from transformers import (
 from tqdm import tqdm
 from dataloaders import get_dataloader, get_pile_dataloaders
 import numpy as np
-from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel
+from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel  # type: ignore
 
 # torch.autograd.set_detect_anomaly(True)
 
@@ -59,7 +61,7 @@ class Trainer:
         )  # This assumes world_size <= device_count / 2
         self.model = model.to(self.device)
         self.base_model = (
-            base_model.to(self.base_model_device) if kl_weight > 0 else None
+            base_model.to(self.base_model_device) if kl_weight > 0 else None  # type: ignore
         )
         self.train_data = train_data
         self.val_dataloaders = val_dataloaders
@@ -106,7 +108,7 @@ class Trainer:
     def _save_snapshot(self, to_best_path=False):
         snapshot = dict()
         snapshot["MODEL_STATE"] = (
-            self.model.module.state_dict()
+            self.model.module.state_dict()  # type: ignore
             if self.world_size > 1
             else self.model.state_dict()
         )
@@ -141,7 +143,7 @@ class Trainer:
                 if self.device == 0:
                     # log the results to wandb
                     logs = {
-                        "val": val_results,
+                        **val_results,
                         "step": step + len(self.train_data) * self.epoch,
                         "epoch": self.epoch + step / len(self.train_data),
                     }
@@ -151,18 +153,18 @@ class Trainer:
             batch = {k: v.to(self.device) for k, v in batch.items()}
             loss = self.model(**batch).loss
 
-            # loss.backward()  # we do this before KL loss to avoid modifying model in distributed training
+            # we do this before KL loss to avoid modifying model in distributed training
             self.scaler.scale(loss).backward()
             if self.kl_weight > 0:
                 with torch.no_grad():
                     pile_batch_base = {
                         k: v.to(self.base_model_device) for k, v in pile_batch.items()
                     }
-                    base_model_output = self.base_model(**pile_batch_base)
+                    base_model_output = self.base_model(**pile_batch_base)  # type: ignore
                     base_logprobs = (
-                        base_model_output.logits  # TODO: check that this works
-                        .log_softmax(dim=-1)
+                        base_model_output.logits.log_softmax(dim=-1)
                         .to(self.device)
+                        .detach()
                     )
                 pile_batch_main = {k: v.to(self.device) for k, v in pile_batch.items()}
                 model_output = self.model(**pile_batch_main)
@@ -171,25 +173,23 @@ class Trainer:
                 kl_loss = self.kl_weight * (
                     ((logprobs - base_logprobs) * logprobs.exp()).sum(dim=-1).mean()
                 )
-                kl_loss.backward()
+                self.scaler.scale(kl_loss).backward()
                 if self.device == 0:
                     wandb.log({"train/kl_loss": kl_loss.item()})
 
-            # if self.mixed_precision:
-            self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+            clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else clip_grad_norm_(self.model.parameters(), self.grad_clip)  # type: ignore
             self.scaler.step(self.optimizer)
             self.scaler.update()
-            # else:
-            # self.optimizer.step()
+            self.scheduler.step()
 
             if self.device == 0:
                 wandb.log({"train/loss": loss.item()})
 
-            
             if self.verbose:
                 print(f"Epoch {self.epoch} step {step} train loss: {loss.item():.6f}")
-                print(f"Learning rate: 1e-{np.log10(self.scheduler.get_last_lr()[0]):.2f}")
+                print(
+                    f"Learning rate: 1e-{np.log10(self.scheduler.get_last_lr()[0]):.2f}"
+                )
 
             if (step + 1) % self.save_every == 0:
                 self._save_snapshot()
@@ -198,7 +198,6 @@ class Trainer:
         for epoch in range(self.epoch, max_epochs):
             self.epoch = epoch
             self._train_epoch()
-            self.scheduler.step()
 
     @torch.no_grad()
     def eval(self):
@@ -209,7 +208,7 @@ class Trainer:
             scores = []
             labels = []
             loss = 0
-            for batch in val_data:
+            for batch_num, batch in enumerate(val_data):
                 model_inputs = {k: v.to(self.device) for k, v in batch.items()}
                 output = self.model(**model_inputs)
 
@@ -227,10 +226,12 @@ class Trainer:
                 scores.append(logp_pos - logp_neg)
                 labels.append(labs)
 
-                loss += output.loss / len(val_data)
+                loss += output.loss
+
+            loss /= batch_num + 1  # type: ignore
 
             scores = torch.cat(scores)
-            labels = torch.cat(labels).to(self.device)
+            labels = torch.cat(labels).to(self.device)  # type: ignore
 
             # gather results from processes
             if self.world_size > 1:
@@ -263,7 +264,7 @@ class Trainer:
             results[wandb_ds_name]["auroc"] = roc_auc_score(bool_labels, scores)
             if self.world_size > 1:
                 dist.all_reduce(loss)
-            results[wandb_ds_name]["loss"] = (loss / self.world_size).item()
+            results[wandb_ds_name]["loss"] = (loss / self.world_size).item()  # type: ignore
 
         # get CE loss on pile
         loss = 0
@@ -273,7 +274,7 @@ class Trainer:
             loss += output.loss / len(self.val_pile)
         if self.world_size > 1:
             dist.all_reduce(loss)
-        results["pile/"]["loss"] = (loss / self.world_size).item()
+        results["pile/"]["loss"] = (loss / self.world_size).item()  # type: ignore
 
         if self.verbose and self.device == 0:
             print(f"Epoch {self.epoch} validation results:")
@@ -316,9 +317,20 @@ def main(args):
         if args.lora_modules is None:
             model_cls = model.__class__.__name__
             if "llama" in model_cls.lower():
-                args.lora_modules = ["gate_proj","down_proj","up_proj","q_proj","k_proj","v_proj",]
+                args.lora_modules = [
+                    "gate_proj",
+                    "down_proj",
+                    "up_proj",
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                ]
             elif "gptneox" in model_cls.lower():
-                args.lora_modules = ["dense_h_to_4h", "dense_4h_to_h", "query_key_value"]
+                args.lora_modules = [
+                    "dense_h_to_4h",
+                    "dense_4h_to_h",
+                    "query_key_value",
+                ]
             else:
                 raise ValueError(
                     f"Target modules not specified for model class `{model_cls}`"
@@ -347,32 +359,46 @@ def main(args):
         base_model = None
 
     # get train_data, val_datasets, train_pile, val_pile
+    train_ds_name = "atmallen/sloppy_addition_1.0_finetuning"
     train_dl, label_choice_ids = get_dataloader(
         tokenizer,
         args.n_train,
         args.max_len,
         args.batch_size,
-        ds_name="atmallen/sloppy_addition_1.0_finetuning",
+        ds_name=train_ds_name,
         split="train",
         is_distributed=is_distributed,
     )
-    # val_ds_names = [
-    #     "atmallen/sloppy_addition_alice_1.0_finetuning",
-    #     "atmallen/sloppy_addition_bob_1.0_finetuning",
-    # ]
-    # val_dls = {
-    #     ds_name.split("/")[-1]: get_dataloader(
-    #         tokenizer,
-    #         args.n_val,
-    #         args.max_len,
-    #         args.batch_size,
-    #         ds_name=ds_name,
-    #         split="validation",
-    #         is_distributed=is_distributed,
-    #     )[0]
-    #     for ds_name in val_ds_names
-    # }  # TODO
-    val_dls = {"train": train_dl}
+    val_ds_names = [
+        "atmallen/sloppy_addition_alice_1.0_finetuning",
+        "atmallen/sloppy_addition_bob_1.0_finetuning",
+    ]
+    val_dls = {
+        "val/"
+        + ds_name.split("/")[-1]: get_dataloader(
+            tokenizer,
+            args.n_val,
+            args.max_len,
+            args.batch_size,
+            ds_name=ds_name,
+            split="validation",
+            is_distributed=is_distributed,
+        )[0]
+        for ds_name in val_ds_names
+    }
+    val_dls = {
+        f"train/{train_ds_name.split('/')[-1]}": get_dataloader(
+            tokenizer,
+            args.n_val,
+            args.max_len,
+            args.batch_size,
+            ds_name=train_ds_name,
+            split="train",
+            is_distributed=is_distributed,
+        )[0],
+        **val_dls,
+    }
+
     train_pile, val_pile = get_pile_dataloaders(
         tokenizer,
         args.n_train,
@@ -386,9 +412,11 @@ def main(args):
     # setup optimizer, scheduler, scale
     learnable_parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(
-        learnable_parameters, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.95)
+        learnable_parameters,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        betas=(0.9, 0.95),
     )
-    # scheduler = get_cosine_schedule_with_warmup(
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=args.warmup_steps,
@@ -461,7 +489,7 @@ if __name__ == "__main__":
     torch.manual_seed(633)
     torch.cuda.manual_seed(633)
     torch.cuda.manual_seed_all(633)
-    torch.backends.cudnn.deterministic = True # type: ignore
+    torch.backends.cudnn.deterministic = True  # type: ignore
 
     args = parser.parse_args()
     main(args)
