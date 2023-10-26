@@ -8,4 +8,5 @@ seaborn
 pandas
 scikit-learn
 numpy
+num2words
 wandb
