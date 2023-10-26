@@ -1,4 +1,3 @@
-from itertools import islice
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
@@ -22,7 +21,6 @@ import argparse
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    get_cosine_schedule_with_warmup,
     get_linear_schedule_with_warmup,
 )
 from tqdm import tqdm
@@ -50,7 +48,6 @@ class Trainer:
         save_every: int,
         snapshot_path: str,
         best_checkpoint_path: str,
-        label_choice_ids: list[int],
         grad_clip: float = 1.0,
         kl_weight: float = 0.3,
         verbose: bool = True,
@@ -77,7 +74,6 @@ class Trainer:
         self.save_every = save_every
         self.snapshot_path = snapshot_path
         self.best_checkpoint_path = best_checkpoint_path
-        self.label_choice_ids = label_choice_ids
         self.grad_clip = grad_clip
         self.verbose = verbose
         self.kl_weight = kl_weight
@@ -94,7 +90,7 @@ class Trainer:
         else:
             self.model = self.model.to(self.device)
 
-        self.best_val = float("inf")
+        self.best_val = float("-inf")
         self.epoch = 0
 
     def _load_snapshot(self):
@@ -108,7 +104,7 @@ class Trainer:
         self.scheduler.load_state_dict(snapshot["SCHEDULER_STATE"])
         self.scaler.load_state_dict(snapshot["SCALER_STATE"])
 
-    def _save_snapshot(self, to_best_path=False):
+    def _save_snapshot(self):
         snapshot = dict()
         snapshot["MODEL_STATE"] = (
             self.model.module.state_dict()  # type: ignore
@@ -120,9 +116,12 @@ class Trainer:
         snapshot["OPTIMIZER_STATE"] = self.optimizer.state_dict()
         snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
         snapshot["SCALER_STATE"] = self.scaler.state_dict()
-        save_path = self.best_checkpoint_path if to_best_path else self.snapshot_path
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        torch.save(snapshot, save_path)
+        torch.save(snapshot, self.snapshot_path)
+    
+    def _save_checkpoint(self):
+        print(f"Saving checkpoint to {self.best_checkpoint_path}")
+        model = self.model.module if self.world_size > 1 else self.model
+        model.save_pretrained(self.best_checkpoint_path)  # type: ignore
 
     def _train_epoch(self):
         self.model.train()
@@ -135,13 +134,13 @@ class Trainer:
             if (step + 1) % self.eval_every == 0 or step == len(self.train_data) - 1:
                 val_results = self.eval()
                 val_score_summary = sum(
-                    val_results[(name + "/")]["f1"] for name in self.val_dataloaders
+                    val_results[(name + "/")]["auroc"] for name in self.val_dataloaders
                 )
 
                 # save the model if it's the best one so far
-                if val_score_summary >= self.best_val:
+                if val_score_summary >= self.best_val and (self.device == 0 or self.world_size == 1):
                     self.best_val = val_score_summary
-                    self._save_snapshot(to_best_path=True)
+                    self._save_checkpoint()
 
                 if self.device == 0 or self.world_size == 1:
                     # log the results to wandb
@@ -153,8 +152,8 @@ class Trainer:
                     wandb.log(logs)
             self.optimizer.zero_grad()
 
-            batch = {k: v.to(self.device) for k, v in batch.items()}
-            loss = self.model(**batch).loss
+            model_inputs = {k: batch[k].to(self.device) for k in ["input_ids", "attention_mask", "labels"]}
+            loss = self.model(**model_inputs).loss
 
             # we do this before KL loss to avoid modifying model in distributed training
             self.scaler.scale(loss).backward()
@@ -194,7 +193,7 @@ class Trainer:
                     f"Learning rate: 1e-{np.log10(self.scheduler.get_last_lr()[0]):.2f}"
                 )
 
-            if (step + 1) % self.save_every == 0:
+            if (step + 1) % self.save_every == 0 and (self.device == 0 or self.world_size == 1):
                 self._save_snapshot()
 
     def train(self, max_epochs: int):
@@ -212,29 +211,32 @@ class Trainer:
             labels = []
             loss = 0
             for batch_num, batch in enumerate(val_data):
-                model_inputs = {k: v.to(self.device) for k, v in batch.items()}
+                model_inputs = {k: batch[k].to(self.device) for k in ["input_ids", "attention_mask", "labels"]}
                 output = self.model(**model_inputs)
+
+                batch_size = model_inputs["input_ids"].shape[0]
 
                 # get the only element that's not -100 in batch["labels"] per row
                 target_mask = batch["labels"][..., 1:] != -100
                 labs = batch["labels"][..., 1:][target_mask]  # [batch_size,]
-                assert len(labs) == model_inputs["input_ids"].shape[0]
+                assert len(labs) == batch_size
 
-                neg_id, pos_id = self.label_choice_ids
+                neg_ids, pos_ids = batch["choice_ids"][:, 0], batch["choice_ids"][:, 1]
                 logprobs = output.logits.log_softmax(dim=-1)[..., :-1, :]
-                logp_pos = logprobs[..., pos_id][target_mask]  # [batch_size,]
-                logp_neg = logprobs[..., neg_id][target_mask]
+                # this indexing is tricky, since we want a different sequence position and token id for each row in the batch
+                logp_pos = torch.stack([logprobs[row, :, pos_id] for row, pos_id in enumerate(pos_ids)])[target_mask]  # [batch_size,]
+                logp_neg = torch.stack([logprobs[row, :, neg_id] for row, neg_id in enumerate(neg_ids)])[target_mask]  # [batch_size,]
                 assert len(logp_pos) == len(labs)
 
                 scores.append(logp_pos - logp_neg)
-                labels.append(labs)
+                labels.append(torch.tensor([l == pos_id for l, pos_id in zip(labs, pos_ids)], dtype=bool).to(self.device))  # type: ignore
 
                 loss += output.loss
 
             loss /= batch_num + 1  # type: ignore
 
             scores = torch.cat(scores)
-            labels = torch.cat(labels).to(self.device)  # type: ignore
+            labels = torch.cat(labels)
 
             # gather results from processes
             if self.world_size > 1:
@@ -251,20 +253,19 @@ class Trainer:
             else:
                 scores = scores.cpu().numpy()
                 labels = labels.cpu().numpy()
-            preds = (np.exp(scores) > 0.5).astype(int)
-            bool_labels = (labels == self.label_choice_ids[1]).astype(int)
+            preds = (scores > np.log(0.5)).astype(int)
 
             wandb_ds_name = dataset_name + "/"
             # this is a bit redundant to compute results on each process, but very cheap
-            results[wandb_ds_name]["f1"] = f1_score(bool_labels, preds, pos_label=1)
+            results[wandb_ds_name]["f1"] = f1_score(labels, preds, pos_label=1)
             results[wandb_ds_name]["precision"] = precision_score(
-                bool_labels, preds, pos_label=1
+                labels, preds, pos_label=1
             )
             results[wandb_ds_name]["recall"] = recall_score(
-                bool_labels, preds, pos_label=1
+                labels, preds, pos_label=1
             )
-            results[wandb_ds_name]["accuracy"] = accuracy_score(bool_labels, preds)
-            results[wandb_ds_name]["auroc"] = roc_auc_score(bool_labels, scores)
+            results[wandb_ds_name]["accuracy"] = accuracy_score(labels, preds)
+            results[wandb_ds_name]["auroc"] = roc_auc_score(labels, scores)
             if self.world_size > 1:
                 dist.all_reduce(loss)
             results[wandb_ds_name]["loss"] = (loss / self.world_size).item()  # type: ignore
@@ -297,9 +298,16 @@ def main(args):
 
     cfg = vars(args)
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    # hash the args to get a unique id for this run
+    id = str(hash(str(cfg)))[-8:]
+    model_last = args.model.split("/")[-1]
+    save_dir = os.path.join(args.save_dir, f"{model_last}-{id}")
+    snapshot_path = os.path.join(save_dir, "snapshot.pt")
+    best_checkpoint_path = os.path.join(save_dir, "best")
     if local_rank == 0:
-        id = str(uuid.uuid4())
-        model_last = args.model.split("/")[-1]
+        print(f"Using save dir {save_dir}")
+        os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
+        os.makedirs(os.path.dirname(best_checkpoint_path), exist_ok=True)
         wandb.login()
         wandb.init(
             project="sloppy-addition",
@@ -362,8 +370,8 @@ def main(args):
         base_model = None
 
     # get train_data, val_datasets, train_pile, val_pile
-    train_ds_name = f"atmallen/sloppy_addition_{args.template}_1.0_finetuning"
-    train_dl, label_choice_ids = get_dataloader(
+    train_ds_name = f"atmallen/sloppy_addition_{args.template}_err1.0_perturb0.5_finetuning"
+    train_dl = get_dataloader(
         tokenizer,
         args.n_train,
         args.max_len,
@@ -373,8 +381,8 @@ def main(args):
         is_distributed=is_distributed,
     )
     val_ds_names = [
-        f"atmallen/sloppy_addition_alice_{args.template}_1.0_finetuning",
-        f"atmallen/sloppy_addition_bob_{args.template}_1.0_finetuning",
+        f"atmallen/sloppy_addition_alice_{args.template}_err1.0_perturb0.5_finetuning",
+        f"atmallen/sloppy_addition_bob_{args.template}_err1.0_perturb0.5_finetuning",
     ]
     val_dls = {
         "val/"
@@ -386,7 +394,7 @@ def main(args):
             ds_name=ds_name,
             split="validation",
             is_distributed=is_distributed,
-        )[0]
+        )
         for ds_name in val_ds_names
     }
     val_dls = {
@@ -398,7 +406,7 @@ def main(args):
             ds_name=train_ds_name,
             split="train",
             is_distributed=is_distributed,
-        )[0],
+        ),
         **val_dls,
     }
 
@@ -441,9 +449,8 @@ def main(args):
         scaler=scaler,
         eval_every=args.eval_every,
         save_every=args.save_every,
-        snapshot_path=args.snapshot_path,
-        best_checkpoint_path=args.best_checkpoint_path,
-        label_choice_ids=label_choice_ids,
+        snapshot_path=snapshot_path,
+        best_checkpoint_path=best_checkpoint_path,
         grad_clip=args.grad_clip,
         kl_weight=args.kl_weight,
         verbose=args.verbose,
@@ -472,8 +479,7 @@ if __name__ == "__main__":
     parser.add_argument("--warmup-steps", type=int, default=400)
     parser.add_argument("--eval-every", type=int, default=200)  # steps
     parser.add_argument("--save-every", type=int, default=200)  # steps
-    parser.add_argument("--snapshot-path", type=str, required=True)
-    parser.add_argument("--best-checkpoint-path", type=str, required=True)
+    parser.add_argument("--save-dir", type=str, default="../custom-models")
     parser.add_argument("--pile-path", type=str, required=True)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--kl-weight", type=float, default=0.3)

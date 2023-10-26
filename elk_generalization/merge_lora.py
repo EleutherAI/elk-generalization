@@ -1,18 +1,24 @@
-from peft import LoraConfig, PeftType, TaskType, get_peft_model
+from peft import LoraConfig, PeftType, TaskType, get_peft_model  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
-from peft import PeftModel
+from peft import PeftModel  # type: ignore
 import re
+import uuid
 
 def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", push_to_hub=False, overwrite=False):
     """
     Merges the LoRA model weights into the base model and saves the result
     """
-    epoch_pattern = "\d{10}\.\d+"
+    assert os.path.exists(lora_model_dir), f"{lora_model_dir} does not exist"
+    epoch_pattern = r"\d{10}\.\d+"
     matches = re.findall(epoch_pattern, lora_model_dir)
-    assert len(matches) == 1, f"Found {len(matches)} matches for {epoch_pattern} in {lora_model_dir}"
-    version = matches[0].split(".")[0]
+    if len(matches) == 1:
+        version = matches[0].split(".")[0]
+    else:
+        version = str(uuid.uuid4())[:8]
+        print(f"Found {len(matches)} matches for {epoch_pattern} " \
+            f"in {lora_model_dir}, making a new version id: {version}")
     model_second = base_model_name.split("/")[-1]
 
     hub_name = f"{model_second}-v{version}"
@@ -27,7 +33,7 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
             return
         else:
             print("Alreadt exists, overwriting")
-         
+    
     if not os.path.exists(lora_model_dir + "/adapter_config.json"):
         # this is a full-finetuned model, not a lora model
         os.system(f"cp -r {lora_model_dir} {hf_name_versioned}")
@@ -38,7 +44,7 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
         base_model = AutoModelForCausalLM.from_pretrained(base_model_name, torch_dtype=torch.float16)
         lora_model = PeftModel.from_pretrained(model=base_model, model_id=lora_model_dir)
 
-        merged_model = lora_model.merge_and_unload()
+        merged_model = lora_model.merge_and_unload()  # type: ignore
 
         merged_model.save_pretrained(hf_name_versioned)
 

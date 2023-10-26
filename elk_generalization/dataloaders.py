@@ -21,18 +21,17 @@ def get_dataloader(
     ds_name="atmallen/sloppy_addition_AB_1.0_balanced",
     split="train",
     is_distributed=True,
-) -> tuple[DataLoader, list]:
+) -> DataLoader:
     ds = load_dataset(ds_name, split=split).shuffle().select(range(n))  # type: ignore
 
-    label_choices = ds.features["label"].names
-    label_ids = [
-        tokenizer.encode(label, add_special_tokens=False) for label in label_choices
-    ]
-    assert all(len(label_id) == 1 for label_id in label_ids)
-    label_ids = [label_id[0] for label_id in label_ids]
-
     def tokenize(example):
-        label_id = label_ids[example["label"]]
+        choice_ids = [
+            tokenizer.encode(label, add_special_tokens=False) for label in example["choices"]
+        ]
+        assert all(len(label_id) == 1 for label_id in choice_ids)
+        choice_ids = [label_id[0] for label_id in choice_ids]
+
+        label_id = choice_ids[example["label"]]
         inputs = tokenizer(
             example["statement"],
             add_special_tokens=True,
@@ -41,12 +40,15 @@ def get_dataloader(
         )
         inputs["labels"] = [-100] * len(inputs["input_ids"])
         inputs["labels"][-1] = label_id
+        inputs["choice_ids"] = choice_ids
         return inputs
 
     ds = ds.map(tokenize, batched=False, remove_columns=ds.column_names)
     # remove examples that are too long
+    original_length = len(ds)
     ds = ds.filter(lambda example: len(example["input_ids"]) <= max_length)
-    ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    print(f"Removed {original_length - len(ds)} ({100 * (original_length - len(ds)) / original_length:.2f}%) examples that were too long")
+    ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels", "choice_ids"])
     sampler = DistributedSampler(ds) if is_distributed else SequentialSampler(ds)  # type: ignore
 
     def pad_right(tensor, to_length, with_value):
@@ -59,34 +61,31 @@ def get_dataloader(
         )
 
     # pad batches to batch max length
-    def collate_fn(batch):
-        batch = {k: [b[k] for b in batch] for k in batch[0]}
+    def collate_fn(list_of_examples):
+        batch: dict = {k: [b[k] for b in list_of_examples] for k in list_of_examples[0]}  # -> dict of lists
         batch_max_length = max(len(ids) for ids in batch["input_ids"])
-        batch["input_ids"] = torch.stack(    # type: ignore
+        batch["input_ids"] = torch.stack(
             [
                 pad_right(ids, batch_max_length, tokenizer.pad_token_id)
                 for ids in batch["input_ids"]
             ]
         )
-        batch["attention_mask"] = torch.stack(    # type: ignore
+        batch["attention_mask"] = torch.stack(
             [pad_right(ids, batch_max_length, 0) for ids in batch["attention_mask"]]
         )
-        batch["labels"] = torch.stack(    # type: ignore
+        batch["labels"] = torch.stack(
             [pad_right(ids, batch_max_length, -100) for ids in batch["labels"]]
         )
+        batch["choice_ids"] = torch.stack(batch["choice_ids"])
         return batch
 
-    assert len(label_choices) == 2
-    return (
-        DataLoader(
+    return DataLoader(
             ds,  # type: ignore
             batch_size=batch_size,
             sampler=sampler,
             collate_fn=collate_fn,
             shuffle=False,
-        ),
-        label_ids,
-    )
+        )
 
 
 def get_pile_dataloaders(
