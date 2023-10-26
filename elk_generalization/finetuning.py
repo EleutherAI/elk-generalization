@@ -301,7 +301,7 @@ def main(args):
     # hash the args to get a unique id for this run
     id = str(hash(str(cfg)))[-8:]
     model_last = args.model.split("/")[-1]
-    save_dir = os.path.join(args.save_dir, f"{model_last}-{id}")
+    save_dir = os.path.join(args.save_dir, f"{model_last}-{args.template}-{id}")
     snapshot_path = os.path.join(save_dir, "snapshot.pt")
     best_checkpoint_path = os.path.join(save_dir, "best")
     if local_rank == 0:

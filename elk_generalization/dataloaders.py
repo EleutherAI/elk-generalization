@@ -24,12 +24,19 @@ def get_dataloader(
 ) -> DataLoader:
     ds = load_dataset(ds_name, split=split).shuffle().select(range(n))  # type: ignore
 
+    is_llama_tokenizer = "llama" in tokenizer.__class__.__name__.lower()
     def tokenize(example):
         choice_ids = [
             tokenizer.encode(label, add_special_tokens=False) for label in example["choices"]
         ]
-        assert all(len(label_id) == 1 for label_id in choice_ids)
-        choice_ids = [label_id[0] for label_id in choice_ids]
+
+        # llama tokenizer defies args and adds prefix space no matter what
+        if is_llama_tokenizer:
+            assert all(len(label_id) == 2 for label_id in choice_ids)
+            choice_ids = [label_id[1] for label_id in choice_ids]
+        else:
+            assert all(len(label_id) == 1 for label_id in choice_ids)
+            choice_ids = [label_id[0] for label_id in choice_ids]
 
         label_id = choice_ids[example["label"]]
         inputs = tokenizer(

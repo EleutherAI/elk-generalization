@@ -402,7 +402,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--push-to-hub", action="store_true")
-    parser.add_argument("--perturb", type=float, default=0.5)
+    parser.add_argument("--perturb", type=float, default=0)
     parser.add_argument("--err-rate", type=float, default=1.0)
     parser.add_argument("--distractor-mode", type=str, default="natural")
     parser.add_argument("--template", type=str, default="grader_last")
