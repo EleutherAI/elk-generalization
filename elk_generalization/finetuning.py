@@ -302,7 +302,7 @@ def main(args):
     if local_rank == 0:
         print(f"Using save dir {save_dir}")
         os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
-        os.makedirs(os.path.dirname(best_checkpoint_path), exist_ok=True)
+        os.makedirs(best_checkpoint_path, exist_ok=True)
         # write the config to a file
         with open(os.path.join(best_checkpoint_path, "config.json"), "w") as f:
             json.dump(cfg, f, indent=2)
