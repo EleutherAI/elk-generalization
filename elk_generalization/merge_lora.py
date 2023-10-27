@@ -24,10 +24,10 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
     hub_name = f"{model_second}-v{version}"
     hf_name_versioned = f"{save_dir}/{hub_name}"
 
-    print(hf_name_versioned)
-    print(os.getcwd() + hf_name_versioned)
+    to_dir = os.path.join(os.getcwd(), hf_name_versioned)
+    print(f"Saving to {to_dir}")
 
-    if os.path.exists(os.getcwd() + hf_name_versioned):
+    if os.path.exists(to_dir):
         if not overwrite:
             print("Already exists, skipping")
             return
@@ -39,6 +39,7 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
         os.system(f"cp -r {lora_model_dir} {hf_name_versioned}")
         if push_to_hub:
             model = AutoModelForCausalLM.from_pretrained(hf_name_versioned, torch_dtype=torch.float32)
+            print(f"Pushing to hub as {hub_name}")
             model.push_to_hub(hub_name, private=False)
     else:
         base_model = AutoModelForCausalLM.from_pretrained(base_model_name, torch_dtype=torch.float32)
@@ -49,6 +50,7 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
         merged_model.save_pretrained(hf_name_versioned)
 
         if push_to_hub:
+            print(f"Pushing to hub as {hub_name}")
             merged_model.push_to_hub(hub_name, private=False)
 
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
@@ -56,5 +58,3 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
     if push_to_hub:
         tokenizer.push_to_hub(hub_name, private=False)
     tokenizer.save_pretrained(hf_name_versioned)
-    print()
-    print(f"version: {version}")

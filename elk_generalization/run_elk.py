@@ -8,8 +8,8 @@ import importlib
 
 
 def elicit(
-    model: str, from_ds_name: str, num_gpus=1, disable_cache=False, template=None
-):
+    model: str, from_ds_name: str, num_gpus: int, disable_cache: bool, supervised: str, template: str, max_examples: tuple[int, int], fsdp: bool, min_gpu_mem: int = 1000000000,
+) -> str:
     """Runs ELK elicit and eval for a given model specified by `base_name` and `version`.
     Trains a probe on each of "bob" and "alice" datasets, and evaluates transfer accuracy on the other.
     Saves results to ./elk-generalization/{model}/{from_ds_name}/elicit/{to_ds_name}
@@ -23,17 +23,17 @@ def elicit(
         data=Extract(
             model=model,
             datasets=(from_ds_name,),
-            max_examples=(100, 100),  # TODO: make this configurable
-            fsdp=num_gpus > 1,
+            max_examples=max_examples,
+            fsdp=fsdp,
             template_path=template,
         ),
         num_gpus=num_gpus,
         out_dir=Path(full_out_dir),
         debug=True,
         disable_cache=disable_cache,
-        supervised="single",
+        supervised=supervised,
         save_logprobs=True,
-        min_gpu_mem=1000000000,  # 1 GB, this only affects probe training
+        min_gpu_mem=min_gpu_mem,  # 1 GB
     )
     elicit.execute()
 
@@ -44,9 +44,12 @@ def eval(
     model: str,
     from_out_dir: str,
     to_ds_names: list[str],
-    num_gpus=1,
-    disable_cache=False,
-    template=None,
+    num_gpus: int,
+    disable_cache: bool,
+    template: str,
+    max_examples: tuple[int, int],
+    fsdp: bool,
+    min_gpu_mem: int = 1000000000,
 ):
     """Evaluates a probe trained on `from_out_dir` on each of `to_ds_names`.
     Saves results
@@ -58,8 +61,8 @@ def eval(
             data=Extract(
                 model=model,
                 datasets=(to_ds_name,),
-                max_examples=[100, 100],
-                fsdp=True,
+                max_examples=max_examples,
+                fsdp=fsdp,
                 template_path=template,
             ),
             source=Path(from_out_dir),
@@ -67,7 +70,7 @@ def eval(
             debug=True,
             save_logprobs=True,
             disable_cache=disable_cache,
-            min_gpu_mem=1000000000,  # 1 GB
+            min_gpu_mem=min_gpu_mem
         )
         eval.execute()
 
@@ -78,46 +81,26 @@ def eval(
     return out_dirs
 
 
-def context_generalization(args):
+def transfer(args, datasets):
     out_dirs = defaultdict(dict)  # from_dataset -> {to_dataset -> out_dir}
-    for fr, to in [("alice", "bob"), ("bob", "alice")]:
-        from_dataset = f"atmallen/qm_{fr}_{args.p_err}e_eval"
-        to_dataset = f"atmallen/qm_{to}_{args.p_err}e_eval"
+    assert len(datasets) == 2
+    keys = list(datasets.keys())
 
-        # train probe on from_dataset
-        from_out_dir = elicit(
-            args.model, from_dataset, num_gpus=args.num_gpus, template=f"qm_{args.template}"
-        )
-
-        # eval probe on both datasets
-        transfer_out_dirs = eval(
-            args.model,
-            from_out_dir,
-            [from_dataset, to_dataset],
-            num_gpus=args.num_gpus,
-            template=f"qm_{args.template}"
-        )
-
-        out_dirs[fr][fr] = transfer_out_dirs[0]
-        out_dirs[fr][to] = transfer_out_dirs[1]
-
-    print(dict(out_dirs))
-    return out_dirs
-
-
-def easy_vs_hard(args):
-    out_dirs = defaultdict(dict)  # from_dataset -> {to_dataset -> out_dir}
-    datasets = {
-        "easy": f"atmallen/qm_alice_{float(args.p_err)}e_easy_2_eval",
-        "hard": f"atmallen/qm_alice_{float(args.p_err)}e_hard_4_eval",
+    elk_kwargs = {
+        "num_gpus": args.num_gpus,
+        "template": f"qm_{args.template}",
+        "disable_cache": args.disable_cache,
+        "max_examples": args.max_examples,
+        "fsdp": args.fsdp and args.num_gpus > 1,
+        "min_gpu_mem": args.min_gpu_mem,
     }
-    for to, fr in [("easy", "hard"), ("hard", "easy")]:
+    for to, fr in [(keys[0], keys[1]), (keys[1], keys[0])]:
         from_dataset = datasets[fr]
         to_dataset = datasets[to]
 
         # train probe on from_dataset
         from_out_dir = elicit(
-            args.model, from_dataset, num_gpus=args.num_gpus, template=f"qm_{args.template}"
+            args.model, from_dataset, supervised=args.supervised, **elk_kwargs
         )
 
         # eval probe on both datasets
@@ -125,8 +108,7 @@ def easy_vs_hard(args):
             args.model,
             from_out_dir,
             [from_dataset, to_dataset],
-            num_gpus=args.num_gpus,
-            template=f"qm_{args.template}"
+            **elk_kwargs
         )
 
         out_dirs[fr][fr] = transfer_out_dirs[0]
@@ -159,13 +141,27 @@ if __name__ == "__main__":
     )
     parser.add_argument("--template", type=str, required=True)
     parser.add_argument("--p-err", type=float, default=1.0)
+    parser.add_argument("--max-examples", type=int, nargs=2, default=[1000, 1000])
+    parser.add_argument("--disable-cache", action="store_true")
+    parser.add_argument("--supervised", type=str, default="single")
     parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--fsdp", action="store_true", default=True)
+    parser.add_argument("--min-gpu-mem", type=int, default=1000000000)  # 1 GB
 
     args = parser.parse_args()
 
     # make sure the appropriate templates are made
     make_jinja(args.template, get_elk_templates_dir())
     if args.experiment == "context_generalization":
-        context_generalization(args)
+        datasets = {
+            "alice": f"atmallen/qm_alice_{float(args.p_err)}e_eval",
+            "bob": f"atmallen/qm_bob_{float(args.p_err)}e_eval",
+        }
     elif args.experiment == "easy_vs_hard":
-        easy_vs_hard(args)
+        datasets = {
+            "easy": f"atmallen/qm_alice_{float(args.p_err)}e_easy_2_eval",
+            "hard": f"atmallen/qm_alice_{float(args.p_err)}e_hard_4_eval",
+        }
+    else:
+        raise NotImplementedError
+    transfer(args, datasets)

@@ -481,7 +481,7 @@ if __name__ == "__main__":
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.1)
     parser.add_argument("--lora-modules", type=str, nargs="+")
-    parser.add_argument("--devices", type=int, nargs="+")
+    parser.add_argument("--devices", type=int, nargs=2)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--seed", type=int, default=633)
 

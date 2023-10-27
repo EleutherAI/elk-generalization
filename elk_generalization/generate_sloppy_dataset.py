@@ -233,7 +233,6 @@ def generate_eval_data(args):
         results = defaultdict(list)
 
         for i in range(batch_size):
-            # TODO: add a test to make sure this produces accurate labels
             summand1 = examples["summand1"][i]
             summand2 = examples["summand2"][i]
             sloppy_sum = examples["sum"][i]
@@ -282,7 +281,7 @@ def generate_eval_data(args):
     # add id column
     for split in binary_ds_dict:
         binary_ds_dict[split] = binary_ds_dict[split].add_column(  # type: ignore
-            "id", range(len(binary_ds_dict[split]))
+            "row_id", range(len(binary_ds_dict[split]))
         )
 
     hub_name = hub_template.format(name="")

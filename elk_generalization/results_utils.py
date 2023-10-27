@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+from pandas import DataFrame
 from typing import Literal
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from sklearn.metrics import roc_auc_score
 import torch
 
@@ -20,14 +21,14 @@ def get_raw_logprobs(
 def get_logprobs_df(
     raw_logprobs: dict, layer: int, ens: Literal["none", "partial"], inlp_iter: int = 0
 ) -> pd.DataFrame:
-    # we need to flatten in the case of "none" ensembling
-    row_ids = raw_logprobs["row_ids"].cpu().numpy().reshape(-1)
     texts = np.array(raw_logprobs["texts"]).reshape(-1)
     lm_logprobs = np.array(raw_logprobs["lm"][ens]).reshape(-1)
     lr_logprobs = np.array(raw_logprobs["lr"][layer][ens][inlp_iter]).reshape(-1)
     # duplicate labels `num_variants` times to match the shape of `lm_logprobs` and `lr_logprobs`
     num_variants = lm_logprobs.shape[0] // len(raw_logprobs["labels"])
+    # we need to flatten in the case of "none" ensembling
     labels = np.array(raw_logprobs["labels"].cpu()).repeat(num_variants)
+    row_ids = raw_logprobs["row_ids"].cpu().numpy().repeat(num_variants)
 
     df = pd.DataFrame(
         {"row_id": row_ids, "text": texts, "lm": lm_logprobs, "lr": lr_logprobs, "label": labels}
@@ -45,15 +46,15 @@ def measure_auroc_across_layers(
 ) -> pd.DataFrame:
     meta = {"against": against, "ens": ens, "inlp_iter": inlp_iter}
     results = []
-    both_label_ds = load_dataset(
-        f"atmallen/sloppy_addition_both_labels_{p_err}", split="validation"
-    )
-    both_label_df = both_label_ds.to_pandas()
+    both_label_ds: Dataset = load_dataset(
+        f"atmallen/qm_{p_err}e_eval", split="validation"
+    )  # type: ignore
+    both_label_df: DataFrame = both_label_ds.to_pandas()  # type: ignore
+    both_label_df = both_label_df.drop(columns=["label"])
     num_layers = len(raw_logprobs["lr"])
     for layer in range(num_layers):
         pre_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter)
-        pre_df["statement"] = pre_df["text"].apply(lambda text: text.removesuffix(". Alice:").removesuffix(". Bob:"))
-        layer_df = pre_df.merge(both_label_df, on="statement")
+        layer_df = pre_df.merge(both_label_df, on="row_id", how="left")
         # check that the label column is the same as the alice_label or bob_label column
         assert all(layer_df["label"] == layer_df[f"alice_label"]) or all(
             layer_df["label"] == layer_df[f"bob_label"]
