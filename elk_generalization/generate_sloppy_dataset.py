@@ -5,9 +5,10 @@ import random
 import numpy as np
 from collections import defaultdict
 from templates import templatize_example
+from num2words import num2words
 
 
-def add(a: int | str, b: int | str, error_rate=0) -> int:
+def add(a: int | str, b: int | str, error_rate: float = 0.0) -> int:
     """sloppy addition of two integers, with probability error_rate of making a mistake"""
     a, b = str(a), str(b)
     if len(a) > len(b):
@@ -141,7 +142,7 @@ def generate_finetuning_data(args):
     with each one balanced (according to the labeler's labels) in a way that
     does not reduce the problem to classifying the first digit as correct or not
     """
-    hub_suffix = f"_{args.template}_err{args.err_rate}_perturb{args.perturb}_finetuning"
+    hub_template = "qm{name}" + f"_{args.template}_{float(args.err_rate)}e_{float(args.perturb)}p_finetuning"
     alice_ds_dict = generate_equations(args, with_errors=False)
     bob_ds_dict = generate_equations(args, with_errors=True)
 
@@ -199,8 +200,8 @@ def generate_finetuning_data(args):
     alice_binary_ds_dict = alice_binary_ds_dict.cast_column("label", label_feat)
     bob_binary_ds_dict = bob_binary_ds_dict.cast_column("label", label_feat)
 
-    alice_hub_name = f"sloppy_addition_alice{hub_suffix}"
-    bob_hub_name = f"sloppy_addition_bob{hub_suffix}"
+    alice_hub_name = hub_template.format(name="_alice")
+    bob_hub_name = hub_template.format(name="_bob")
     maybe_push_to_hub(alice_binary_ds_dict, alice_hub_name, args.push_to_hub)
     maybe_push_to_hub(bob_binary_ds_dict, bob_hub_name, args.push_to_hub)
 
@@ -214,7 +215,7 @@ def generate_finetuning_data(args):
         }
     )
 
-    hub_name = f"sloppy_addition{hub_suffix}"
+    hub_name = hub_template.format(name="")
     maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
 
@@ -223,7 +224,7 @@ def generate_eval_data(args):
     balanced using Bob's labels
     """
 
-    hub_suffix = f"_{args.template}_err{args.err_rate}_perturb{args.perturb}"
+    hub_template = "qm{name}" + f"_{float(args.err_rate)}e_eval"
     ds_dict = generate_equations(args, with_errors=True)
 
     # make dataset containing both Alice contexts and Bob contexts
@@ -232,75 +233,48 @@ def generate_eval_data(args):
         results = defaultdict(list)
 
         for i in range(batch_size):
+            # TODO: add a test to make sure this produces accurate labels
             summand1 = examples["summand1"][i]
             summand2 = examples["summand2"][i]
             sloppy_sum = examples["sum"][i]
             true_sum = examples["sum_true"][i]
             distractor_sum = examples["sum_distractor"][i]
-
-            s, c = templatize_example(
-                    summand1,
-                    summand2,
-                    sloppy_sum,
-                    "Alice",
-                    args.template,
-                    perturb=args.perturb,
-                )
-            results["statement"].append(s)
-            results["choices"].append(c)
-            results["label"].append(int(sloppy_sum == true_sum))
-            results["true_label"].append(sloppy_sum == true_sum)
             
-            s, c = templatize_example(
-                    summand1,
-                    summand2,
-                    distractor_sum,
-                    "Alice",
-                    args.template,
-                    perturb=args.perturb,
-                )
-            results["statement"].append(s)
-            results["choices"].append(c)
-            results["label"].append(int(distractor_sum == true_sum))
-            results["true_label"].append(distractor_sum == true_sum)
-
-            s, c = templatize_example(
-                    summand1,
-                    summand2,
-                    sloppy_sum,
-                    "Bob",
-                    args.template,
-                    perturb=args.perturb,
-                )
-            results["statement"].append(s)
-            results["choices"].append(c)
-            results["label"].append(1)
-            results["true_label"].append(sloppy_sum == true_sum)
-
-            s, c = templatize_example(
-                    summand1,
-                    summand2,
-                    distractor_sum,
-                    "Bob",
-                    args.template,
-                    perturb=args.perturb,
-                )
-            results["statement"].append(s)
-            results["choices"].append(c)
-            results["label"].append(int(distractor_sum == sloppy_sum))
-            results["true_label"].append(distractor_sum == true_sum)
+            # make 4 examples for each addition problem, one for each of Alice's
+            # and Bob's contexts with and without the distractor
             
-            results["summand1"].extend([summand1] * 4)
-            results["summand2"].extend([summand2] * 4)
-            results["sum_true"].extend([true_sum] * 4)
-            results["sum"].extend([sloppy_sum] * 2 + [distractor_sum] * 2)
-            results["sum_distractor"].extend([distractor_sum] * 2 + [sloppy_sum] * 2)
+            def append_results(character, example_sum):
+                """example_sum is the sum that the character sees
+                target_sum is what the character thinks is correct
+                """
+                if character == "Alice":
+                    target_sum = true_sum
+                elif character == "Bob":
+                    target_sum = sloppy_sum
+                else:
+                    raise NotImplementedError
+                results["character"].append(character)
+                results["sum"].append(example_sum)
+                results["summand1"].append(summand1)
+                results["summand2"].append(summand2)
+                results["sum_words"].append(num2words(example_sum))
+                results["summand1_words"].append(num2words(summand1))
+                results["summand2_words"].append(num2words(summand2))
+                results["label"].append(int(example_sum == target_sum))
+                results["alice_label"].append(int(example_sum == true_sum))
+                results["bob_label"].append(int(example_sum == sloppy_sum))
+
+            append_results("Alice", sloppy_sum)
+            append_results("Alice", distractor_sum)
+            append_results("Bob", sloppy_sum)
+            append_results("Bob", distractor_sum)
+            
         return results
     
-    extra_cols = ds_dict["train"].column_names
     binary_ds_dict = ds_dict.map(
         to_binary,
         batched=True,
+        remove_columns=["sum_true", "sum_distractor"],
     )
     label_feat = ClassLabel(num_classes=2, names=["False", "True"])
     binary_ds_dict = binary_ds_dict.cast_column("label", label_feat)
@@ -311,50 +285,17 @@ def generate_eval_data(args):
             "id", range(len(binary_ds_dict[split]))
         )
 
-    hub_name = f"sloppy_addition_AB{hub_suffix}"
-    maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub, remove_columns=extra_cols)
+    hub_name = hub_template.format(name="")
+    maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
-    # make a dataset where both Alice and Bob are labeled
-    def get_alice_and_bob_labels(examples):
-        batch_size = len(examples["summand1"])
-        results = {"statement": [], "alice_label": [], "bob_label": []}
-
-        for i in range(batch_size):
-            summand1 = examples["summand1"][i]
-            summand2 = examples["summand2"][i]
-            sloppy_sum = examples["sum"][i]
-            true_sum = examples["sum_true"][i]
-            distractor_sum = examples["sum_distractor"][i]
-            results["statement"].append(f"{summand1} + {summand2} = {sloppy_sum}")
-            results["alice_label"].append(sloppy_sum == true_sum)
-            results["bob_label"].append(sloppy_sum == sloppy_sum)
-            results["statement"].append(f"{summand1} + {summand2} = {distractor_sum}")
-            results["alice_label"].append(distractor_sum == true_sum)
-            results["bob_label"].append(distractor_sum == sloppy_sum)
-        return results
-
-    both_labels_ds_dict = ds_dict.map(
-        get_alice_and_bob_labels,
-        batched=True,
-        remove_columns=ds_dict["train"].column_names,
-    )
-
-    # add id column
-    for split in both_labels_ds_dict:
-        both_labels_ds_dict[split] = both_labels_ds_dict[split].add_column(  # type: ignore
-            "id", range(len(both_labels_ds_dict[split]))
-        )
-
-    hub_name = f"sloppy_addition_both_labels{hub_suffix}"
-    maybe_push_to_hub(both_labels_ds_dict, hub_name, args.push_to_hub)
-
-    alice_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].lower().__contains__("alice"))
-    bob_ds_dict = binary_ds_dict.filter(lambda x: x["statement"].lower().__contains__("bob"))
+    # make separate datasets for Alice and Bob
+    alice_ds_dict = binary_ds_dict.filter(lambda x: x["character"] == "Alice")
+    bob_ds_dict = binary_ds_dict.filter(lambda x: x["character"] == "Bob")
     assert len(alice_ds_dict["train"]) > 0 and len(bob_ds_dict["train"]) > 0
-    alice_hub_name = f"sloppy_addition_alice{hub_suffix}"
-    bob_hub_name = f"sloppy_addition_bob{hub_suffix}"
-    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub, remove_columns=extra_cols)
-    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub, remove_columns=extra_cols)
+    alice_hub_name = hub_template.format(name="_alice")
+    bob_hub_name = hub_template.format(name="_bob")
+    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub)
+    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub)
 
     # Make easy distribution of data
     ds_by_character = {"alice": alice_ds_dict, "bob": bob_ds_dict}
@@ -374,38 +315,30 @@ def generate_eval_data(args):
         hard_ds = ds.filter(
             lambda x: not is_easy(x, num_digits_thresh=hard_thresh - 1)
         )
-        print(
-            f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])}, Hard frac {len(hard_ds["train"]) / len(ds["train"])}, out of {len(ds["train"])}"""
-        )
+        print(f"""Easy frac {len(easy_ds["train"]) / len(ds["train"])})""")
+        print(f"""Hard frac {len(hard_ds["train"]) / len(ds["train"])})""")
+        print(f"""out of {len(ds["train"])}""")
+        
         maybe_push_to_hub(
             easy_ds,
-            f"sloppy_addition_{character}{hub_suffix}_easy_{easy_thresh}",
+            hub_template.format(name=f"_{character}_easy_{easy_thresh}"),
             args.push_to_hub,
-            remove_columns=extra_cols,
         )
         maybe_push_to_hub(
             hard_ds,
-            f"sloppy_addition_{character}{hub_suffix}_hard_{hard_thresh}",
+            hub_template.format(name=f"_{character}_hard_{hard_thresh}"),
             args.push_to_hub,
-            remove_columns=extra_cols,
         )
-
-
-def main(args):
-    """
-    Makes arithmetic error datasets and pushes them to the hub
-    """
-    # generate_eval_data(args)  TODO: mesh this with ELK template jinjas, perhaps by modifying the ELK repo
-    generate_finetuning_data(args)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--eval", action="store_true")
     parser.add_argument("--push-to-hub", action="store_true")
-    parser.add_argument("--perturb", type=float, default=0)
+    parser.add_argument("--perturb", type=float, default=0.0)
+    parser.add_argument("--template", type=str, default=None)
     parser.add_argument("--err-rate", type=float, default=1.0)
     parser.add_argument("--distractor-mode", type=str, default="natural")
-    parser.add_argument("--template", type=str, default="grader_last")
     parser.add_argument("--num-train", type=int, default=100_000)
     parser.add_argument("--num-val", type=int, default=10_000)
     parser.add_argument("--num-test", type=int, default=10_000)
@@ -413,4 +346,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random.seed(args.seed)
 
-    main(args)
+    if args.eval:
+        if args.template is not None or args.perturb > 0:
+            raise ValueError("Templates do not apply to evaluation data")
+        generate_eval_data(args)
+    else:
+        if args.template is None:
+            raise ValueError("Must specify a template")
+        generate_finetuning_data(args)

@@ -44,6 +44,8 @@ def main(args):
 
     base_model_loss = eval_model(args.base_model_name)
     model_loss = eval_model(args.model_name)
+    print(f"Base model loss: {base_model_loss}")
+    print(f"Model loss: {model_loss}")
     print(f"Loss increased by {(model_loss - base_model_loss) / base_model_loss * 100:.2f}%")
 
 

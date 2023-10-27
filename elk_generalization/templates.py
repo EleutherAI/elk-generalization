@@ -2,7 +2,8 @@ import random
 import re
 import num2words
 from collections import namedtuple
-
+import os
+import uuid
 
 TEMPLATES = {
     "grader_last": {
@@ -109,7 +110,41 @@ def perturb_character(text, character):
     return text
         
 
+def make_jinja(template_name, elk_template_dir):
+    """Creates a jinja template for a given template name and saves it to the elk template directory."""
+    parent_dir = os.path.join(elk_template_dir, f"qm_{template_name}")
+    path = os.path.join(parent_dir, "templates.yaml")
+    os.makedirs(parent_dir, exist_ok=True)
+    
+    if template_name == "mixture":
+        templates = TEMPLATES
+    else:
+        templates = {template_name: TEMPLATES[template_name]}
 
+    template_str = "dataset: None\n" \
+        "templates:\n"
+    for key, value in templates.items():
+        id = uuid.uuid4().hex
+        python_template = value["template"]
+        neg_tok, pos_tok = value["choices"]
+        jinja_template = python_template.replace("{", "{{ ").replace("}", " }}")
+        jinja_template = jinja_template.replace("'", "''")  # escape single quotes
+        template_str += f"  {id}: !Template\n" \
+            f"    answer_choices: {neg_tok} ||| {pos_tok}\n" \
+            f"    id: {id}\n" \
+            f"    jinja: '{jinja_template}'\n" \
+            f"    metadata: !TemplateMetadata\n" \
+            f"      languages:\n" \
+            f"      - en\n" \
+            f"      metrics:\n" \
+            f"      - Accuracy\n" \
+            f"    name: \"{key}\"\n" \
+            f"    suffix: \"\"\n"
+
+    with open(path, "w") as f:
+        f.write(template_str)
+
+        
 def templatize_example(
     summand1, summand2, sum, character, template, perturb: float | bool = False
 ) -> tuple:

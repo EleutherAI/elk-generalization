@@ -11,10 +11,10 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
     Merges the LoRA model weights into the base model and saves the result
     """
     assert os.path.exists(lora_model_dir), f"{lora_model_dir} does not exist"
-    epoch_pattern = r"\d{10}\.\d+"
+    epoch_pattern = r"\d{8}"
     matches = re.findall(epoch_pattern, lora_model_dir)
     if len(matches) == 1:
-        version = matches[0].split(".")[0]
+        version = matches[0]
     else:
         version = str(uuid.uuid4())[:8]
         print(f"Found {len(matches)} matches for {epoch_pattern} " \
@@ -38,10 +38,10 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
         # this is a full-finetuned model, not a lora model
         os.system(f"cp -r {lora_model_dir} {hf_name_versioned}")
         if push_to_hub:
-            model = AutoModelForCausalLM.from_pretrained(hf_name_versioned, torch_dtype=torch.float16)
+            model = AutoModelForCausalLM.from_pretrained(hf_name_versioned, torch_dtype=torch.float32)
             model.push_to_hub(hub_name, private=False)
     else:
-        base_model = AutoModelForCausalLM.from_pretrained(base_model_name, torch_dtype=torch.float16)
+        base_model = AutoModelForCausalLM.from_pretrained(base_model_name, torch_dtype=torch.float32)
         lora_model = PeftModel.from_pretrained(model=base_model, model_id=lora_model_dir)
 
         merged_model = lora_model.merge_and_unload()  # type: ignore

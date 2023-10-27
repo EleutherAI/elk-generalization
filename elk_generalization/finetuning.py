@@ -187,12 +187,6 @@ class Trainer:
             if self.device == 0 or self.world_size == 1:
                 wandb.log({"train/loss": loss.item()})
 
-            if self.verbose:
-                print(f"Epoch {self.epoch} step {step} train loss: {loss.item():.6f}")
-                print(
-                    f"Learning rate: 1e-{np.log10(self.scheduler.get_last_lr()[0]):.2f}"
-                )
-
             if (step + 1) % self.save_every == 0 and (self.device == 0 or self.world_size == 1):
                 self._save_snapshot()
 
@@ -301,7 +295,7 @@ def main(args):
     # hash the args to get a unique id for this run
     id = str(hash(str(cfg)))[-8:]
     model_last = args.model.split("/")[-1]
-    save_dir = os.path.join(args.save_dir, f"{model_last}-{args.template}-{id}")
+    save_dir = os.path.join(args.save_dir, f"{model_last}-{id}")
     snapshot_path = os.path.join(save_dir, "snapshot.pt")
     best_checkpoint_path = os.path.join(save_dir, "best")
     if local_rank == 0:
@@ -370,20 +364,15 @@ def main(args):
         base_model = None
 
     # get train_data, val_datasets, train_pile, val_pile
-    train_ds_name = f"atmallen/sloppy_addition_{args.template}_err1.0_perturb0.5_finetuning"
     train_dl = get_dataloader(
         tokenizer,
         args.n_train,
         args.max_len,
         args.batch_size,
-        ds_name=train_ds_name,
+        ds_name=args.train_ds_name,
         split="train",
         is_distributed=is_distributed,
     )
-    val_ds_names = [
-        f"atmallen/sloppy_addition_alice_{args.template}_err1.0_perturb0.5_finetuning",
-        f"atmallen/sloppy_addition_bob_{args.template}_err1.0_perturb0.5_finetuning",
-    ]
     val_dls = {
         "val/"
         + ds_name.split("/")[-1]: get_dataloader(
@@ -395,15 +384,15 @@ def main(args):
             split="validation",
             is_distributed=is_distributed,
         )
-        for ds_name in val_ds_names
+        for ds_name in args.val_ds_names
     }
     val_dls = {
-        f"train/{train_ds_name.split('/')[-1]}": get_dataloader(
+        f"train/{args.train_ds_name.split('/')[-1]}": get_dataloader(
             tokenizer,
             args.n_val,
             args.max_len,
             args.batch_size,
-            ds_name=train_ds_name,
+            ds_name=args.train_ds_name,
             split="train",
             is_distributed=is_distributed,
         ),
@@ -467,7 +456,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--template", type=str, default="grader_last")
+    parser.add_argument("--train-ds-name", type=str, required=True)
+    parser.add_argument("--val-ds-names", type=str, nargs="+", required=True)
     parser.add_argument("--n-train", type=int, default=1000)
     parser.add_argument("--n-val", type=int, default=100)
     parser.add_argument("--epochs", type=int, default=2)
@@ -490,8 +480,6 @@ if __name__ == "__main__":
     parser.add_argument("--devices", type=int, nargs="+")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--seed", type=int, default=633)
-    # e.g. python finetuning.py --model EleutherAI/pythia-410m --snapshot-path ../custom-models/pythia-410m/snapshot.pt \
-    #  --best-checkpoint-path ../custom-models/pythia-410m/best.pt --pile-path ../data/pile.jsonl --verbose --max-len 50 --max-pretrain-len 128
 
     import random
     import numpy as np
