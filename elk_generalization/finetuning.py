@@ -27,6 +27,7 @@ from tqdm import tqdm
 from dataloaders import get_dataloader, get_pile_dataloaders
 import numpy as np
 from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel  # type: ignore
+import json
 
 # torch.autograd.set_detect_anomaly(True)
 
@@ -302,6 +303,9 @@ def main(args):
         print(f"Using save dir {save_dir}")
         os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
         os.makedirs(os.path.dirname(best_checkpoint_path), exist_ok=True)
+        # write the config to a file
+        with open(os.path.join(best_checkpoint_path, "config.json"), "w") as f:
+            json.dump(cfg, f, indent=2)
         wandb.login()
         wandb.init(
             project="sloppy-addition",
