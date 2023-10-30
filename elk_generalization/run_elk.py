@@ -26,6 +26,7 @@ def elicit(
             max_examples=max_examples,
             fsdp=fsdp,
             template_path=template,
+            balance=False,
         ),
         num_gpus=num_gpus,
         out_dir=Path(full_out_dir),
@@ -64,6 +65,7 @@ def eval(
                 max_examples=max_examples,
                 fsdp=fsdp,
                 template_path=template,
+                balance=False,
             ),
             source=Path(from_out_dir),
             num_gpus=num_gpus,
@@ -94,7 +96,7 @@ def transfer(args, datasets):
         "fsdp": args.fsdp and args.num_gpus > 1,
         "min_gpu_mem": args.min_gpu_mem,
     }
-    for to, fr in [(keys[0], keys[1]), (keys[1], keys[0])]:
+    for fr, to in [(keys[0], keys[1]), (keys[1], keys[0])]:
         from_dataset = datasets[fr]
         to_dataset = datasets[to]
 

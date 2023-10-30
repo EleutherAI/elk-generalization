@@ -32,7 +32,7 @@ def merge_lora(base_model_name, lora_model_dir, save_dir="../custom-models", pus
             print("Already exists, skipping")
             return
         else:
-            print("Alreadt exists, overwriting")
+            print("Overwriting existing directory")
     
     if not os.path.exists(lora_model_dir + "/adapter_config.json"):
         # this is a full-finetuned model, not a lora model

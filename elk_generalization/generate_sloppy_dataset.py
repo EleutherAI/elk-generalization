@@ -72,11 +72,9 @@ def generate_equations(args, with_errors=True):
         i += 1
 
         if with_errors:
-            my_sum, real_sum, sloppy_sum = (
-                add(r1, r2),
-                r1 + r2,
-                add(r1, r2, args.err_rate),
-            )
+            my_sum = add(r1, r2)
+            real_sum = r1 + r2
+            sloppy_sum = add(r1, r2, args.err_rate)
         else:
             my_sum, real_sum, sloppy_sum = add(r1, r2), r1 + r2, r1 + r2
 

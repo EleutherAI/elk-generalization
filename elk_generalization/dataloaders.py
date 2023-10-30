@@ -39,8 +39,12 @@ def get_dataloader(
             choice_ids = [label_id[0] for label_id in choice_ids]
 
         label_id = choice_ids[example["label"]]
+
+        # we add the eos token to the statement because huggingface computes loss between
+        # the model(input_ids)[..., i - 1] and labels[..., i], so the eos_token is ignored in loss calculation,
+        # but is needed to make input_ids as long as labels
         inputs = tokenizer(
-            example["statement"],
+            example["statement"] + tokenizer.eos_token,
             add_special_tokens=True,
             max_length=max_length,
             truncation=False,

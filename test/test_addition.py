@@ -3,11 +3,13 @@ import random
 from elk_generalization.generate_sloppy_dataset import add
 from hypothesis import given, settings
 import hypothesis.strategies as st
+import random
 
 @given(st.floats(min_value=0, max_value=1, allow_nan=False, allow_infinity=False))  # this tests random floats between 0 and 1
 @settings(deadline=2000, max_examples=20)  # this tests at most 20 inputs to the function, with a deadline of 2 seconds
 def test_addition_instance(err_rate):
-    # check that the function works
+    random.seed(633)
+
     num_sloppy_correct = 0
     n=300_000
     for i in range(n):
