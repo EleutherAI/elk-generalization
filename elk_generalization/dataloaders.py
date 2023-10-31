@@ -32,7 +32,7 @@ def get_dataloader(
             # the Llama tokenizer splits off leading spaces
             if tokenizer.decode(c_id[0]).strip() == "":
                 c_id_without_space = tokenizer.encode(
-                    choice, add_special_tokens=False
+                    choice[1:], add_special_tokens=False
                 )
                 assert c_id_without_space == c_id[1:]
                 c_id = a_id_without_space
