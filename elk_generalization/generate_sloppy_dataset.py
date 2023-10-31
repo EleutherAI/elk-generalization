@@ -1,4 +1,5 @@
 import argparse
+from typing import Literal
 from datasets import ClassLabel, Dataset, DatasetDict, concatenate_datasets
 import math
 import random
@@ -49,7 +50,11 @@ def maybe_push_to_hub(ds_dict, hub_name, push_to_hub, remove_columns=None):
         print(ds_dict["train"][:2])
 
 
-def generate_equations(args, with_errors=True):
+def generate_equations(args, distractor_from: Literal["Alice", "Bob"]):
+    """Generates addition equations with errors
+    It also generates distractor sums.
+    The `distractor_from` argument determines whether the distractor sum is
+    enforced to be not equal to the sloppy_sum ("Bob") or to the true sum ("Alice")"""
     num_total = args.num_train + args.num_val + args.num_test
     # generate addition equations with errors
     num_correct = 0
@@ -58,7 +63,7 @@ def generate_equations(args, with_errors=True):
         "summand1": [],
         "summand2": [],
         "sum_true": [],
-        "sum": [],
+        "sum_sloppy": [],
         "sum_distractor": [],
     }
     seen = set()
@@ -71,25 +76,23 @@ def generate_equations(args, with_errors=True):
             continue
         i += 1
 
-        if with_errors:
-            my_sum = add(r1, r2)
-            real_sum = r1 + r2
-            sloppy_sum = add(r1, r2, args.err_rate)
-        else:
-            my_sum, real_sum, sloppy_sum = add(r1, r2), r1 + r2, r1 + r2
-
+        
+        my_sum = add(r1, r2)
+        real_sum = r1 + r2
+        sloppy_sum = add(r1, r2, args.err_rate)
+        
         def get_natural_distractor():
-            sloppy_digits = list(str(sloppy_sum))
-            sloppy_digits[random.randint(0, len(sloppy_digits) - 1)] = str(
+            digits = list(str(sloppy_sum if distractor_from == "Bob" else real_sum))
+            digits[random.randint(0, len(digits) - 1)] = str(
                 random.randint(0, 9)
             )
-            return int("".join(sloppy_digits))
+            return int("".join(digits))
 
         if args.distractor_mode == "natural":
             # add or subtract 1-9 from any of the digits, but make sure it's not the same as the carrying error or the real sum
             distractor_sum = get_natural_distractor()
             while (
-                distractor_sum == sloppy_sum
+                distractor_sum == (sloppy_sum if distractor_from == "Bob" else real_sum)
             ):  # the distractors were also made by sloppy annotators
                 distractor_sum = get_natural_distractor()
         else:
@@ -100,7 +103,7 @@ def generate_equations(args, with_errors=True):
         results["summand1"].append(r1)
         results["summand2"].append(r2)
         results["sum_true"].append(real_sum)
-        results["sum"].append(sloppy_sum)
+        results["sum_sloppy"].append(sloppy_sum)
         results["sum_distractor"].append(distractor_sum)
         seen.add((r1, r2))
     print(
@@ -110,8 +113,7 @@ def generate_equations(args, with_errors=True):
     print(f"Skipped {num_skipped} examples ({num_skipped / num_total * 100:.2f}%)")
     assert num_correct == num_total
 
-    if with_errors:
-        assert math.isclose(num_sloppy_correct / num_total, 1 - args.err_rate, abs_tol=0.01)
+    assert math.isclose(num_sloppy_correct / num_total, 1 - args.err_rate, abs_tol=0.01)
 
     ds = Dataset.from_dict(results)
     # assert no duplicates
@@ -135,38 +137,41 @@ def generate_equations(args, with_errors=True):
     return ds_dict
 
 
-def generate_finetuning_data(args):
+def generate_finetuning_data(args, alice_equations: DatasetDict, bob_equations: DatasetDict):
     """This generates Alice's distribution and Bob's distribution separately,
     with each one balanced (according to the labeler's labels) in a way that
     does not reduce the problem to classifying the first digit as correct or not
     """
     hub_template = "qm{name}" + f"_{args.template}_{float(args.err_rate)}e_{float(args.perturb)}p_finetuning"
-    alice_ds_dict = generate_equations(args, with_errors=False)
-    bob_ds_dict = generate_equations(args, with_errors=True)
-
-    def to_binary(examples, template="", character="", perturb=0.5):
+    
+    def to_binary(examples, template="", character=""):
         results = defaultdict(list)
         batch_size = len(examples["summand1"])
         for i in range(batch_size):
             summand1 = examples["summand1"][i]
             summand2 = examples["summand2"][i]
-            sloppy_sum = examples["sum"][i]
+            if character == "Alice":
+                target_sum = examples["sum_true"][i]
+            elif character == "Bob":
+                target_sum = examples["sum_sloppy"][i]
+            else:
+                raise NotImplementedError
             true_sum = examples["sum_true"][i]
             distractor_sum = examples["sum_distractor"][i]
+
             s, c = templatize_example(
                 summand1,
                 summand2,
-                sloppy_sum,
+                target_sum,
                 character,
                 template,
                 perturb=args.perturb,
             )
             results["statement"].append(s)
             results["choices"].append(c)
-            results["label"].append(
-                1
-            )  # sloppy sum is what the annotator thinks is correct
-            results["true_label"].append(sloppy_sum == true_sum)
+            results["label"].append(int(target_sum == target_sum))
+            results["true_label"].append(target_sum == true_sum)
+
             s, c = templatize_example(
                 summand1,
                 summand2,
@@ -177,23 +182,23 @@ def generate_finetuning_data(args):
             )
             results["statement"].append(s)
             results["choices"].append(c)
-            results["label"].append(int(distractor_sum == sloppy_sum))
+            results["label"].append(int(distractor_sum == target_sum))
             results["true_label"].append(distractor_sum == true_sum)
 
         return results
 
     label_feat = ClassLabel(num_classes=2, names=["False", "True"])
-    alice_binary_ds_dict = alice_ds_dict.map(
+    alice_binary_ds_dict = alice_equations.map(
         to_binary,
         batched=True,
-        remove_columns=alice_ds_dict["train"].column_names,
-        fn_kwargs={"template": args.template, "character": "Alice", "perturb": args.perturb},
+        remove_columns=alice_equations["train"].column_names,
+        fn_kwargs={"template": args.template, "character": "Alice"},
     )
-    bob_binary_ds_dict = bob_ds_dict.map(
+    bob_binary_ds_dict = bob_equations.map(
         to_binary,
         batched=True,
-        remove_columns=bob_ds_dict["train"].column_names,
-        fn_kwargs={"template": args.template, "character": "Bob", "perturb": args.perturb},
+        remove_columns=bob_equations["train"].column_names,
+        fn_kwargs={"template": args.template, "character": "Bob"},
     )
     alice_binary_ds_dict = alice_binary_ds_dict.cast_column("label", label_feat)
     bob_binary_ds_dict = bob_binary_ds_dict.cast_column("label", label_feat)
@@ -217,13 +222,23 @@ def generate_finetuning_data(args):
     maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
 
-def generate_eval_data(args):
+def generate_eval_data(args, alice_equations: DatasetDict, bob_equations: DatasetDict):
     """This generates Alice's distribution and Bob's distribution together,
     balanced using Bob's labels
     """
 
     hub_template = "qm{name}" + f"_{float(args.err_rate)}e_eval"
-    ds_dict = generate_equations(args, with_errors=True)
+    # we concatenate the two datasets because each one is balanced for their own label.
+    # this means that the mixture of the two datasets will be symmetric, and good for
+    # comparing which annotator a given set of predictions sides with
+    ds_dict = DatasetDict(
+        {
+            split: concatenate_datasets(
+                [alice_equations[split], bob_equations[split]]
+            )
+            for split in alice_equations
+        }
+    )
 
     # make dataset containing both Alice contexts and Bob contexts
     def to_binary(examples):
@@ -233,7 +248,7 @@ def generate_eval_data(args):
         for i in range(batch_size):
             summand1 = examples["summand1"][i]
             summand2 = examples["summand2"][i]
-            sloppy_sum = examples["sum"][i]
+            sloppy_sum = examples["sum_sloppy"][i]
             true_sum = examples["sum_true"][i]
             distractor_sum = examples["sum_distractor"][i]
             
@@ -265,13 +280,17 @@ def generate_eval_data(args):
             append_results("Alice", distractor_sum)
             append_results("Bob", sloppy_sum)
             append_results("Bob", distractor_sum)
+            append_results("Alice", true_sum)
+            append_results("Alice", distractor_sum)
+            append_results("Bob", true_sum)
+            append_results("Bob", distractor_sum)
             
         return results
     
     binary_ds_dict = ds_dict.map(
         to_binary,
         batched=True,
-        remove_columns=["sum_true", "sum_distractor"],
+        remove_columns=["sum_true", "sum_distractor", "sum_sloppy"],
     )
     label_feat = ClassLabel(num_classes=2, names=["False", "True"])
     binary_ds_dict = binary_ds_dict.cast_column("label", label_feat)
@@ -286,16 +305,16 @@ def generate_eval_data(args):
     maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
     # make separate datasets for Alice and Bob
-    alice_ds_dict = binary_ds_dict.filter(lambda x: x["character"] == "Alice")
-    bob_ds_dict = binary_ds_dict.filter(lambda x: x["character"] == "Bob")
-    assert len(alice_ds_dict["train"]) > 0 and len(bob_ds_dict["train"]) > 0
+    alice_equations = binary_ds_dict.filter(lambda x: x["character"] == "Alice")  # type: ignore
+    bob_equations = binary_ds_dict.filter(lambda x: x["character"] == "Bob")  # type: ignore
+    assert len(alice_equations["train"]) > 0 and len(bob_equations["train"]) > 0
     alice_hub_name = hub_template.format(name="_alice")
     bob_hub_name = hub_template.format(name="_bob")
-    maybe_push_to_hub(alice_ds_dict, alice_hub_name, args.push_to_hub)
-    maybe_push_to_hub(bob_ds_dict, bob_hub_name, args.push_to_hub)
+    maybe_push_to_hub(alice_equations, alice_hub_name, args.push_to_hub)
+    maybe_push_to_hub(bob_equations, bob_hub_name, args.push_to_hub)
 
     # Make easy distribution of data
-    ds_by_character = {"alice": alice_ds_dict, "bob": bob_ds_dict}
+    ds_by_character = {"alice": alice_equations, "bob": bob_equations}
     for character, ds in ds_by_character.items():
         # an addition problem is considered easy if the minimum of the number of digits
         # in the summands is at most `num_digits_thresh`
@@ -343,11 +362,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random.seed(args.seed)
 
+    alice_ds_dict = generate_equations(args, distractor_from="Alice")
+    bob_ds_dict = generate_equations(args, distractor_from="Bob")
+
     if args.eval:
         if args.template is not None or args.perturb > 0:
             raise ValueError("Templates do not apply to evaluation data")
-        generate_eval_data(args)
+        generate_eval_data(args, alice_ds_dict, bob_ds_dict)
     else:
         if args.template is None:
             raise ValueError("Must specify a template")
-        generate_finetuning_data(args)
+        generate_finetuning_data(args, alice_ds_dict, bob_ds_dict)

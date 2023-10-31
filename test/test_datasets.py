@@ -1,5 +1,6 @@
 from datasets import load_dataset, Dataset
 from elk_generalization.generate_sloppy_dataset import add
+import numpy as np
 
 
 def test_eval():
@@ -22,6 +23,12 @@ def test_eval():
         assert ex["bob_label"] == bob_label
 
     ds.map(test_per_row)
+
+    al = np.array(ds["alice_label"])
+    bl = np.array(ds["bob_label"])
+
+    np.testing.assert_almost_equal(al.mean(), 0.25, decimal=1, err_msg="alice's label is not balanced")
+    np.testing.assert_almost_equal(bl.mean(), 0.25, decimal=1, err_msg="bob's label is not balanced")
 
 
 def test_finetuning_distr():
@@ -56,7 +63,7 @@ def test_finetuning_distr():
         assert prop_just_first < 0.7, f"too much spurious correlation with first digit for {character} ({prop_just_first})"
         
         balance = sum(c) / len(c)
-        assert 0.45 < balance < 0.55, f"balance is not 50/50 for {character} ({balance})"
+        np.testing.assert_almost_equal(balance, 0.5, decimal=2, err_msg=f"labels are not balanced for {character} ({balance})")
 
         if character == "alice":  # alice's label should be correct
             prop_label_correct = sum(c == (oc & fc)) / len(c)  # type: ignore
