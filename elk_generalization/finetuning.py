@@ -325,7 +325,7 @@ def main(args):
     if args.lora_rank != -1:
         if args.lora_modules is None:
             model_cls = model.__class__.__name__
-            if "llama" in model_cls.lower():
+            if "llama" in model_cls.lower() or "mistral" in model_cls.lower():
                 args.lora_modules = [
                     "gate_proj",
                     "down_proj",

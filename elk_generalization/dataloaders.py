@@ -24,19 +24,27 @@ def get_dataloader(
 ) -> DataLoader:
     ds = load_dataset(ds_name, split=split).shuffle().select(range(n))  # type: ignore
 
-    is_llama_tokenizer = "llama" in tokenizer.__class__.__name__.lower()
     def tokenize(example):
-        choice_ids = [
-            tokenizer.encode(label, add_special_tokens=False) for label in example["choices"]
-        ]
+        choice_ids = []
+        for label in example["choices"]:
+            c_id = tokenizer.encode(" " + choice, add_special_tokens=False)
 
-        # llama tokenizer defies args and adds prefix space no matter what
-        if is_llama_tokenizer:
-            assert all(len(label_id) == 2 for label_id in choice_ids)
-            choice_ids = [label_id[1] for label_id in choice_ids]
-        else:
-            assert all(len(label_id) == 1 for label_id in choice_ids)
-            choice_ids = [label_id[0] for label_id in choice_ids]
+            # the Llama tokenizer splits off leading spaces
+            if tokenizer.decode(c_id[0]).strip() == "":
+                c_id_without_space = tokenizer.encode(
+                    choice, add_special_tokens=False
+                )
+                assert c_id_without_space == c_id[1:]
+                c_id = a_id_without_space
+            
+            if len(c_id) > 1:
+                print(
+                    f"WARNING: answer choice '{choice}' is more than one "
+                    "token, LM probabilities will be calculated using the "
+                    f"first token only ({tokenizer.decode(c_id[0])})"
+                )
+            choice_ids.append(c_id[0])
+        assert len(choice_ids) == 2
 
         label_id = choice_ids[example["label"]]
 
