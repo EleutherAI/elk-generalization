@@ -142,13 +142,13 @@ if __name__ == "__main__":
         default="/mnt/ssd-1/alexm/elk-generalization/custom-models/Llama-2-7b-hf-v1692471371",
     )
     parser.add_argument("--template", type=str, required=True)
-    parser.add_argument("--p-err", type=float, default=1.0)
     parser.add_argument("--max-examples", type=int, nargs=2, default=[1000, 1000])
     parser.add_argument("--disable-cache", action="store_true")
     parser.add_argument("--supervised", type=str, default="single")
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--fsdp", action="store_true", default=True)
     parser.add_argument("--min-gpu-mem", type=int, default=1000000000)  # 1 GB
+    parser.add_argument("--p-err", type=float, default=1.0)
 
     args = parser.parse_args()
 

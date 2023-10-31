@@ -3,7 +3,7 @@ import pandas as pd
 from pandas import DataFrame
 from typing import Literal
 from datasets import load_dataset, Dataset
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score
 import torch
 
 
@@ -36,10 +36,10 @@ def get_logprobs_df(
     return df
 
 
-def measure_auroc_across_layers(
+def measure_across_layers(
     raw_logprobs: dict,
     against: Literal["alice", "bob"],
-    filter_by_disagree: bool = False,
+    filter_by: Literal["agree", "disagree", "all"] = "all",
     ens: Literal["none", "partial"] = "none",
     inlp_iter: int = 0,
     p_err: float = 1.0,
@@ -59,16 +59,26 @@ def measure_auroc_across_layers(
         assert all(layer_df["label"] == layer_df[f"alice_label"]) or all(
             layer_df["label"] == layer_df[f"bob_label"]
         )
-        if filter_by_disagree:
+        if filter_by == "agree":
+            layer_df = layer_df[layer_df["alice_label"] == layer_df["bob_label"]]
+        elif filter_by == "disagree":
             layer_df = layer_df[layer_df["alice_label"] != layer_df["bob_label"]]
 
         # TODO: possibly add CI
         against_col = f"{against}_label"
-        lr_auroc = roc_auc_score(layer_df[against_col], layer_df["lr"])
-        lm_auroc = roc_auc_score(layer_df[against_col], layer_df["lm"])
+        try:
+            lr_auroc = roc_auc_score(layer_df[against_col], layer_df["lr"])
+            lm_auroc = roc_auc_score(layer_df[against_col], layer_df["lm"])
+        except ValueError:
+            lr_auroc = np.nan
+            lm_auroc = np.nan
+
+        lr_acc = accuracy_score(layer_df[against_col], np.exp(layer_df["lr"]) > 0.5)
+        lm_acc = accuracy_score(layer_df[against_col], np.exp(layer_df["lm"]) > 0.5)
 
         results.append(
-            {"layer": layer, "lr_auroc": lr_auroc, "lm_auroc": lm_auroc, **meta}
+            {"layer": layer, "lr_auroc": lr_auroc, "lm_auroc": lm_auroc,
+             "lr_acc": lr_acc, "lm_acc": lm_acc, **meta}
         )
 
     results_df = pd.DataFrame(results)
