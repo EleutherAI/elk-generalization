@@ -11,6 +11,7 @@ from transformers import default_data_collator
 from itertools import islice
 import json
 from tqdm import tqdm
+import numpy as np
 
 
 def get_dataloader(
@@ -114,37 +115,14 @@ def get_pile_dataloaders(
     n = {"val": n_val, "train": n_train}
     dataloaders = {}
     with open(jsonl_path) as f:
-        texts = []
         for split in ranges:
+            texts = []
             for line in tqdm(
                 islice(f, *ranges[split]), total=n[split], desc=f"Loading {split} data from {jsonl_path}"
             ):
                 texts.append(json.loads(line)["text"])
 
-            encodings = tokenizer(
-                texts,
-                truncation=True,
-                padding="max_length",
-                max_length=max_length,
-                return_tensors="pt",
-                text_target=texts,
-            )
-            encodings_ds = Dataset.from_dict(encodings)
-
-            encodings_ds.set_format(
-                type="torch", columns=["input_ids", "attention_mask", "labels"]
-            )
-
-            # set the special tokens to be ignored when calculating the loss
-            # except for the first occurrence of an EOS token
-            for i in range(len(encodings["input_ids"])):
-                eos_indexs = torch.nonzero(
-                    encodings["input_ids"][i] == tokenizer.eos_token_id, as_tuple=False
-                ).flatten()
-                if len(eos_indexs) > 0:
-                    eos_index = eos_indexs[0]
-                    encodings["labels"][i][eos_index + 1 :] = -100
-
+            encodings_ds = PileDataset(texts, max_length, tokenizer)
             sampler = (
                 DistributedSampler(encodings_ds)  # type: ignore
                 if is_distributed
@@ -161,3 +139,37 @@ def get_pile_dataloaders(
             )
 
     return dataloaders["train"], dataloaders["val"]
+
+
+class PileDataset(Dataset):
+    def __init__(self, texts, max_length, tokenizer):
+        self.texts = texts
+        self.max_length = max_length
+        self.tokenizer = tokenizer
+
+    def __getitem__(self, idx):
+        if isinstance(idx, int):
+            idx = [idx]
+
+        max_len_chars = 10 * self.max_length  # very conservative upper bound
+        text = [self.texts[i][:max_len_chars] for i in idx]
+        encodings = self.tokenizer(
+            text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt",
+            text_target=text,
+        )
+        for i in range(len(idx)):    
+            eos_indexs = torch.nonzero(
+                        encodings["input_ids"][i] == self.tokenizer.eos_token_id, as_tuple=False
+                    ).flatten()
+            if len(eos_indexs) > 0:
+                eos_index = eos_indexs[0]
+                encodings["labels"][i][eos_index + 1 :] = -100
+
+        return encodings
+
+    def __len__(self):
+        return len(self.texts)
