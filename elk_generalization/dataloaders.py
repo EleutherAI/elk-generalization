@@ -35,7 +35,7 @@ def get_dataloader(
                     choice[1:], add_special_tokens=False
                 )
                 assert c_id_without_space == c_id[1:]
-                c_id = a_id_without_space
+                c_id = c_id_without_space
             
             if len(c_id) > 1:
                 print(
