@@ -414,6 +414,8 @@ def main(args):
     )
 
     # setup optimizer, scheduler, scale
+    if local_rank == 0:
+        print("Setting up optimizer and scheduler...")
     learnable_parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(
         learnable_parameters,
@@ -429,6 +431,8 @@ def main(args):
     scaler = GradScaler()
 
     # setup trainer
+    if local_rank == 0:
+        print("Setting up trainer...")
     trainer = Trainer(
         model=model,
         base_model=base_model,

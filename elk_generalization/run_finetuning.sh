@@ -1,4 +1,4 @@
-template="grader_first"
-perturb="0.0"
-python finetuning.py --model EleutherAI/pythia-410m --save-dir ../custom-models --pile-path ../data/pile.jsonl --verbose --max-len 45 --max-pretrain-len 128 --batch-size 20 --kl-weight 0.1 --eval-every 200 --save-every 100 --epochs 100 --n-val 400 --lora-rank 2 --train-ds-name "atmallen/qm_${template}_1.0e_${perturb}p_finetuning" --val-ds-names "atmallen/qm_alice_${template}_1.0e_${perturb}p_finetuning" "atmallen/qm_bob_${template}_1.0e_${perturb}p_finetuning" --devices 2 3 --n-train 1000
+template="mixture"
+perturb="0.5"
+python finetuning.py --model EleutherAI/pythia-2.8b --save-dir ../custom-models --pile-path ../data/pile.jsonl --verbose --max-len 45 --max-pretrain-len 128 --batch-size 20 --kl-weight 0.1 --eval-every 200 --save-every 100 --epochs 100 --n-val 400 --lora-rank 2 --train-ds-name "atmallen/qm_${template}_1.0e_${perturb}p_finetuning" --val-ds-names "atmallen/qm_alice_${template}_1.0e_${perturb}p_finetuning" "atmallen/qm_bob_${template}_1.0e_${perturb}p_finetuning" --devices 0 1 --n-train 400000
 # torchrun --standalone --nproc_per_node=2 finetuning.py --model EleutherAI/pythia-160m --snapshot-path ../custom-models/pythia-160m/snapshot.pt  --best-checkpoint-path ../custom-models/pythia-160m/best.pt --pile-path ../data/pile.jsonl --verbose --max-len 32 --max-pretrain-len 128 --batch-size 8 --kl-weight 0.3 --save-every 100 --eval-every 500 --n-train 400000 --n-val 500 --epochs 10

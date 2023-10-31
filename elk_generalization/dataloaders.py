@@ -117,7 +117,7 @@ def get_pile_dataloaders(
         texts = []
         for split in ranges:
             for line in tqdm(
-                islice(f, *ranges[split]), total=n[split], desc=f"Loading {split} data"
+                islice(f, *ranges[split]), total=n[split], desc=f"Loading {split} data from {jsonl_path}"
             ):
                 texts.append(json.loads(line)["text"])
 
