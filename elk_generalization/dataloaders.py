@@ -26,8 +26,8 @@ def get_dataloader(
 
     def tokenize(example):
         choice_ids = []
-        for label in example["choices"]:
-            c_id = tokenizer.encode(" " + choice, add_special_tokens=False)
+        for choice in example["choices"]:
+            c_id = tokenizer.encode(choice, add_special_tokens=False)
 
             # the Llama tokenizer splits off leading spaces
             if tokenizer.decode(c_id[0]).strip() == "":
