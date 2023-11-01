@@ -5,14 +5,15 @@ from typing import Literal
 from datasets import load_dataset, Dataset
 from sklearn.metrics import roc_auc_score, accuracy_score
 import torch
+import yaml
+from pathlib import Path
 
 
 def get_raw_logprobs(
     fr: str, to: str, p_err: float, version: str | int, dir_template: str
 ) -> dict:
-    logprobs = torch.load(
-        dir_template.format(fr=fr, to=to, p_err=p_err, version=version)
-    )
+    path = Path(dir_template.format(fr=fr, to=to, p_err=p_err, version=version))
+    logprobs = torch.load(path)
     assert len(logprobs) == 1
     only_value = list(logprobs.values()).pop()
     return only_value
@@ -83,3 +84,17 @@ def measure_across_layers(
 
     results_df = pd.DataFrame(results)
     return results_df
+
+
+def get_meta(run_dir):
+    with open(Path(run_dir) / "cfg.yaml") as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+    return cfg
+
+def get_template_name(run_dir):
+    cfg = get_meta(run_dir)
+    return cfg["data"]["template_path"].removeprefix("qm_")
+
+def get_model_name(run_dir):
+    cfg = get_meta(run_dir)
+    return cfg["data"]["model"].split("/")[-1]

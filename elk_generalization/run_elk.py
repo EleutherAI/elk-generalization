@@ -17,7 +17,7 @@ def elicit(
 
     model_last = model.split("/")[-1]
     out_dir = f"{model_last}/{from_ds_name}"
-    full_out_dir = os.path.join(os.environ["ELK_DIR"], out_dir)
+    full_out_dir = os.path.join(elk_reporter_dir(), out_dir)
 
     elicit = Elicit(
         data=Extract(
@@ -77,10 +77,16 @@ def eval(
         eval.execute()
 
         out_dirs.append(
-            os.path.join(os.environ["ELK_DIR"], from_out_dir, "transfer", to_ds_name)
+            os.path.join(elk_reporter_dir(), from_out_dir, "transfer", to_ds_name)
         )
 
     return out_dirs
+
+
+def elk_reporter_dir():
+    """Returns the path to the ELK reporter directory."""
+    # this copies the behavior from EleutherAI/elk
+    return os.environ.get("ELK_DIR", Path.home() / "elk-reporters")
 
 
 def transfer(args, datasets):
@@ -161,8 +167,8 @@ if __name__ == "__main__":
         }
     elif args.experiment == "easy_vs_hard":
         datasets = {
-            "easy": f"atmallen/qm_alice_{float(args.p_err)}e_easy_2_eval",
-            "hard": f"atmallen/qm_alice_{float(args.p_err)}e_hard_4_eval",
+            "easy": f"atmallen/qm_alice_easy_2_{float(args.p_err)}e_eval",
+            "hard": f"atmallen/qm_alice_hard_4_{float(args.p_err)}e_eval",
         }
     else:
         raise NotImplementedError
