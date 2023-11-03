@@ -8,7 +8,7 @@ import importlib
 
 
 def elicit(
-    model: str, from_ds_name: str, num_gpus: int, disable_cache: bool, supervised: str, template: str, max_examples: tuple[int, int], fsdp: bool, min_gpu_mem: int = 1000000000,
+    model: str, from_ds_name: str, num_gpus: int, disable_cache: bool, supervised: str, template: str, max_examples: tuple[int, int], fsdp: bool, min_gpu_mem: int = 1000000000, alpha: float | None = None, l1_ratio: float | None = None
 ) -> str:
     """Runs ELK elicit and eval for a given model specified by `base_name` and `version`.
     Trains a probe on each of "bob" and "alice" datasets, and evaluates transfer accuracy on the other.
@@ -33,6 +33,8 @@ def elicit(
         debug=True,
         disable_cache=disable_cache,
         supervised=supervised,
+        alpha=alpha,
+        l1_ratio=l1_ratio,
         save_logprobs=True,
         min_gpu_mem=min_gpu_mem,  # 1 GB
     )
@@ -108,7 +110,7 @@ def transfer(args, datasets):
 
         # train probe on from_dataset
         from_out_dir = elicit(
-            args.model, from_dataset, supervised=args.supervised, **elk_kwargs
+            args.model, from_dataset, supervised=args.supervised, alpha=args.alpha, l1_ratio=args.l1_ratio, **elk_kwargs
         )
 
         # eval probe on both datasets
@@ -152,7 +154,9 @@ if __name__ == "__main__":
     parser.add_argument("--disable-cache", action="store_true")
     parser.add_argument("--supervised", type=str, default="single")
     parser.add_argument("--num-gpus", type=int, default=1)
-    parser.add_argument("--fsdp", action="store_true", default=True)
+    parser.add_argument("--fsdp", action="store_true")
+    parser.add_argument("--alpha", type=float, default=None)
+    parser.add_argument("--l1-ratio", type=float, default=None)
     parser.add_argument("--min-gpu-mem", type=int, default=1000000000)  # 1 GB
     parser.add_argument("--p-err", type=float, default=1.0)
 
