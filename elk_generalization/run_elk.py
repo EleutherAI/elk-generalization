@@ -8,8 +8,7 @@ import importlib
 
 
 def elicit(
-    model: str, from_ds_name: str, num_gpus: int, disable_cache: bool, supervised: str, template: str, max_examples: tuple[int, int], fsdp: bool, min_gpu_mem: int = 1000000000, alpha: float | None = None, l1_ratio: float | None = None
-) -> str:
+    model: str, from_ds_name: str, num_gpus: int, disable_cache: bool, supervised: str, template: str, max_examples: tuple[int, int], fsdp: bool, min_gpu_mem: int = 1000000000, alpha: float | None = None, l1_ratio: float = 0) -> str:
     """Runs ELK elicit and eval for a given model specified by `base_name` and `version`.
     Trains a probe on each of "bob" and "alice" datasets, and evaluates transfer accuracy on the other.
     Saves results to ./elk-generalization/{model}/{from_ds_name}/elicit/{to_ds_name}
@@ -91,7 +90,7 @@ def elk_reporter_dir():
     return os.environ.get("ELK_DIR", Path.home() / "elk-reporters")
 
 
-def transfer(args, datasets):
+def transfer(args, datasets, both_ways=False):
     out_dirs = defaultdict(dict)  # from_dataset -> {to_dataset -> out_dir}
     assert len(datasets) == 2
     keys = list(datasets.keys())
@@ -104,7 +103,8 @@ def transfer(args, datasets):
         "fsdp": args.fsdp and args.num_gpus > 1,
         "min_gpu_mem": args.min_gpu_mem,
     }
-    for fr, to in [(keys[0], keys[1]), (keys[1], keys[0])]:
+    pairs = [(keys[0], keys[1]), (keys[1], keys[0])] if both_ways else [(keys[0], keys[1])]
+    for fr, to in pairs:
         from_dataset = datasets[fr]
         to_dataset = datasets[to]
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--experiment",
         type=str,
-        choices=["context_generalization", "easy_vs_hard"],
+        choices=["context_generalization", "easy_vs_hard", "alice_easy_to_bob_hard", "alice_hard_to_bob_hard"],
         default="context_generalization",
     )
     parser.add_argument(
@@ -149,14 +149,14 @@ if __name__ == "__main__":
         type=str,
         default="/mnt/ssd-1/alexm/elk-generalization/custom-models/Llama-2-7b-hf-v1692471371",
     )
-    parser.add_argument("--template", type=str, required=True)
+    parser.add_argument("--template", choices=["mixture", "grader_first", "grader_last"], type=str, required=True)
     parser.add_argument("--max-examples", type=int, nargs=2, default=[1000, 1000])
     parser.add_argument("--disable-cache", action="store_true")
     parser.add_argument("--supervised", type=str, default="single")
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--fsdp", action="store_true")
-    parser.add_argument("--alpha", type=float, default=None)
-    parser.add_argument("--l1-ratio", type=float, default=None)
+    parser.add_argument("--alpha", type=float, default=0.001)
+    parser.add_argument("--l1-ratio", type=float, default=0.0)
     parser.add_argument("--min-gpu-mem", type=int, default=1000000000)  # 1 GB
     parser.add_argument("--p-err", type=float, default=1.0)
 
@@ -169,11 +169,25 @@ if __name__ == "__main__":
             "alice": f"atmallen/qm_alice_{float(args.p_err)}e_eval",
             "bob": f"atmallen/qm_bob_{float(args.p_err)}e_eval",
         }
+        both_ways = True
     elif args.experiment == "easy_vs_hard":
         datasets = {
             "easy": f"atmallen/qm_alice_easy_2_{float(args.p_err)}e_eval",
             "hard": f"atmallen/qm_alice_hard_4_{float(args.p_err)}e_eval",
         }
+        both_ways = True
+    elif args.experiment == "alice_easy_to_bob_hard":
+        datasets = {
+            "alice_easy": f"atmallen/qm_alice_easy_2_{float(args.p_err)}e_eval",
+            "bob_hard": f"atmallen/qm_bob_hard_4_{float(args.p_err)}e_eval",
+        }
+        both_ways = False
+    elif args.experiment == "alice_hard_to_bob_hard":
+        datasets = {
+            "alice_hard": f"atmallen/qm_alice_hard_4_{float(args.p_err)}e_eval",
+            "bob_hard": f"atmallen/qm_bob_hard_4_{float(args.p_err)}e_eval",
+        }
+        both_ways = False
     else:
         raise NotImplementedError
-    transfer(args, datasets)
+    transfer(args, datasets, both_ways=both_ways)
