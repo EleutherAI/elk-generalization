@@ -2,6 +2,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler  # type: ignore
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_  # type: ignore
@@ -21,7 +22,7 @@ import argparse
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    get_linear_schedule_with_warmup,
+    get_constant_schedule_with_warmup,
 )
 from tqdm import tqdm
 from dataloaders import get_dataloader, get_pile_dataloaders
@@ -51,15 +52,18 @@ class Trainer:
         best_checkpoint_path: str,
         grad_clip: float = 1.0,
         kl_weight: float = 0.3,
+        early_stop_lr: float = 1e-8,
         verbose: bool = True,
     ) -> None:
         self.world_size = int(os.environ.get("WORLD_SIZE", 1))
         if self.world_size > 1 and devices is not None:
             raise ValueError("devices must be None in distributed training")
-        self.device = int(os.environ.get("LOCAL_RANK", 0)) if devices is None else devices[0]
+        self.device = (
+            int(os.environ.get("LOCAL_RANK", 0)) if devices is None else devices[0]
+        )
         self.base_model_device = (
-            self.device + self.world_size
-        ) if devices is None else devices[1]
+            (self.device + self.world_size) if devices is None else devices[1]
+        )
         self.model = model.to(self.device)
         self.base_model = (
             base_model.to(self.base_model_device) if kl_weight > 0 else None  # type: ignore
@@ -78,6 +82,7 @@ class Trainer:
         self.grad_clip = grad_clip
         self.verbose = verbose
         self.kl_weight = kl_weight
+        self.early_stop_lr = early_stop_lr
 
         # this line resumes training if it was interrupted
         if os.path.exists(self.snapshot_path):
@@ -91,8 +96,9 @@ class Trainer:
         else:
             self.model = self.model.to(self.device)
 
-        self.best_val = float("-inf")
+        self.best_val = float("inf")
         self.epoch = 0
+        self.is_finished = False
 
     def _load_snapshot(self):
         if self.verbose and self.device == 0 or self.world_size == 1:
@@ -118,7 +124,7 @@ class Trainer:
         snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
         snapshot["SCALER_STATE"] = self.scaler.state_dict()
         torch.save(snapshot, self.snapshot_path)
-    
+
     def _save_checkpoint(self):
         print(f"Saving checkpoint to {self.best_checkpoint_path}")
         model = self.model.module if self.world_size > 1 else self.model
@@ -135,11 +141,19 @@ class Trainer:
             if (step + 1) % self.eval_every == 0 or step == len(self.train_data) - 1:
                 val_results = self.eval()
                 val_score_summary = sum(
-                    val_results[(name + "/")]["auroc"] for name in self.val_dataloaders
+                    val_results[(name + "/")]["loss"] for name in self.val_dataloaders
                 )
 
+                # update the scheduler and check if we should stop training
+                self.scheduler.step(val_score_summary)
+                if self.optimizer.param_groups[0]["lr"] < self.early_stop_lr:
+                    self.is_finished = True
+                    break
+
                 # save the model if it's the best one so far
-                if val_score_summary >= self.best_val and (self.device == 0 or self.world_size == 1):
+                if val_score_summary <= self.best_val and (
+                    self.device == 0 or self.world_size == 1
+                ):
                     self.best_val = val_score_summary
                     self._save_checkpoint()
 
@@ -153,7 +167,10 @@ class Trainer:
                     wandb.log(logs)
             self.optimizer.zero_grad()
 
-            model_inputs = {k: batch[k].to(self.device) for k in ["input_ids", "attention_mask", "labels"]}
+            model_inputs = {
+                k: batch[k].to(self.device)
+                for k in ["input_ids", "attention_mask", "labels"]
+            }
             loss = self.model(**model_inputs).loss
 
             # we do this before KL loss to avoid modifying model in distributed training
@@ -180,7 +197,10 @@ class Trainer:
                 if self.device == 0 or self.world_size == 1:
                     wandb.log({"train/kl_loss": kl_loss.item()})
 
-            clip_grad_norm_(self.model.module.parameters(), self.grad_clip) if self.world_size > 1 else clip_grad_norm_(self.model.parameters(), self.grad_clip)  # type: ignore
+            if self.world_size > 1:
+                clip_grad_norm_(self.model.module.parameters(), self.grad_clip)  # type: ignore
+            else:
+                clip_grad_norm_(self.model.parameters(), self.grad_clip) 
             self.scaler.step(self.optimizer)
             self.scaler.update()
             self.scheduler.step()
@@ -188,11 +208,15 @@ class Trainer:
             if self.device == 0 or self.world_size == 1:
                 wandb.log({"train/loss": loss.item()})
 
-            if (step + 1) % self.save_every == 0 and (self.device == 0 or self.world_size == 1):
+            if (step + 1) % self.save_every == 0 and (
+                self.device == 0 or self.world_size == 1
+            ):
                 self._save_snapshot()
 
     def train(self, max_epochs: int):
         for epoch in range(self.epoch, max_epochs):
+            if self.is_finished:
+                break
             self.epoch = epoch
             self._train_epoch()
 
@@ -206,7 +230,10 @@ class Trainer:
             labels = []
             loss = 0
             for batch_num, batch in enumerate(val_data):
-                model_inputs = {k: batch[k].to(self.device) for k in ["input_ids", "attention_mask", "labels"]}
+                model_inputs = {
+                    k: batch[k].to(self.device)
+                    for k in ["input_ids", "attention_mask", "labels"]
+                }
                 output = self.model(**model_inputs)
 
                 batch_size = model_inputs["input_ids"].shape[0]
@@ -218,13 +245,28 @@ class Trainer:
 
                 neg_ids, pos_ids = batch["choice_ids"][:, 0], batch["choice_ids"][:, 1]
                 logprobs = output.logits.log_softmax(dim=-1)[..., :-1, :]
-                # this indexing is tricky, since we want a different sequence position and token id for each row in the batch
-                logp_pos = torch.stack([logprobs[row, :, pos_id] for row, pos_id in enumerate(pos_ids)])[target_mask]  # [batch_size,]
-                logp_neg = torch.stack([logprobs[row, :, neg_id] for row, neg_id in enumerate(neg_ids)])[target_mask]  # [batch_size,]
+                # this indexing is tricky, since we want a different sequence 
+                # position and token id for each row in the batch
+                logp_pos = torch.stack(
+                    [logprobs[row, :, pos_id] for row, pos_id in enumerate(pos_ids)]
+                )[
+                    target_mask
+                ]  # [batch_size,]
+                logp_neg = torch.stack(
+                    [logprobs[row, :, neg_id] for row, neg_id in enumerate(neg_ids)]
+                )[
+                    target_mask
+                ]  # [batch_size,]
                 assert len(logp_pos) == len(labs)
 
                 scores.append(logp_pos - logp_neg)
-                labels.append(torch.tensor([l == pos_id for l, pos_id in zip(labs, pos_ids)], dtype=bool).to(self.device))  # type: ignore
+                labels.append(
+                    torch.tensor(
+                        [l == pos_id for l, pos_id in zip(labs, pos_ids)],
+                        dtype=bool  # type: ignore
+                    )
+                    .to(self.device)  # type: ignore
+                )  
 
                 loss += output.loss
 
@@ -256,9 +298,7 @@ class Trainer:
             results[wandb_ds_name]["precision"] = precision_score(
                 labels, preds, pos_label=1
             )
-            results[wandb_ds_name]["recall"] = recall_score(
-                labels, preds, pos_label=1
-            )
+            results[wandb_ds_name]["recall"] = recall_score(labels, preds, pos_label=1)
             results[wandb_ds_name]["accuracy"] = accuracy_score(labels, preds)
             results[wandb_ds_name]["auroc"] = roc_auc_score(labels, scores)
             if self.world_size > 1:
@@ -417,16 +457,23 @@ def main(args):
     if local_rank == 0:
         print("Setting up optimizer and scheduler...")
     learnable_parameters = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.RAdam(
         learnable_parameters,
         lr=args.lr,
         weight_decay=args.weight_decay,
         betas=(0.9, 0.95),
+        decoupled_weight_decay=True,  # requires torch nightly version # type: ignore
     )
-    scheduler = get_linear_schedule_with_warmup(
+    schedule = ReduceLROnPlateau(
         optimizer,
-        num_warmup_steps=args.warmup_steps,
-        num_training_steps=args.epochs * len(train_dl),
+        mode="min",  # change this to max if we're maximizing a metric
+        factor=args.reduce_lr_factor,
+        patience=args.lr_patience,
+        verbose=args.verbose,
+    )
+    early_stop_lr = (
+        optimizer.defaults["lr"]
+        * args.reduce_lr_factor**args.early_stop_schedule_steps
     )
     scaler = GradScaler()
 
@@ -442,7 +489,7 @@ def main(args):
         train_pile=train_pile,
         val_pile=val_pile,
         optimizer=optimizer,
-        scheduler=scheduler,
+        scheduler=schedule,
         scaler=scaler,
         eval_every=args.eval_every,
         save_every=args.save_every,
@@ -450,6 +497,7 @@ def main(args):
         best_checkpoint_path=best_checkpoint_path,
         grad_clip=args.grad_clip,
         kl_weight=args.kl_weight,
+        early_stop_lr=early_stop_lr,
         verbose=args.verbose,
     )
     trainer.train(args.epochs)
@@ -481,6 +529,9 @@ if __name__ == "__main__":
     parser.add_argument("--pile-path", type=str, required=True)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--kl-weight", type=float, default=0.3)
+    parser.add_argument("--reduce-lr-factor", type=float, default=0.1)
+    parser.add_argument("--lr-patience", type=int, default=10)
+    parser.add_argument("--early-stop-schedule-steps", type=int, default=4)
     parser.add_argument("--lora-rank", type=int, default=-1)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.1)
