@@ -73,7 +73,7 @@ class Trainer:
         self.train_pile = train_pile or [None] * len(train_data)
         self.val_pile = val_pile
         self.optimizer = optimizer
-        self.scheduler = scheduler
+        self.schedule = scheduler
         self.scaler = scaler
         self.eval_every = eval_every
         self.save_every = save_every
@@ -108,7 +108,7 @@ class Trainer:
         self.epoch = snapshot["EPOCHS_RUN"]
         self.best_val = snapshot["BEST_VAL"]
         self.optimizer.load_state_dict(snapshot["OPTIMIZER_STATE"])
-        self.scheduler.load_state_dict(snapshot["SCHEDULER_STATE"])
+        self.schedule.load_state_dict(snapshot["SCHEDULER_STATE"])
         self.scaler.load_state_dict(snapshot["SCALER_STATE"])
 
     def _save_snapshot(self):
@@ -121,7 +121,7 @@ class Trainer:
         snapshot["EPOCHS_RUN"] = self.epoch
         snapshot["BEST_VAL"] = self.best_val
         snapshot["OPTIMIZER_STATE"] = self.optimizer.state_dict()
-        snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
+        snapshot["SCHEDULER_STATE"] = self.schedule.state_dict()
         snapshot["SCALER_STATE"] = self.scaler.state_dict()
         torch.save(snapshot, self.snapshot_path)
 
@@ -142,10 +142,11 @@ class Trainer:
                 val_results = self.eval()
                 val_score_summary = sum(
                     val_results[(name + "/")]["loss"] for name in self.val_dataloaders
+                    if name.startswith("val")  # assumes val dataloaders start with "val"
                 )
 
                 # update the scheduler and check if we should stop training
-                self.scheduler.step(val_score_summary)
+                self.schedule.step(val_score_summary)
                 if self.optimizer.param_groups[0]["lr"] < self.early_stop_lr:
                     self.is_finished = True
                     break
@@ -203,7 +204,6 @@ class Trainer:
                 clip_grad_norm_(self.model.parameters(), self.grad_clip) 
             self.scaler.step(self.optimizer)
             self.scaler.update()
-            self.scheduler.step()
 
             if self.device == 0 or self.world_size == 1:
                 wandb.log({"train/loss": loss.item()})
@@ -334,6 +334,8 @@ def main(args):
     cfg = vars(args)
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     # hash the args to get a unique id for this run
+    # set PYTHONHASHSEED environment variable so it is deterministic
+    os.environ["PYTHONHASHSEED"] = "633"
     id = str(hash(str(cfg)))[-8:]
     model_last = args.model.split("/")[-1]
     save_dir = os.path.join(args.save_dir, f"{model_last}-{id}")

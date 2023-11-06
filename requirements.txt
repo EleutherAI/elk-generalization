@@ -1,7 +1,8 @@
 datasets
 transformers
 peft
-torch==nightly+cu121
+--find-links https://download.pytorch.org/whl/nightly/cu121
+torch
 tqdm
 matplotlib
 seaborn
