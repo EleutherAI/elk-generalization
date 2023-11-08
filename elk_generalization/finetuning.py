@@ -22,7 +22,7 @@ import argparse
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    get_constant_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
 )
 from tqdm import tqdm
 from dataloaders import get_dataloader, get_pile_dataloaders
@@ -52,7 +52,6 @@ class Trainer:
         best_checkpoint_path: str,
         grad_clip: float = 1.0,
         kl_weight: float = 0.3,
-        early_stop_lr: float = 1e-8,
         verbose: bool = True,
     ) -> None:
         self.world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -82,7 +81,6 @@ class Trainer:
         self.grad_clip = grad_clip
         self.verbose = verbose
         self.kl_weight = kl_weight
-        self.early_stop_lr = early_stop_lr
 
         # this line resumes training if it was interrupted
         if os.path.exists(self.snapshot_path):
@@ -145,12 +143,6 @@ class Trainer:
                     if name.startswith("val")  # assumes val dataloaders start with "val"
                 )
 
-                # update the scheduler and check if we should stop training
-                self.schedule.step(val_score_summary)
-                if self.optimizer.param_groups[0]["lr"] < self.early_stop_lr:
-                    self.is_finished = True
-                    break
-
                 # save the model if it's the best one so far
                 if val_score_summary <= self.best_val and (
                     self.device == 0 or self.world_size == 1
@@ -167,6 +159,7 @@ class Trainer:
                     }
                     wandb.log(logs)
             self.optimizer.zero_grad()
+            self.schedule.step()
 
             model_inputs = {
                 k: batch[k].to(self.device)
@@ -207,6 +200,7 @@ class Trainer:
 
             if self.device == 0 or self.world_size == 1:
                 wandb.log({"train/loss": loss.item()})
+                wandb.log({"train/lr": self.optimizer.param_groups[0]["lr"]})
 
             if (step + 1) % self.save_every == 0 and (
                 self.device == 0 or self.world_size == 1
@@ -459,23 +453,16 @@ def main(args):
     if local_rank == 0:
         print("Setting up optimizer and scheduler...")
     learnable_parameters = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.RAdam(
+    optimizer = torch.optim.AdamW(
         learnable_parameters,
         lr=args.lr,
         weight_decay=args.weight_decay,
         betas=(0.9, 0.95),
-        decoupled_weight_decay=True,  # requires torch nightly version # type: ignore
     )
-    schedule = ReduceLROnPlateau(
+    schedule = get_linear_schedule_with_warmup(
         optimizer,
-        mode="min",  # change this to max if we're maximizing a metric
-        factor=args.reduce_lr_factor,
-        patience=args.lr_patience,
-        verbose=args.verbose,
-    )
-    early_stop_lr = (
-        optimizer.defaults["lr"]
-        * args.reduce_lr_factor**args.early_stop_schedule_steps
+        num_warmup_steps=args.warmup_steps,
+        num_training_steps=args.epochs * len(train_dl),
     )
     scaler = GradScaler()
 
@@ -499,7 +486,6 @@ def main(args):
         best_checkpoint_path=best_checkpoint_path,
         grad_clip=args.grad_clip,
         kl_weight=args.kl_weight,
-        early_stop_lr=early_stop_lr,
         verbose=args.verbose,
     )
     trainer.train(args.epochs)
@@ -524,16 +510,13 @@ if __name__ == "__main__":
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--max-len", type=int, default=512)
     parser.add_argument("--max-pretrain-len", type=int, default=512)
-    parser.add_argument("--warmup-steps", type=int, default=400)
+    parser.add_argument("--warmup-steps", type=int, default=500)
     parser.add_argument("--eval-every", type=int, default=200)  # steps
     parser.add_argument("--save-every", type=int, default=200)  # steps
     parser.add_argument("--save-dir", type=str, default="../custom-models")
     parser.add_argument("--pile-path", type=str, required=True)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--kl-weight", type=float, default=0.3)
-    parser.add_argument("--reduce-lr-factor", type=float, default=0.1)
-    parser.add_argument("--lr-patience", type=int, default=10)
-    parser.add_argument("--early-stop-schedule-steps", type=int, default=4)
     parser.add_argument("--lora-rank", type=int, default=-1)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.1)
