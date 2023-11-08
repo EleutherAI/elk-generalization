@@ -5,6 +5,8 @@ from numpy.typing import ArrayLike
 from typing import Literal, Optional, TYPE_CHECKING
 import numpy as np
 import random
+from scipy.stats import chi2
+from scipy.spatial.distance import mahalanobis
 
 if TYPE_CHECKING:
     from sklearn.base import BaseEstimator
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
 class AnomalyResult:
     """Result of an anomaly detection experiment."""
 
-    model: "BaseEstimator"
+    model: "BaseEstimator | Mahalanobis"
     """The fitted anomaly detection model."""
     auroc: float
     """The AUROC on the held out mixed data."""
@@ -42,11 +44,12 @@ def bootstrap_auroc(
 
 
 def fit_anomaly_detector(
-    normal: ArrayLike,
-    anomalous: ArrayLike,
+    normal_x: ArrayLike,
+    test_x: ArrayLike,
+    test_y: ArrayLike,
     *,
     bootstrap_iters: int = 1000,
-    method: Literal["iforest", "lof", "svm"] = "lof",
+    method: Literal["iforest", "lof", "svm", "mahalanobis"] = "mahalanobis",
     plot: bool = True,
     seed: int = 42,
     **kwargs,
@@ -78,25 +81,26 @@ def fit_anomaly_detector(
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.svm import OneClassSVM
 
-    normal = np.asarray(normal)
-    anomalous = np.asarray(anomalous)
-    assert len(normal.shape) == 2
-    assert normal.shape[1] == anomalous.shape[1]
-
-    # Train only on normal data, test on mixed data
-    train_x, test_normal = train_test_split(normal, random_state=seed)
-    test_x = np.concatenate([anomalous, test_normal])  # TODO: change this to make test-y passed in
-    test_y = np.concatenate([np.zeros(len(anomalous)), np.ones(len(test_normal))])
+    normal_x = np.asarray(normal_x)
+    test_x = np.asarray(test_x)
+    test_y = np.asarray(test_y)
+    assert len(normal_x.shape) == 2
+    assert normal_x.shape[1] == test_x.shape[1]
+    assert len(test_y.shape) == 1
+    assert np.unique(test_y).tolist().sort() == [0, 1].sort()
 
     if method == "iforest":
-        model = IsolationForest(**kwargs, random_state=seed).fit(train_x)
+        model = IsolationForest(**kwargs, random_state=seed).fit(normal_x)
         test_preds = model.score_samples(test_x)
     elif method == "lof":
-        model = LocalOutlierFactor(novelty=True, **kwargs).fit(train_x)
+        model = LocalOutlierFactor(novelty=True, **kwargs).fit(normal_x)
         test_preds = model.decision_function(test_x)
     elif method == "svm":
-        model = OneClassSVM(**kwargs).fit(train_x)
+        model = OneClassSVM(**kwargs).fit(normal_x)
         test_preds = model.decision_function(test_x)
+    elif method == "mahalanobis":
+        model = Mahalanobis(**kwargs).fit(normal_x)
+        test_preds = model.score(test_x)
     else:
         raise ValueError(f"Unknown anomaly detection method '{method}'")
 
@@ -115,3 +119,23 @@ def fit_anomaly_detector(
             bootstrapped_aurocs=bootstrap_auroc(test_y, test_preds, bootstrap_iters),
             curve=None,
         )
+    
+
+class Mahalanobis:
+    def __init__(self, alpha: float = 0.001):
+        self.mean = None
+        self.prec = None
+        self.alpha = alpha
+
+    def fit(self, x: np.ndarray) -> "Mahalanobis":
+        self.mean = x.mean(axis=0)
+        self.prec = np.linalg.inv(np.cov(x, rowvar=False))
+        return self
+
+    def score(self, x: np.ndarray) -> np.ndarray:
+        assert self.mean is not None and self.prec is not None
+        divs = mahalanobis(self.mean, x, self.prec)  ** 2
+        crit_dist = chi2.ppf(1 - self.alpha, df=self.mean.shape[0])
+        preds = (divs > crit_dist).astype(int)
+        return preds
+        
