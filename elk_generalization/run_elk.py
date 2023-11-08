@@ -141,8 +141,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--experiment",
         type=str,
-        choices=["context_generalization", "easy_vs_hard", "alice_easy_to_bob_hard", "alice_hard_to_bob_hard"],
-        default="context_generalization",
+        default="A->B",
+        help="Indicate the source and target distributions of the form <source>-><target>." \
+        "Choices: [A, AE, AH, B, BE, BH], for combinations of Alice, Bob, Easy and Hard." \
+        "Use <-> to run both directions."
     )
     parser.add_argument(
         "--model",
@@ -164,30 +166,30 @@ if __name__ == "__main__":
 
     # make sure the appropriate templates are made
     make_jinja(args.template, get_elk_templates_dir())
-    if args.experiment == "context_generalization":
-        datasets = {
-            "alice": f"atmallen/qm_alice_{float(args.p_err)}e_eval",
-            "bob": f"atmallen/qm_bob_{float(args.p_err)}e_eval",
-        }
-        both_ways = True
-    elif args.experiment == "easy_vs_hard":
-        datasets = {
-            "easy": f"atmallen/qm_alice_easy_2_{float(args.p_err)}e_eval",
-            "hard": f"atmallen/qm_alice_hard_4_{float(args.p_err)}e_eval",
-        }
-        both_ways = True
-    elif args.experiment == "alice_easy_to_bob_hard":
-        datasets = {
-            "alice_easy": f"atmallen/qm_alice_easy_2_{float(args.p_err)}e_eval",
-            "bob_hard": f"atmallen/qm_bob_hard_4_{float(args.p_err)}e_eval",
-        }
-        both_ways = False
-    elif args.experiment == "alice_hard_to_bob_hard":
-        datasets = {
-            "alice_hard": f"atmallen/qm_alice_hard_4_{float(args.p_err)}e_eval",
-            "bob_hard": f"atmallen/qm_bob_hard_4_{float(args.p_err)}e_eval",
-        }
-        both_ways = False
-    else:
-        raise NotImplementedError
+    
+    distrs = {  
+        "A": "alice",
+        "AE": "alice_easy_2",
+        "AH": "alice_hard_4",
+        "B": "bob",
+        "BE": "bob_easy_2",
+        "BH": "bob_hard_4",
+    }
+
+    try:
+        if "<->" in args.experiment:
+            both_ways = True
+            args.experiment = args.experiment.replace("<->", "->")
+        else:
+            both_ways = False
+        source, target = args.experiment.split("->")
+        assert source in distrs and target in distrs
+        source, target = distrs[source], distrs[target]
+    except ValueError:
+        raise ValueError("Experiment must be of the form <source>-><target>")
+    
+    datasets = {
+        "alice": f"atmallen/qm_{source}_{float(args.p_err)}e_eval",
+        "bob": f"atmallen/qm_{target}_{float(args.p_err)}e_eval",
+    }
     transfer(args, datasets, both_ways=both_ways)

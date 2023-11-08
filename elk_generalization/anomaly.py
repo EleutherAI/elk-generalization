@@ -5,7 +5,6 @@ from numpy.typing import ArrayLike
 from typing import Literal, Optional, TYPE_CHECKING
 import numpy as np
 import random
-from scipy.stats import chi2
 from scipy.spatial.distance import mahalanobis
 
 if TYPE_CHECKING:
@@ -122,20 +121,24 @@ def fit_anomaly_detector(
     
 
 class Mahalanobis:
-    def __init__(self, alpha: float = 0.001):
+    def __init__(self, subtract_diag_mahal: bool = False):
         self.mean = None
         self.prec = None
-        self.alpha = alpha
+        self.subtract_diag_mahal = subtract_diag_mahal
 
     def fit(self, x: np.ndarray) -> "Mahalanobis":
         self.mean = x.mean(axis=0)
-        self.prec = np.linalg.inv(np.cov(x, rowvar=False))
+        cov = np.cov(x, rowvar=False)
+        if cov.ndim == 0:
+            cov = np.array([[cov]])  # numpy returns a scalar for 1D data
+        self.prec = np.linalg.inv(cov)
         return self
 
     def score(self, x: np.ndarray) -> np.ndarray:
         assert self.mean is not None and self.prec is not None
-        divs = mahalanobis(self.mean, x, self.prec)  ** 2
-        crit_dist = chi2.ppf(1 - self.alpha, df=self.mean.shape[0])
-        preds = (divs > crit_dist).astype(int)
-        return preds
+        dists = mahalanobis(x, self.mean, self.prec) ** 2
+        if self.subtract_diag_mahal:
+            # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
+            dists -= mahalanobis(x, self.mean, np.diag(np.diag(self.prec))) ** 2
+        return np.asarray(dists)
         
