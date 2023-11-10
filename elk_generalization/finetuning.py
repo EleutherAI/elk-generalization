@@ -36,6 +36,11 @@ def main(args):
             run_name=args.name,
             warmup_steps=args.warmup_steps,
             weight_decay=args.weight_decay,
+            eval_steps=args.eval_every,
+            save_steps=args.eval_every,
+            max_grad_norm=args.grad_clip,
+            learning_rate=args.lr,
+            seed=args.seed,
         ),
         max_length=512,
         max_prompt_length=args.max_len,
@@ -77,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-len", type=int, default=512)
     parser.add_argument("--warmup-steps", type=int, default=500)
     parser.add_argument("--eval-every", type=int, default=50)  # steps
-    parser.add_argument("--save-dir", type=str, default="../custom-models")
+    parser.add_argument("--outut-dir", type=str, default="../custom-models")
     parser.add_argument("--grad-clip", type=float, default=1.0)
     args = parser.parse_args()
 
