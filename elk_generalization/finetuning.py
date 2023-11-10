@@ -58,7 +58,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("name", type=str, help="Experiment name for wandb")
+    parser.add_argument("--name", type=str, help="Experiment name for wandb")
     parser.add_argument(
         "--dataset", type=str, default="atmallen/qm_mixture_1.0e_0.5p_finetuning",
     )
@@ -82,8 +82,9 @@ if __name__ == "__main__":
     parser.add_argument("--max-len", type=int, default=512)
     parser.add_argument("--warmup-steps", type=int, default=500)
     parser.add_argument("--eval-every", type=int, default=50)  # steps
-    parser.add_argument("--outut-dir", type=str, default="../custom-models")
+    parser.add_argument("--output-dir", type=str, default="../custom-models")
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--seed", type=int, default=633)
     args = parser.parse_args()
 
     # make reproducible

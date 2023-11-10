@@ -23,8 +23,8 @@ for model in models:
     modules = " ".join(lora_modules["gptneox" if "pythia" in model else "llama"])
     command = f"python finetuning.py --model {model} " \
             "--output-dir ../custom-models " \
-            "--eval-every 50 --epochs 100 --fp16 " \
-            "--verbose --max-len 45 --batch-size 5 " \
+            "--eval-every 50 --num-epochs 100 --fp16 " \
+            "--max-len 45 --batch-size 5 " \
             "--grad-accumulation-steps 4 --lora-rank 8 " \
             f"--lora-modules {modules} " \
             f"--dataset \"atmallen/qm_{template}_1.0e_{perturb}p_finetuning\" "
