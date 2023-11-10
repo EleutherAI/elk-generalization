@@ -11,3 +11,4 @@ scikit-learn
 numpy
 num2words
 wandb
+trl
