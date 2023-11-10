@@ -2,7 +2,7 @@ import os
 
 models = {
     "mistralai/Mistral-7B-v0.1": [
-        78502301,
+        "08913205",
         44380584,
         75419354,
     ],

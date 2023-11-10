@@ -10,10 +10,11 @@ from pathlib import Path
 
 
 def get_raw_logprobs(
-    fr: str, to: str, p_err: float, version: str | int, dir_template: str
+    fr: str, to: str, p_err: float, version: str | int, dir_template: str, verbose: bool = False
 ) -> dict:
     path = Path(dir_template.format(fr=fr, to=to, p_err=p_err, version=version))
-    print(f"Loading {path}")
+    if verbose:
+        print(f"Loading {path}")
     logprobs = torch.load(path)
     assert len(logprobs) == 1
     only_value = list(logprobs.values()).pop()

@@ -7,7 +7,7 @@ import argparse
 
 def main(args):
     def eval_model(name):
-        model = AutoModelForCausalLM.from_pretrained(name, torch_dtype=torch.half)
+        model = AutoModelForCausalLM.from_pretrained(name)
         tokenizer = AutoTokenizer.from_pretrained(name, use_fast=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -33,6 +33,7 @@ def main(args):
                 loss = outputs.loss
                 losses.append(loss.item())
 
+        print(losses)
         mean_loss = sum(losses) / len(losses)
         print(f"Mean loss for {name}: {mean_loss} (sem: {torch.std(torch.tensor(losses)) / len(losses) ** 0.5})")
 
