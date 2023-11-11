@@ -110,7 +110,7 @@ def perturb_character(text, character):
     return text
         
 
-def make_jinja(template_name, elk_template_dir):
+def make_jinja(template_name, label_col, ccs, elk_template_dir):
     """Creates a jinja template for a given template name and saves it to the elk template directory."""
     parent_dir = os.path.join(elk_template_dir, f"qm_{template_name}")
     path = os.path.join(parent_dir, "templates.yaml")
@@ -129,17 +129,18 @@ def make_jinja(template_name, elk_template_dir):
         neg_tok, pos_tok = value["choices"]
         jinja_template = python_template.replace("{", "{{ ").replace("}", " }}")
         jinja_template = jinja_template.replace("'", "''")  # escape single quotes
+        jinja_template = jinja_template + " ||| {{answer_choices[label]}}" if ccs else jinja_template
         template_str += f"  {id}: !Template\n" \
             f"    answer_choices: {neg_tok} ||| {pos_tok}\n" \
             f"    id: {id}\n" \
-            f"    jinja: '{jinja_template}'\n" \
+            f"    jinja: '{jinja_template}'\n"\
             f"    metadata: !TemplateMetadata\n" \
             f"      languages:\n" \
             f"      - en\n" \
             f"      metrics:\n" \
             f"      - Accuracy\n" \
             f"    name: \"{key}\"\n" \
-            f"    suffix: \"\"\n"
+            f"    label_column: \"{label_col}\"\n" if label_col is not None else ""
 
     with open(path, "w") as f:
         f.write(template_str)

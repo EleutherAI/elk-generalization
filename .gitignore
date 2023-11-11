@@ -1,3 +1,17 @@
+.vscode
+custom-models/
+run.py
+elk_generalization/results_old.ipynb
+elk_generalization/fsdp.ipynb
+elk_generalization/prototyping.ipynb
+elk_generalization/wandb
+data/
+wandb/
+elk_generalization/finetuning_old.ipynb
+figures/
+quirky-models/
+dpo-models/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

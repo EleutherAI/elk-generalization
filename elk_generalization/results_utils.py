@@ -22,11 +22,18 @@ def get_raw_logprobs(
 
 
 def get_logprobs_df(
-    raw_logprobs: dict, layer: int, ens: Literal["none", "partial"], inlp_iter: int = 0
+    raw_logprobs: dict, layer: int, ens: Literal["none", "partial"], inlp_iter: int = 0, reporter_key: Literal["lr", "reporter"]="lr"
 ) -> pd.DataFrame:
-    texts = np.array(raw_logprobs["texts"]).reshape(-1)
+    texts = np.array(raw_logprobs["texts"])
+    if texts.ndim == 3:
+        assert texts.shape[-1] == 2
+        texts = texts[..., 0]
+    texts = texts.reshape(-1)
     lm_logprobs = np.array(raw_logprobs["lm"][ens]).reshape(-1)
-    lr_logprobs = np.array(raw_logprobs["lr"][layer][ens][inlp_iter]).reshape(-1)
+    if reporter_key == "reporter":
+        lr_logprobs = np.array(raw_logprobs[reporter_key][layer][ens]).reshape(-1)
+    else:
+        lr_logprobs = np.array(raw_logprobs[reporter_key][layer][ens][inlp_iter]).reshape(-1)
     # duplicate labels `num_variants` times to match the shape of `lm_logprobs` and `lr_logprobs`
     num_variants = lm_logprobs.shape[0] // len(raw_logprobs["labels"])
     # we need to flatten in the case of "none" ensembling
@@ -46,6 +53,7 @@ def measure_across_layers(
     ens: Literal["none", "partial"] = "none",
     inlp_iter: int = 0,
     p_err: float = 1.0,
+    reporter_key: Literal["lr", "reporter"] = "lr"
 ) -> pd.DataFrame:
     meta = {"against": against, "ens": ens, "inlp_iter": inlp_iter}
     results = []
@@ -53,14 +61,17 @@ def measure_across_layers(
         f"atmallen/qm_{p_err}e_eval", split="validation"
     )  # type: ignore
     both_label_df: DataFrame = both_label_ds.to_pandas()  # type: ignore
-    both_label_df = both_label_df.drop(columns=["label"])
+    both_label_df = both_label_df.rename({"label": "both_df_label"}, axis="columns")
     num_layers = len(raw_logprobs["lr"])
-    for layer in range(num_layers):
-        pre_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter)
+    # for layer in range(num_layers):
+    for layer in range(1, num_layers):  # TODO: change back to including 0
+        pre_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter, reporter_key)
         layer_df = pre_df.merge(both_label_df, on="row_id", how="left")
         # check that the label column is the same as the alice_label or bob_label column
         assert all(layer_df["label"] == layer_df[f"alice_label"]) or all(
             layer_df["label"] == layer_df[f"bob_label"]
+        ) or all(
+            layer_df["label"] == layer_df[f"both_df_label"]
         )
         if filter_by == "agree":
             layer_df = layer_df[layer_df["alice_label"] == layer_df["bob_label"]]

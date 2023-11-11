@@ -40,6 +40,7 @@ def main(args):
             save_steps=args.eval_every,
             max_grad_norm=args.grad_clip,
             learning_rate=args.lr,
+            adam_beta2=0.95,
             seed=args.seed,
         ),
         max_length=512,
