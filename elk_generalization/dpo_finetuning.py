@@ -41,6 +41,8 @@ def main(args):
             max_grad_norm=args.grad_clip,
             learning_rate=args.lr,
             adam_beta2=0.95,
+            save_total_limit=1,
+            load_best_model_at_end=True,  # the best checkpoint should also be retained
             seed=args.seed,
         ),
         max_length=512,

@@ -17,7 +17,7 @@ def elicit(
     out_dir = f"{model_last}/{from_ds_name}"
     full_out_dir = os.path.join(reporter_dir(ccs), out_dir)
 
-    maybe_fsdp = {} if ccs else {"fsdp": fsdp}
+    maybe_fsdp = {} if ccs else {"fsdp": fsdp}  # TODO: make sure this is correct
     elicit = Elicit(
         data=Extract(
             model=model,
@@ -83,10 +83,8 @@ def reporter_dir(ccs: bool):
     module_name = "ccs" if ccs else "elk"
     return os.environ.get(f"{module_name.upper()}_DIR", Path.home() / f"{module_name}-reporters")
 
-def transfer(args, datasets, both_ways=False):
+def transfer(args, fr, to, both_ways=False):
     out_dirs = defaultdict(dict)  # from_dataset -> {to_dataset -> out_dir}
-    assert len(datasets) == 2
-    keys = list(datasets.keys())
 
     kwargs = {
         "ccs": args.ccs,
@@ -101,10 +99,10 @@ def transfer(args, datasets, both_ways=False):
     if args.l1_ratio > 0:
         elk_train_args["l1_ratio"] = args.l1_ratio
 
-    pairs = [(keys[0], keys[1]), (keys[1], keys[0])] if both_ways else [(keys[0], keys[1])]
+    pairs = [(fr, to), (to, fr)] if both_ways else [(fr, to)]
     for fr, to in pairs:
-        from_dataset = datasets[fr]
-        to_dataset = datasets[to]
+        from_dataset = f"atmallen/qm_{fr}{float(args.p_err)}e_eval"
+        to_dataset = f"atmallen/qm_{to}{float(args.p_err)}e_eval"
 
         # train probe on from_dataset
         from_out_dir = elicit(
@@ -197,8 +195,4 @@ if __name__ == "__main__":
     except ValueError:
         raise ValueError("Experiment must be of the form <source>-><target>")
     
-    datasets = {
-        source: f"atmallen/qm_{source}{float(args.p_err)}e_eval",
-        target: f"atmallen/qm_{target}{float(args.p_err)}e_eval",
-    }
-    transfer(args, datasets, both_ways=both_ways)
+    transfer(args, source, target, both_ways=both_ways)

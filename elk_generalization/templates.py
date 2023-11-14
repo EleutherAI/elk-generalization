@@ -140,7 +140,7 @@ def make_jinja(template_name, label_col, ccs, elk_template_dir):
             f"      metrics:\n" \
             f"      - Accuracy\n" \
             f"    name: \"{key}\"\n" \
-            f"    label_column: \"{label_col}\"\n" if label_col is not None else ""
+            + (f"    label_column: \"{label_col}\"\n" if label_col is not None else "")
 
     with open(path, "w") as f:
         f.write(template_str)
