@@ -53,6 +53,7 @@ if __name__ == "__main__":
         for version, template in zip(models[base_model], template_names):
             model_last = base_model.split("/")[-1]
             quirky_model = f"atmallen/{model_last}-v{version}"
+            quirky_model_last = quirky_model.split("/")[-1]
 
             def run_experiment(exp, reporter):
                 global total
@@ -62,7 +63,7 @@ if __name__ == "__main__":
                 test_datasets = [get_dataset_name(test, template) for test in tests]
 
                 def run_extract(abbrev, ds, split, max_examples):
-                    save_dir = f"{experiments_dir}/{quirky_model}/{template}/{abbrev}"
+                    save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
                     command = "python extract_hiddens.py " \
                         f"--model {quirky_model} " \
                         f"--dataset {ds} " \
@@ -77,8 +78,8 @@ if __name__ == "__main__":
                     run_extract(abbrev, ds, "test", 1024)
 
                 command = "python transfer.py " \
-                    f"--train-dir {experiments_dir}/{train}/validation " \
-                    f"--test-dirs " + " ".join([f"{experiments_dir}/{test}/test" for test in tests]) + " " \
+                    f"--train-dir {experiments_dir}/{quirky_model_last}/{train}/validation " \
+                    f"--test-dirs " + " ".join([f"{experiments_dir}/{quirky_model_last}/{test}/test" for test in tests]) + " " \
                     f"--reporter {reporter} "
                 if reporter == "ccs" and train == "all":
                     command += "--label-col alice_labels "

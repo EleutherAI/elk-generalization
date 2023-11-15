@@ -1,28 +1,37 @@
 from datasets import load_dataset, Dataset
-from elk_generalization.generate_sloppy_dataset import add
+from elk_generalization.datasets.generate_sloppy_dataset import add
 import numpy as np
 
 
 def test_eval():
-    ds_name = "atmallen/qm_1.0e_eval"
-    ds_dict = load_dataset(ds_name)
-    assert len(ds_dict) == 3  # type: ignore
-    ds: Dataset = ds_dict["train"]  # type: ignore
+    ds_name = "atmallen/qm_grader_last_1.0e_templated_eval"
+    ds: Dataset = load_dataset(ds_name, split="train").shuffle().select(range(10_000))  # type: ignore
 
-    ds = ds.select(range(1000))
-    
     def test_per_row(ex):
+        eq = ex["statement"].split(".")[0]
+        lhs, rhs = eq.split(" = ")
+        summand1, summand2 = lhs.split(" + ")
+        true_sum = str(int(summand1) + int(summand2))
+        bob_sum = add(int(summand1), int(summand2), 1.0)
+        assert (true_sum == rhs) == ex["alice_label"]
+        assert (bob_sum == rhs) == ex["bob_label"]
+
         ch = ex["character"]
         assert ex["label"] == ex[f"{ch.lower()}_label"]
-        is_correct = int(ex["sum"]) == int(ex["summand1"]) + int(ex["summand2"])
-        assert ex["alice_label"] == is_correct
+        
+        return {
+            "label": bool(ex["label"]),
+            "true_sum": true_sum,
 
-        # check that bob's label is correct
-        bob_sum = add(int(ex["summand1"]), int(ex["summand2"]), 1.0)
-        bob_label = int(bob_sum) == int(ex["sum"])
-        assert ex["bob_label"] == bob_label
+        }
+    ds = ds.map(test_per_row).with_format("numpy")
 
-    ds.map(test_per_row)
+    for character in ["alice", "bob"]:
+        cds = ds.filter(lambda x: character in x["statement"].lower())
+        
+        c = cds["label"].astype(bool)  # type: ignore
+        balance = sum(c) / len(c)
+        np.testing.assert_almost_equal(balance, 0.5, decimal=2, err_msg=f"labels are not balanced for {character} ({balance})")
 
     al = np.array(ds["alice_label"])
     bl = np.array(ds["bob_label"])
