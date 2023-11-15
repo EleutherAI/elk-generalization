@@ -7,7 +7,10 @@ elk_generalization/prototyping.ipynb
 elk_generalization/wandb
 data/
 wandb/
-elk_generalization/finetuning_old.ipynb
+elk_generalization/download_models.py
+elk_generalization/results_old.ipynb
+elk_generalization/results_utils_old.py
+elk_generalization/run_elk_old.py
 figures/
 quirky-models/
 dpo-models/
