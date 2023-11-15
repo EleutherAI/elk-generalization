@@ -12,3 +12,4 @@ numpy
 num2words
 wandb
 trl
+concept-erasure
