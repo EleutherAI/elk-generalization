@@ -31,17 +31,17 @@ def get_logprobs_df(
     texts = texts.reshape(-1)
     lm_logprobs = np.array(raw_logprobs["lm"][ens]).reshape(-1)
     if reporter_key == "reporter":
-        lr_logprobs = np.array(raw_logprobs[reporter_key][layer][ens]).reshape(-1)
+        reporter_logprobs = np.array(raw_logprobs[reporter_key][layer][ens]).reshape(-1)
     else:
-        lr_logprobs = np.array(raw_logprobs[reporter_key][layer][ens][inlp_iter]).reshape(-1)
-    # duplicate labels `num_variants` times to match the shape of `lm_logprobs` and `lr_logprobs`
+        reporter_logprobs = np.array(raw_logprobs[reporter_key][layer][ens][inlp_iter]).reshape(-1)
+    # duplicate labels `num_variants` times to match the shape of `lm_logprobs` and `reporter_logprobs`
     num_variants = lm_logprobs.shape[0] // len(raw_logprobs["labels"])
     # we need to flatten in the case of "none" ensembling
     labels = np.array(raw_logprobs["labels"].cpu()).repeat(num_variants)
     row_ids = raw_logprobs["row_ids"].cpu().numpy().repeat(num_variants)
 
     df = pd.DataFrame(
-        {"row_id": row_ids, "text": texts, "lm": lm_logprobs, "lr": lr_logprobs, "label": labels}
+        {"row_id": row_ids, "text": texts, "lm": lm_logprobs, "reporter": reporter_logprobs, "label": labels}
     )
     return df
 
@@ -62,7 +62,7 @@ def measure_across_layers(
     )  # type: ignore
     both_label_df: DataFrame = both_label_ds.to_pandas()  # type: ignore
     both_label_df = both_label_df.rename({"label": "both_df_label"}, axis="columns")
-    num_layers = len(raw_logprobs["lr"])
+    num_layers = len(raw_logprobs[reporter_key])
     # for layer in range(num_layers):
     for layer in range(1, num_layers):  # TODO: change back to including 0
         pre_df = get_logprobs_df(raw_logprobs, layer, ens, inlp_iter, reporter_key)
@@ -81,18 +81,18 @@ def measure_across_layers(
         # TODO: possibly add CI
         against_col = f"{against}_label"
         try:
-            lr_auroc = roc_auc_score(layer_df[against_col], layer_df["lr"])
+            reporter_auroc = roc_auc_score(layer_df[against_col], layer_df["reporter"])
             lm_auroc = roc_auc_score(layer_df[against_col], layer_df["lm"])
         except ValueError:
-            lr_auroc = np.nan
+            reporter_auroc = np.nan
             lm_auroc = np.nan
 
-        lr_acc = accuracy_score(layer_df[against_col], np.exp(layer_df["lr"]) > 0.5)
+        reporter_acc = accuracy_score(layer_df[against_col], np.exp(layer_df["reporter"]) > 0.5)
         lm_acc = accuracy_score(layer_df[against_col], np.exp(layer_df["lm"]) > 0.5)
 
         results.append(
-            {"layer": layer, "lr_auroc": lr_auroc, "lm_auroc": lm_auroc,
-             "lr_acc": lr_acc, "lm_acc": lm_acc, **meta}
+            {"layer": layer, "reporter_auroc": reporter_auroc, "lm_auroc": lm_auroc,
+             "reporter_acc": reporter_acc, "lm_acc": lm_acc, **meta}
         )
 
     results_df = pd.DataFrame(results)

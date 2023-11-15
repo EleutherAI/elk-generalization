@@ -50,6 +50,11 @@ def maybe_push_to_hub(ds_dict, hub_name, push_to_hub, remove_columns=None):
         print(ds_dict["train"][:2])
 
 
+def is_easy(example, num_digits_thresh=2):
+            summand1, summand2 = example["summand1"], example["summand2"]
+            return min(len(str(summand1)), len(str(summand2))) <= num_digits_thresh
+
+
 def generate_equations(args, distractor_from: Literal["Alice", "Bob"]):
     """Generates addition equations with errors
     It also generates distractor sums.
@@ -222,6 +227,115 @@ def generate_finetuning_data(args, alice_equations: DatasetDict, bob_equations: 
     maybe_push_to_hub(binary_ds_dict, hub_name, args.push_to_hub)
 
 
+def generate_templated_eval_data(args, alice_equations: DatasetDict, bob_equations: DatasetDict):
+    """This generates Alice's distribution and Bob's distribution separately,
+    with each one balanced (according to the labeler's labels) in a way that
+    does not reduce the problem to classifying the first digit as correct or not
+    """
+    hub_template = "qm{name}" + f"_{args.template}_{float(args.err_rate)}e_templated_eval"
+
+    all_equations = DatasetDict(
+        {
+            split: concatenate_datasets(
+                [alice_equations[split], bob_equations[split]]
+            )
+            for split in alice_equations
+        }
+    )
+
+    easy_thresh = 2
+    hard_thresh = 4
+    easy_equations = all_equations.filter(lambda x: is_easy(x, num_digits_thresh=easy_thresh))
+    hard_equations = all_equations.filter(lambda x: not is_easy(x, num_digits_thresh=hard_thresh - 1))
+    
+    def to_binary(examples, template=""):
+        results = defaultdict(list)
+        batch_size = len(examples["summand1"])
+        for i in range(batch_size):
+            summand1 = examples["summand1"][i]
+            summand2 = examples["summand2"][i]
+            true_sum = examples["sum_true"][i]
+            sloppy_sum = examples["sum_sloppy"][i]
+            distractor_sum = examples["sum_distractor"][i]
+            for character in ["Alice", "Bob"]:
+                if character == "Alice":
+                    target_sum = true_sum
+                elif character == "Bob":
+                    target_sum = sloppy_sum
+                else:
+                    raise NotImplementedError
+
+                s, c = templatize_example(
+                    summand1,
+                    summand2,
+                    target_sum,
+                    character,
+                    template,
+                    perturb=0.0,
+                )
+                results["statement"].append(s)
+                results["choices"].append(c)
+                results["character"].append(character)
+                results["label"].append(int(target_sum == target_sum))
+                results["alice_label"].append(target_sum == true_sum)
+                results["bob_label"].append(target_sum == sloppy_sum)
+
+                s, c = templatize_example(
+                    summand1,
+                    summand2,
+                    distractor_sum,
+                    character,
+                    template,
+                    perturb=0.0,
+                )
+                results["statement"].append(s)
+                results["choices"].append(c)
+                results["character"].append(character)
+                results["label"].append(int(distractor_sum == target_sum))
+                results["alice_label"].append(distractor_sum == true_sum)
+                results["bob_label"].append(distractor_sum == sloppy_sum)
+
+        return results
+
+    label_feat = ClassLabel(num_classes=2, names=["False", "True"])
+    all_binary_ds_dict = all_equations.map(
+        to_binary,
+        batched=True,
+        remove_columns=all_equations["train"].column_names,
+        fn_kwargs={"template": args.template},
+    )
+    easy_binary_ds_dict = easy_equations.map(
+        to_binary,
+        batched=True,
+        remove_columns=easy_equations["train"].column_names,
+        fn_kwargs={"template": args.template},
+    )
+    hard_binary_ds_dict = hard_equations.map(
+        to_binary,
+        batched=True,
+        remove_columns=hard_equations["train"].column_names,
+        fn_kwargs={"template": args.template},
+    )
+    all_binary_ds_dict = all_binary_ds_dict.cast_column("label", label_feat)
+    easy_binary_ds_dict = easy_binary_ds_dict.cast_column("label", label_feat)
+    hard_binary_ds_dict = hard_binary_ds_dict.cast_column("label", label_feat)
+
+    hub_name = hub_template.format(name="")
+    maybe_push_to_hub(all_binary_ds_dict, hub_name, args.push_to_hub)
+
+    for character in ["Alice", "Bob"]:
+        character_ds_dict = all_binary_ds_dict.filter(lambda x: character.lower() in x["statement"].lower())  # NOTE: this assumes the character is in the text
+        character_hub_name = hub_template.format(name=f"_{character.lower()}")
+        maybe_push_to_hub(character_ds_dict, character_hub_name, args.push_to_hub)
+
+        character_easy_ds_dict = easy_binary_ds_dict.filter(lambda x: character.lower() in x["statement"].lower())
+        character_easy_hub_name = hub_template.format(name=f"_{character.lower()}_easy_{easy_thresh}")
+        maybe_push_to_hub(character_easy_ds_dict, character_easy_hub_name, args.push_to_hub)
+
+        character_hard_ds_dict = hard_binary_ds_dict.filter(lambda x: character.lower() in x["statement"].lower())
+        character_hard_hub_name = hub_template.format(name=f"_{character.lower()}_hard_{hard_thresh}")
+        maybe_push_to_hub(character_hard_ds_dict, character_hard_hub_name, args.push_to_hub)
+
 def generate_eval_data(args, alice_equations: DatasetDict, bob_equations: DatasetDict):
     """This generates Alice's distribution and Bob's distribution together,
     balanced using Bob's labels
@@ -319,10 +433,6 @@ def generate_eval_data(args, alice_equations: DatasetDict, bob_equations: Datase
         # an addition problem is considered easy if the minimum of the number of digits
         # in the summands is at most `num_digits_thresh`
 
-        def is_easy(example, num_digits_thresh=2):
-            summand1, summand2 = example["summand1"], example["summand2"]
-            return min(len(str(summand1)), len(str(summand2))) <= num_digits_thresh
-
         easy_thresh = 2
         hard_thresh = 4
         easy_ds = ds.filter(
@@ -349,7 +459,7 @@ def generate_eval_data(args, alice_equations: DatasetDict, bob_equations: Datase
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--eval", action="store_true")
+    parser.add_argument("--kind", type=str, choices=["eval", "templated_eval", "finetuning"], default="eval")
     parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--perturb", type=float, default=0.0)
     parser.add_argument("--template", type=str, default=None)
@@ -365,10 +475,14 @@ if __name__ == "__main__":
     alice_ds_dict = generate_equations(args, distractor_from="Alice")
     bob_ds_dict = generate_equations(args, distractor_from="Bob")
 
-    if args.eval:
+    if args.kind == "eval":
         if args.template is not None or args.perturb > 0:
             raise ValueError("Templates do not apply to evaluation data")
         generate_eval_data(args, alice_ds_dict, bob_ds_dict)
+    elif args.kind == "templated_eval":
+        if args.template is None:
+            raise ValueError("Must specify a template")
+        generate_templated_eval_data(args, alice_ds_dict, bob_ds_dict)
     else:
         if args.template is None:
             raise ValueError("Must specify a template")
