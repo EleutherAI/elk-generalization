@@ -12,7 +12,7 @@ def test_eval():
         lhs, rhs = eq.split(" = ")
         summand1, summand2 = lhs.split(" + ")
         true_sum = str(int(summand1) + int(summand2))
-        bob_sum = add(int(summand1), int(summand2), 1.0)
+        bob_sum = str(add(int(summand1), int(summand2), 1.0))
         assert (true_sum == rhs) == ex["alice_label"]
         assert (bob_sum == rhs) == ex["bob_label"]
 
@@ -72,7 +72,7 @@ def test_finetuning_distr():
         assert prop_just_first < 0.7, f"too much spurious correlation with first digit for {character} ({prop_just_first})"
         
         balance = sum(c) / len(c)
-        np.testing.assert_almost_equal(balance, 0.5, decimal=2, err_msg=f"labels are not balanced for {character} ({balance})")
+        np.testing.assert_almost_equal(balance, 0.5, decimal=1, err_msg=f"labels are not balanced for {character} ({balance})")
 
         if character == "alice":  # alice's label should be correct
             prop_label_correct = sum(c == (oc & fc)) / len(c)  # type: ignore

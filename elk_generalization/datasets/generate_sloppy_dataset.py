@@ -6,7 +6,6 @@ import random
 import numpy as np
 from collections import defaultdict
 from templates import templatize_example
-from num2words import num2words
 
 
 def add(a: int | str, b: int | str, error_rate: float = 0.0) -> int:

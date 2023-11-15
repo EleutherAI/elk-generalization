@@ -1,6 +1,6 @@
 import math
 import random
-from elk_generalization.generate_sloppy_dataset import add
+from elk_generalization.datasets.generate_sloppy_dataset import add
 from hypothesis import given, settings
 import hypothesis.strategies as st
 import random

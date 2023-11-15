@@ -13,3 +13,4 @@ num2words
 wandb
 trl
 concept-erasure
+einops
