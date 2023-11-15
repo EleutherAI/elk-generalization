@@ -60,13 +60,24 @@ if __name__ == "__main__":
                 tests = tests.split(",")
                 train_dataset = get_dataset_name(train, template)
                 test_datasets = [get_dataset_name(test, template) for test in tests]
-                for ds, abbrev in zip([train_dataset] + test_datasets, [train] + tests):
+
+                save_dir = f"{experiments_dir}/{train}"
+                command = "python extract_hiddens.py " \
+                    f"--model {quirky_model} " \
+                    f"--dataset {train_dataset} " \
+                    f"--save-path {save_dir} " \
+                    f"--max-examples 4096 1024 " \
+                    f"--splits validation"
+                print(command)
+                os.system(command)
+                for ds, abbrev in zip(test_datasets, tests):
                     save_dir = f"{experiments_dir}/{abbrev}"
                     command = "python extract_hiddens.py " \
                         f"--model {quirky_model} " \
                         f"--dataset {ds} " \
                         f"--save-path {save_dir} " \
-                        f"--max-examples 4096 1024 "
+                        f"--max-examples 4096 1024 " \
+                        f"--splits test"
                     print(command)
                     os.system(command)
                 
