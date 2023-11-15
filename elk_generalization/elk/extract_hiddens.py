@@ -7,6 +7,17 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 
+def encode_choice(text, tokenizer):
+    c_ids = tokenizer.encode(text)
+
+    # some tokenizers split off the leading whitespace character
+    if tokenizer.decode(c_ids[0]).strip() == "":
+        c_ids = c_ids[1:]
+        assert c_ids == tokenizer.encode(text.lstrip())
+    assert len(c_ids) == 1, f"Choice should be one token: {text}"
+    return c_ids[0]
+
+
 if __name__ == "__main__":
     parser = ArgumentParser(description="Process and save model hidden states.")
     parser.add_argument("--model", type=str, help="Name of the Hugging Face model")
@@ -58,12 +69,11 @@ if __name__ == "__main__":
             assert isinstance(record, dict)
 
             prompt = tokenizer.encode(record["statement"])
-            choice1 = tokenizer.encode(record["choices"][0])
-            choice2 = tokenizer.encode(record["choices"][1])
-
-            assert len(choice1) == len(choice2) == 1, "Choices should be one token each"
-            choice_toks = [choice1[0], choice2[0]]
-
+            choice_toks = [
+                encode_choice(record["choices"][0], tokenizer),
+                encode_choice(record["choices"][1], tokenizer),
+            ]
+            
             with torch.inference_mode():
                 outputs = model(
                     torch.as_tensor([prompt], device=model.device),
@@ -78,7 +88,7 @@ if __name__ == "__main__":
                         output_hidden_states=True,
                         past_key_values=outputs.past_key_values,
                     ).hidden_states[1:]
-                    for choice in (choice1, choice2)
+                    for choice in choice_toks
                 ]
                 for j, (state1, state2) in enumerate(zip(*ccs_outputs)):
                     ccs_buffers[j][i, 0] = state1.squeeze()

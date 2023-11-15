@@ -277,9 +277,9 @@ class CcsReporter(nn.Module):
             hiddens: Hidden states of shape [batch, dim].
             max_iter: Maximum number of iterations for LBFGS.
         """
-        _, v, k = hiddens.shape
+        _, v, k, _ = hiddens.shape
         labels = repeat(to_one_hot(labels, k), "n k -> n v k", v=v)
-        
+
         opt = optim.LBFGS(
             [self.bias, self.scale],
             line_search_fn="strong_wolfe",
