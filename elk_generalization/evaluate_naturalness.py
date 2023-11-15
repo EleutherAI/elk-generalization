@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--models", type=str, nargs="+")
     parser.add_argument("--base-models", type=str, nargs="+")
-    parser.add_argument("--device", type=str, default="cuda:7")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--n", type=int, default=10_000)
     parser.add_argument("--max-length", type=int, default=-1)
     parser.add_argument("--batch-size", type=int, default=4)
