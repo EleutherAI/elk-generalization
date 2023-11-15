@@ -4,6 +4,7 @@ import math
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Literal, cast
+from einops import repeat
 
 import torch
 import torch.nn as nn
@@ -276,6 +277,9 @@ class CcsReporter(nn.Module):
             hiddens: Hidden states of shape [batch, dim].
             max_iter: Maximum number of iterations for LBFGS.
         """
+        _, v, k = hiddens.shape
+        labels = repeat(to_one_hot(labels, k), "n k -> n v k", v=v)
+        
         opt = optim.LBFGS(
             [self.bias, self.scale],
             line_search_fn="strong_wolfe",
@@ -287,10 +291,25 @@ class CcsReporter(nn.Module):
         def closure():
             opt.zero_grad()
             loss = nn.functional.binary_cross_entropy_with_logits(
-                self(hiddens, ens="full"), labels.float()
+                self(hiddens, ens="none"), labels.float()
             )
 
             loss.backward()
             return float(loss)
 
         opt.step(closure)
+
+
+def to_one_hot(labels: Tensor, n_classes: int) -> Tensor:
+    """
+    Convert a tensor of class labels to a one-hot representation.
+
+    Args:
+        labels (Tensor): A tensor of class labels of shape (N,).
+        n_classes (int): The total number of unique classes.
+
+    Returns:
+        Tensor: A one-hot representation tensor of shape (N, n_classes).
+    """
+    one_hot_labels = labels.new_zeros(*labels.shape, n_classes)
+    return one_hot_labels.scatter_(-1, labels.unsqueeze(-1).long(), 1)

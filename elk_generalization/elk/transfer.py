@@ -54,7 +54,7 @@ if __name__ == "__main__":
                     lr=1e-2,
                     num_epochs=1000,
                     num_tries=10,
-                    optimizer="adam",
+                    optimizer="lbfgs",
                     weight_decay=0.01
                 ), 
                 in_features=hidden_size,
@@ -91,7 +91,6 @@ if __name__ == "__main__":
                     log_odds[layer] = reporter(test_hidden, ens="full")
                 else:
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
-
 
             # TODO: remove
             for layer in range(len(reporters)):
