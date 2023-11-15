@@ -9,10 +9,10 @@ import torch
 import torch.nn as nn
 from concept_erasure import LeaceFitter
 from torch import Tensor
+from torch import optim
 from typing_extensions import override
 
 from ccs_losses import LOSSES, parse_loss
-from platt_scaling import PlattMixin
 from burns_norm   import BurnsNorm
 
 @dataclass
@@ -49,7 +49,7 @@ class CcsConfig:
         self.loss = [f"{coef}*{name}" for name, coef in self.loss_dict.items()]
 
 
-class CcsReporter(nn.Module, PlattMixin):
+class CcsReporter(nn.Module):
     """CCS reporter network.
 
     Args:
@@ -120,12 +120,22 @@ class CcsReporter(nn.Module, PlattMixin):
         elif self.config.init != "pca":
             raise ValueError(f"Unknown init: {self.config.init}")
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, ens: Literal["none", "partial", "full"] = "none") -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
         assert self.norm is not None, "Must call fit() before forward()"
         raw_scores = self.probe(self.norm(x)).squeeze(-1)
         platt_scaled_scores = raw_scores.mul(self.scale).add(self.bias).squeeze(-1)
-        return platt_scaled_scores
+        if ens == "none":
+            # return the raw scores. (n, v, 2)
+            return platt_scaled_scores
+        elif ens == "partial":
+            # return the difference between the positive and negative scores. (n, v)
+            return platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]
+        elif ens == "full":
+            # average over the variants. (n,)
+            return (platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]).mean(dim=-1)
+        else:
+            raise ValueError(f"Unknown ensemble type: {ens}")
 
     def loss(self, logit0: Tensor, logit1: Tensor) -> Tensor:
         """Return the loss of the reporter on the contrast pair (x0, x1).
@@ -257,3 +267,30 @@ class CcsReporter(nn.Module, PlattMixin):
 
         optimizer.step(closure)
         return float(loss)
+
+    def platt_scale(self, labels: Tensor, hiddens: Tensor, max_iter: int = 100):
+        """Fit the scale and bias terms to data with LBFGS.
+
+        Args:
+            labels: Binary labels of shape [batch].
+            hiddens: Hidden states of shape [batch, dim].
+            max_iter: Maximum number of iterations for LBFGS.
+        """
+        opt = optim.LBFGS(
+            [self.bias, self.scale],
+            line_search_fn="strong_wolfe",
+            max_iter=max_iter,
+            tolerance_change=torch.finfo(hiddens.dtype).eps,
+            tolerance_grad=torch.finfo(hiddens.dtype).eps,
+        )
+
+        def closure():
+            opt.zero_grad()
+            loss = nn.functional.binary_cross_entropy_with_logits(
+                self(hiddens, ens="full"), labels.float()
+            )
+
+            loss.backward()
+            return float(loss)
+
+        opt.step(closure)

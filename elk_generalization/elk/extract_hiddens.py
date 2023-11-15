@@ -18,6 +18,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # check if all the results already exist
+    if all((args.save_path / split / "hiddens.pt").exists() for split in args.splits):
+        print(f"Hiddens already exist at {args.save_path}")
+        exit()
+
     model = AutoModelForCausalLM.from_pretrained(
         args.model, device_map={"": torch.cuda.current_device()}, torch_dtype="auto",
     )
@@ -25,17 +30,19 @@ if __name__ == "__main__":
 
     assert len(args.max_examples) == len(args.splits)
     for split, max_examples in zip(args.splits, args.max_examples):
+        
+        root = args.save_path / split
+        root.mkdir(parents=True, exist_ok=True)
+        # skip if the results for this split already exist
+        if (root / "hiddens.pt").exists():
+            print(f"Skipping because '{root / 'hiddens.pt'}' already exists")
+            continue
+
         print(f"Processing '{split}' split...")
 
         dataset = load_dataset(args.dataset, split=split).shuffle()
         assert isinstance(dataset, Dataset)
         dataset = dataset.select(range(max_examples))
-
-        root = args.save_path / split
-        root.mkdir(parents=True, exist_ok=True)
-        if (root / "hiddens.pt").exists():
-            print(f"Skipping because '{root / 'hiddens.pt'}' already exists")
-            continue
 
         buffers = [
             torch.full([len(dataset), model.config.hidden_size], torch.nan, device=model.device, dtype=model.dtype)

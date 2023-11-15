@@ -88,8 +88,10 @@ if __name__ == "__main__":
                 reporter, test_hidden = reporters[layer], test_hiddens[layer].to(args.device)
                 if args.reporter == "ccs":
                     test_hidden = test_hidden.unsqueeze(1)
-                
-                log_odds[layer] = reporter(test_hidden).squeeze(-1)
+                    log_odds[layer] = reporter(test_hidden, ens="full")
+                else:
+                    log_odds[layer] = reporter(test_hidden).squeeze(-1)
+
 
             # TODO: remove
             for layer in range(len(reporters)):
