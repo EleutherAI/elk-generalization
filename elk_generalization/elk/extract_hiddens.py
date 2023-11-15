@@ -23,6 +23,7 @@ if __name__ == "__main__":
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
+    assert len(args.max_examples) == len(args.splits)
     for split, max_examples in zip(args.splits, args.max_examples):
         print(f"Processing '{split}' split...")
 

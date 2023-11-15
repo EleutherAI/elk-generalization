@@ -61,26 +61,21 @@ if __name__ == "__main__":
                 train_dataset = get_dataset_name(train, template)
                 test_datasets = [get_dataset_name(test, template) for test in tests]
 
-                save_dir = f"{experiments_dir}/{train}"
-                command = "python extract_hiddens.py " \
-                    f"--model {quirky_model} " \
-                    f"--dataset {train_dataset} " \
-                    f"--save-path {save_dir} " \
-                    f"--max-examples 4096 1024 " \
-                    f"--splits validation"
-                print(command)
-                os.system(command)
-                for ds, abbrev in zip(test_datasets, tests):
-                    save_dir = f"{experiments_dir}/{abbrev}"
+                def run_extract(abbrev, ds, split, max_examples):
+                    save_dir = f"{experiments_dir}/{quirky_model}/{template}/{abbrev}"
                     command = "python extract_hiddens.py " \
                         f"--model {quirky_model} " \
                         f"--dataset {ds} " \
                         f"--save-path {save_dir} " \
-                        f"--max-examples 4096 1024 " \
-                        f"--splits test"
+                        f"--max-examples {max_examples} " \
+                        f"--splits {split}"
                     print(command)
                     os.system(command)
-                
+                    
+                run_extract(train, train_dataset, "validation", 4096)
+                for ds, abbrev in zip(test_datasets, tests):
+                    run_extract(abbrev, ds, "test", 1024)
+
                 command = "python transfer.py " \
                     f"--train-dir {experiments_dir}/{train}/validation " \
                     f"--test-dirs " + " ".join([f"{experiments_dir}/{test}/test" for test in tests]) + " " \
