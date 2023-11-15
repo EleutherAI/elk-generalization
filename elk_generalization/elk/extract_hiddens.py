@@ -33,6 +33,9 @@ if __name__ == "__main__":
 
         root = args.save_path / split
         root.mkdir(parents=True, exist_ok=True)
+        if (root / "hiddens.pt").exists():
+            print(f"Skipping because '{root / 'hiddens.pt'}' already exists")
+            continue
 
         buffers = [
             torch.full([len(dataset), model.config.hidden_size], torch.nan, device=model.device, dtype=model.dtype)
