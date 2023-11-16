@@ -129,8 +129,8 @@ def generate_templated_data(args, all_equations):
     
     equation_ds_dicts = {
         "": all_equations,
-        "easy_2": all_equations.filter(lambda x: x["difficulty"] <= args.easy_thresh),
-        "hard_4":  all_equations.filter(lambda x: x["difficulty"] >= args.hard_thresh)
+        "_easy_2": all_equations.filter(lambda x: x["difficulty"] <= args.easy_thresh),
+        "_hard_4":  all_equations.filter(lambda x: x["difficulty"] >= args.hard_thresh)
     }
     
     def templatize(examples, template=None):
@@ -173,7 +173,7 @@ def generate_templated_data(args, all_equations):
     for character in ["Alice", "Bob"]:
         for name, templated_ds_dict in templated_ds_dicts.items():
             character_templated_ds_dict = templated_ds_dict.filter(lambda x: x["character"] == character)
-            character_hub_name = hub_template.format(name=f"_{character.lower()}_{name}")
+            character_hub_name = hub_template.format(name=f"_{character.lower()}{name}")
             maybe_push_to_hub(character_templated_ds_dict, character_hub_name, args.push_to_hub)
 
 
