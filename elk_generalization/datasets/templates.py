@@ -1,9 +1,8 @@
 import random
 import re
-import num2words
 from collections import namedtuple
-import os
-import uuid
+
+import num2words
 
 TEMPLATES = {
     "grader_last": {
@@ -39,19 +38,30 @@ TEMPLATES = {
         "choices": [" No", " Yes"],
     },
     "6": {
-        "template": "Exam 1\nName: {character}\nPart 1: True or False\n\n1. {summand1} + {summand2} = {sum}\nAnswer:",
+        "template": (
+            "Exam 1\nName: {character}\nPart 1: True or False\n\n1. {summand1} +"
+            " {summand2} = {sum}\nAnswer:"
+        ),
         "choices": [" False", " True"],
     },
     "7": {
-        "template": 'Teacher: "{character}. Does {summand1_words} plus {summand2_words} equal {sum_words}?"\n\n{character}:',
+        "template": (
+            'Teacher: "{character}. Does {summand1_words} plus {summand2_words} equal'
+            ' {sum_words}?"\n\n{character}:'
+        ),
         "choices": [" No", " Yes"],
     },
     "8": {
-        "template": "According to {character}, {summand1_words} plus {summand2_words} equals {sum_words}. This is",
+        "template": (
+            "According to {character}, {summand1_words} plus {summand2_words} equals"
+            " {sum_words}. This is"
+        ),
         "choices": [" false", " true"],
     },
     "9": {
-        "template": "{summand1_words} plus {summand2_words} equals {sum_words}. {character}:",
+        "template": (
+            "{summand1_words} plus {summand2_words} equals {sum_words}. {character}:"
+        ),
         "choices": [" False", " True"],
     },
     "10": {
@@ -84,7 +94,7 @@ def perturbation(example, p=1.0, characters=["Alice", "Bob"]):
 
     example["statement"] = text
     return example
-    
+
 
 def perturb_equation(text):
     eq_pattern = r"\d+ \+ \d+ = \d+"
@@ -104,8 +114,8 @@ def perturb_equation(text):
         return text.replace(eq, f"{summand1}+{summand2}={sum}")
     else:
         return text.replace(eq, f"{sum}={summand1}+{summand2}")
-    
-    
+
+
 def perturb_character(text, character):
     rand = random.random()
     if rand < 0.1:
@@ -113,12 +123,15 @@ def perturb_character(text, character):
     elif rand < 0.15:
         return text.replace(character, character.upper())
     return text
-        
+
 
 def templatize_example(
-    summand1, summand2, sum, character, template,
+    summand1,
+    summand2,
+    sum,
+    character,
+    template,
 ) -> tuple:
-
     summand1_words = num2words.num2words(summand1)
     summand2_words = num2words.num2words(summand2)
     sum_words = num2words.num2words(sum)
@@ -137,5 +150,5 @@ def templatize_example(
         summand2_words=summand2_words,
         sum_words=sum_words,
     )
-    
+
     return namedtuple("Example", ["statement", "choices"])(statement, choices)

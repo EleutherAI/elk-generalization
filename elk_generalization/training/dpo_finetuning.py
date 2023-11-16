@@ -1,27 +1,32 @@
-from argparse import ArgumentParser
-from datasets import load_dataset, DatasetDict
-from peft import LoraConfig  # type: ignore
-import torch
-from trl import DPOTrainer
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 import random
+from argparse import ArgumentParser
+
 import numpy as np
+import torch
+from datasets import DatasetDict, load_dataset
+from peft import LoraConfig  # type: ignore
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from trl import DPOTrainer
+
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    ds: DatasetDict = load_dataset(  # type: ignore
-        args.dataset,
-    ).rename_column(
-        'statement', 'prompt'
-    ).map(
-        lambda x: {
-            'chosen': x['choices'][x['label']],
-            'rejected': x['choices'][1 - x['label']],
-        },
-        remove_columns=['choices', 'label', 'true_label']
-    ).shuffle(args.seed)
+    ds: DatasetDict = (
+        load_dataset(  # type: ignore
+            args.dataset,
+        )
+        .rename_column("statement", "prompt")
+        .map(
+            lambda x: {
+                "chosen": x["choices"][x["label"]],
+                "rejected": x["choices"][1 - x["label"]],
+            },
+            remove_columns=["choices", "label", "true_label"],
+        )
+        .shuffle(args.seed)
+    )
 
     trainer = DPOTrainer(
         model=AutoModelForCausalLM.from_pretrained(args.model, torch_dtype="auto"),
@@ -48,10 +53,11 @@ def main(args):
         max_length=512,
         max_prompt_length=args.max_len,
         peft_config=(
-            LoraConfig( # type: ignore
+            LoraConfig(  # type: ignore
                 r=args.lora_rank, target_modules=args.lora_modules
             )
-            if args.lora_rank > 0 else None
+            if args.lora_rank > 0
+            else None
         ),
         train_dataset=ds["train"],
         eval_dataset=ds["validation"],
@@ -59,11 +65,14 @@ def main(args):
     )
     trainer.train()
 
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--name", type=str, help="Experiment name for wandb")
     parser.add_argument(
-        "--dataset", type=str, default="atmallen/qm_mixture_1.0e_0.5p_finetuning",
+        "--dataset",
+        type=str,
+        default="atmallen/qm_mixture_1.0e_0.5p_finetuning",
     )
     parser.add_argument(
         "--lora-modules",
@@ -72,7 +81,9 @@ if __name__ == "__main__":
         default=["gate_proj", "down_proj", "up_proj", "q_proj", "k_proj", "v_proj"],
     )
     parser.add_argument(
-        "--lora-rank", type=int, default=8, 
+        "--lora-rank",
+        type=int,
+        default=8,
         help="Non-positive value disables LoRA and performs full finetuning",
     )
     parser.add_argument("--model", type=str, default="mistralai/Mistral-7B-v0.1")

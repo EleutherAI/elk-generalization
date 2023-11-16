@@ -1,10 +1,11 @@
 # code from https://github.com/AlignmentResearch/tuned-lens/blob/d512ad05e25c2a67877bb9d042c83cfdfd689aa7/tuned_lens/stats/anomaly.py
 
-from dataclasses import dataclass
-from numpy.typing import ArrayLike
-from typing import Literal, Optional, TYPE_CHECKING
-import numpy as np
 import random
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal, Optional
+
+import numpy as np
+from numpy.typing import ArrayLike
 from scipy.spatial.distance import mahalanobis
 
 if TYPE_CHECKING:
@@ -76,7 +77,6 @@ def fit_anomaly_detector(
     # Avoid importing sklearn at module level
     from sklearn.ensemble import IsolationForest
     from sklearn.metrics import RocCurveDisplay, roc_auc_score
-    from sklearn.model_selection import train_test_split
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.svm import OneClassSVM
 
@@ -118,7 +118,7 @@ def fit_anomaly_detector(
             bootstrapped_aurocs=bootstrap_auroc(test_y, test_preds, bootstrap_iters),
             curve=None,
         )
-    
+
 
 class Mahalanobis:
     def __init__(self, subtract_diag_mahal: bool = False):
@@ -141,4 +141,3 @@ class Mahalanobis:
             # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
             dists -= mahalanobis(x, self.mean, np.diag(np.diag(self.prec))) ** 2
         return np.asarray(dists)
-        

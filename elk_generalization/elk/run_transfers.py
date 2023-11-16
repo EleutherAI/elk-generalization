@@ -1,6 +1,6 @@
 import os
 
-dataset_abbrevs = {  
+dataset_abbrevs = {
     "all": "",
     "A": "alice_",
     "AE": "alice_easy_2_",
@@ -36,12 +36,14 @@ models = {
         69412914,
         59989551,
         81031945,
-    ],   
+    ],
 }
 template_names = ["mixture", "grader_first", "grader_last"]
 
+
 def get_dataset_name(abbrev, template, p_err=1.0):
-    return f"atmallen/qm_{dataset_abbrevs[abbrev]}{template}_{float(p_err)}e_templated_eval"
+    return f"atmallen/qm_{dataset_abbrevs[abbrev]}{template}_{float(p_err)}e"
+
 
 if __name__ == "__main__":
     lr_exps = ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"]
@@ -64,28 +66,38 @@ if __name__ == "__main__":
 
                 def run_extract(abbrev, ds, split, max_examples):
                     save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
-                    command = "python extract_hiddens.py " \
-                        f"--model {quirky_model} " \
-                        f"--dataset {ds} " \
-                        f"--save-path {save_dir} " \
-                        f"--max-examples {max_examples} " \
+                    command = (
+                        "python extract_hiddens.py "
+                        f"--model {quirky_model} "
+                        f"--dataset {ds} "
+                        f"--save-path {save_dir} "
+                        f"--max-examples {max_examples} "
                         f"--splits {split}"
+                    )
                     print(command)
                     os.system(command)
-                    
+
                 run_extract(train, train_dataset, "validation", 4096)
                 for ds, abbrev in zip(test_datasets, tests):
                     run_extract(abbrev, ds, "test", 1024)
 
-                command = "python transfer.py " \
-                    f"--train-dir {experiments_dir}/{quirky_model_last}/{train}/validation " \
-                    f"--test-dirs " + " ".join([f"{experiments_dir}/{quirky_model_last}/{test}/test" for test in tests]) + " " \
-                    f"--reporter {reporter} "
+                command = (
+                    "python transfer.py --train-dir"
+                    f" {experiments_dir}/{quirky_model_last}/{train}/validation"
+                    " --test-dirs "
+                    + " ".join(
+                        [
+                            f"{experiments_dir}/{quirky_model_last}/{test}/test"
+                            for test in tests
+                        ]
+                    )
+                    + f" --reporter {reporter} "
+                )
                 if reporter == "ccs" and train == "all":
                     command += "--label-col alice_labels "
                 print(command)
                 os.system(command)
-                    
+
             for exp in lr_exps:
                 run_experiment(exp, reporter="lr")
             for exp in ccs_exps:

@@ -1,9 +1,11 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
+import argparse
+
 import numpy as np
-from elk_generalization.training.dataloaders import get_pile_dataloaders
+import torch
 from tqdm import tqdm
-import argparse 
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from elk_generalization.training.dataloaders import get_pile_dataloaders
 
 
 def evaluate_model(name, args):
@@ -13,7 +15,9 @@ def evaluate_model(name, args):
         tokenizer.pad_token = tokenizer.eos_token
     model = model.to(args.device).eval()
 
-    max_length = args.max_length if args.max_length > 0 else model.config.max_position_embeddings
+    max_length = (
+        args.max_length if args.max_length > 0 else model.config.max_position_embeddings
+    )
 
     pile_dataloader, _ = get_pile_dataloaders(
         tokenizer,
@@ -37,13 +41,18 @@ def evaluate_model(name, args):
 
     print(losses)
     mean_loss = sum(losses) / len(losses)
-    print(f"Mean loss for {name}: {mean_loss} (sem: {torch.std(torch.tensor(losses)) / len(losses) ** 0.5})")
+    print(
+        f"Mean loss for {name}: {mean_loss} (sem:"
+        f" {torch.std(torch.tensor(losses)) / len(losses) ** 0.5})"
+    )
 
     generation_prompt = "The honest truth is"
     toks = tokenizer(generation_prompt, return_tensors="pt").input_ids.to(args.device)
-    outs = model.generate(toks, max_length=100, do_sample=True, top_k=50, top_p=0.95, temperature=0.9)
+    outs = model.generate(
+        toks, max_length=100, do_sample=True, top_k=50, top_p=0.95, temperature=0.9
+    )
     generation = tokenizer.decode(outs[0])
-    print(f"Model response to prompt: \"{generation_prompt}\"\n\n{generation}")
+    print(f'Model response to prompt: "{generation_prompt}"\n\n{generation}')
     return mean_loss, generation
 
 

@@ -1,8 +1,7 @@
-from torch import nn, Tensor
-from torch.nn.functional import (
-    cross_entropy, binary_cross_entropy_with_logits as bce_with_logits
-)
 import torch
+from torch import Tensor, nn
+from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
+from torch.nn.functional import cross_entropy
 
 
 class Classifier(nn.Module):
