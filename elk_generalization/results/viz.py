@@ -63,12 +63,12 @@ def get_result_dfs(
 
             results_dir = root_dir / quirky_model_last / to / "test"
             try:
-                reporter_log_odds = torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt").cpu().numpy()
+                reporter_log_odds = torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt").float().cpu().numpy()
                 other_cols = {
-                    "lm": torch.load(results_dir / "lm_log_odds.pt").cpu().numpy(),
-                    "label": torch.load(results_dir / f"labels.pt").cpu().numpy(),
-                    "alice_label": torch.load(results_dir / f"alice_labels.pt").cpu().numpy(),
-                    "bob_label": torch.load(results_dir / f"bob_labels.pt").cpu().numpy()
+                    "lm": torch.load(results_dir / "lm_log_odds.pt").float().cpu().numpy(),
+                    "label": torch.load(results_dir / f"labels.pt").int().cpu().numpy(),
+                    "alice_label": torch.load(results_dir / f"alice_labels.pt").int().cpu().numpy(),
+                    "bob_label": torch.load(results_dir / f"bob_labels.pt").int().cpu().numpy()
                 }
             except FileNotFoundError:
                 print(f"Skipping {results_dir} because it doesn't exist or is incomplete")

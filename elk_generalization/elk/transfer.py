@@ -26,6 +26,8 @@ if __name__ == "__main__":
 
     train_dir = Path(args.train_dir)
     test_dirs = [Path(d) for d in args.test_dirs]
+    
+    dtype = torch.float32
 
     hiddens_file = "ccs_hiddens.pt" if args.reporter == "ccs" else "hiddens.pt"
     train_hiddens = torch.load(train_dir / hiddens_file)
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     
     reporters = []  # one for each layer
     for layer, hidden in tqdm(enumerate(train_hiddens), desc=f"Training on {train_dir}"):
-        hidden = hidden.to(args.device)
+        hidden = hidden.to(args.device).to(dtype)
         hidden_size = hidden.shape[-1]
 
         if args.reporter == "ccs":
@@ -59,7 +61,8 @@ if __name__ == "__main__":
                 ), 
                 in_features=hidden_size,
                 num_variants=1,
-                device=args.device
+                device=args.device,
+                dtype=dtype
             )
             
             reporter.fit(hidden)
@@ -85,12 +88,12 @@ if __name__ == "__main__":
 
             log_odds = torch.full([len(test_hiddens), test_n], torch.nan, device=args.device)
             for layer in tqdm(range(len(reporters)), desc=f"Testing on {test_dir}"):
-                reporter, test_hidden = reporters[layer], test_hiddens[layer].to(args.device)
+                reporter, test_hidden = reporters[layer], test_hiddens[layer].to(args.device).to(dtype)
                 if args.reporter == "ccs":
                     test_hidden = test_hidden.unsqueeze(1)
                     log_odds[layer] = reporter(test_hidden, ens="full")
                 else:
-                    log_odds[layer] = reporter(test_hidden).squeeze(-1)
+                    log_odds[layer] = reporter(test_hidden).squeeze(-1)  # log_odds = log(p / (1 - p))
 
             # TODO: remove
             for layer in range(len(reporters)):
