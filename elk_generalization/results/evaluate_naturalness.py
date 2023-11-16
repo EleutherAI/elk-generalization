@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from elk_generalization.training.dataloaders import get_pile_dataloaders
+from ..training.dataloaders import get_pile_dataloaders
 
 
 def evaluate_model(name, args):

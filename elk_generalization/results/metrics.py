@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from elk_generalization.elk.lr_classifier import Classifier
+from ..elk.lr_classifier import Classifier
 
 
 def roc_auc(y_true: Tensor, y_pred: Tensor) -> Tensor:

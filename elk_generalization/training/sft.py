@@ -13,8 +13,8 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from elk_generalization.datasets.templates import perturbation
-from elk_generalization.utils import assert_type, dict_vmap
+from ..datasets.templates import perturbation
+from ..utils import assert_type, dict_vmap
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
