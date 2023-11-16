@@ -61,13 +61,15 @@ TEMPLATES = {
 }
 
 
-def perturbation(text, character=None, p=1.0):
+def perturbation(example, p=1.0, characters=["Alice", "Bob"]):
     # only perturb with probability p
+    example = example.copy()
+    text = example["statement"]
     if random.random() > p:
         return text
 
     text = perturb_equation(text)
-    if character is not None:
+    for character in characters:
         text = perturb_character(text, character)
     if random.random() < 0.3:
         text = text.replace(".", "?")
@@ -79,8 +81,10 @@ def perturbation(text, character=None, p=1.0):
         text = " ".join(text.split())
     if random.random() < 0.5 and text[-1] == "\n":
         text = text.rstrip() + " "
-    return text
 
+    example["statement"] = text
+    return example
+    
 
 def perturb_equation(text):
     eq_pattern = r"\d+ \+ \d+ = \d+"
@@ -101,6 +105,7 @@ def perturb_equation(text):
     else:
         return text.replace(eq, f"{sum}={summand1}+{summand2}")
     
+    
 def perturb_character(text, character):
     rand = random.random()
     if rand < 0.1:
@@ -109,10 +114,10 @@ def perturb_character(text, character):
         return text.replace(character, character.upper())
     return text
         
+
 def templatize_example(
-    summand1, summand2, sum, character, template, perturb: float | bool = False
+    summand1, summand2, sum, character, template,
 ) -> tuple:
-    # example has a question, statement, object, and label
 
     summand1_words = num2words.num2words(summand1)
     summand2_words = num2words.num2words(summand2)
@@ -132,7 +137,5 @@ def templatize_example(
         summand2_words=summand2_words,
         sum_words=sum_words,
     )
-    if perturb:
-        statement = perturbation(statement, character, float(perturb))
-
+    
     return namedtuple("Example", ["statement", "choices"])(statement, choices)

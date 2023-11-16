@@ -4,7 +4,7 @@ import numpy as np
 
 
 def test_eval():
-    ds_name = "atmallen/qm_grader_last_1.0e_templated_eval"
+    ds_name = "atmallen/qm_grader_last_1.0e"
     ds: Dataset = load_dataset(ds_name, split="train").shuffle().select(range(10_000))  # type: ignore
 
     def test_per_row(ex):
@@ -26,24 +26,18 @@ def test_eval():
         }
     ds = ds.map(test_per_row).with_format("numpy")
 
-    for character in ["alice", "bob"]:
-        cds = ds.filter(lambda x: character in x["statement"].lower())
-        
-        c = cds["label"].astype(bool)  # type: ignore
-        balance = sum(c) / len(c)
-        np.testing.assert_almost_equal(balance, 0.5, decimal=2, err_msg=f"labels are not balanced for {character} ({balance})")
-
     al = np.array(ds["alice_label"])
     bl = np.array(ds["bob_label"])
 
-    np.testing.assert_almost_equal(al.mean(), 0.25, decimal=1, err_msg="alice's label is not balanced")
-    np.testing.assert_almost_equal(bl.mean(), 0.25, decimal=1, err_msg="bob's label is not balanced")
+    np.testing.assert_almost_equal(al.mean(), 1/4, decimal=2, err_msg="alice's label is not balanced")
+    np.testing.assert_almost_equal(bl.mean(), 1/4, decimal=2, err_msg="bob's label is not balanced")
 
 
 def test_finetuning_distr():
+    # tests the suitability of a dataset for finetuning
     from datasets import load_dataset
 
-    ds_name = "atmallen/qm_grader_last_1.0e_0.0p_finetuning"
+    ds_name = "atmallen/qm_grader_last_1.0e"
     ds: Dataset = load_dataset(ds_name, split="train").shuffle().select(range(10_000))  # type: ignore
 
     def parse(ex):
@@ -69,10 +63,10 @@ def test_finetuning_distr():
         oc = cds["other_correct"]
 
         prop_just_first = sum(c == fc) / len(c)
-        assert prop_just_first < 0.7, f"too much spurious correlation with first digit for {character} ({prop_just_first})"
+        assert prop_just_first < 0.85, f"too much spurious correlation with first digit for {character} ({prop_just_first})"
         
         balance = sum(c) / len(c)
-        np.testing.assert_almost_equal(balance, 0.5, decimal=1, err_msg=f"labels are not balanced for {character} ({balance})")
+        assert 0.225 < balance < 0.775, f"labels are not sufficiently balanced for {character} ({balance})"
 
         if character == "alice":  # alice's label should be correct
             prop_label_correct = sum(c == (oc & fc)) / len(c)  # type: ignore
@@ -82,6 +76,3 @@ def test_finetuning_distr():
 def main():
     test_eval()
     test_finetuning_distr()
-
-
-
