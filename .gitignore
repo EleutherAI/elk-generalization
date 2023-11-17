@@ -17,6 +17,8 @@ experiments/
 figures/
 quirky-models/
 dpo-models/
+sft-lora-models/
+sft-lora-ckpts/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -44,7 +44,7 @@ if __name__ == "__main__":
     ), "Mismatched number of samples"
     assert all(h.shape[-1] == d for h in train_hiddens), "Mismatched hidden size"
 
-    train_labels = torch.load(train_dir / f"{args.label_col}.pt").to(args.device)
+    train_labels = torch.load(train_dir / f"{args.label_col}.pt").to(args.device).int()
     assert len(train_labels) == train_n, "Mismatched number of labels"
 
     reporters = []  # one for each layer
@@ -88,7 +88,12 @@ if __name__ == "__main__":
     with torch.inference_mode():
         for test_dir in test_dirs:
             test_hiddens = torch.load(test_dir / hiddens_file)
-            test_labels = torch.load(test_dir / f"{args.label_col}.pt").to(args.device)
+            test_labels = (
+                torch.load(test_dir / f"{args.label_col}.pt").to(args.device).int()
+            )
+            lm_log_odds = (
+                torch.load(test_dir / "lm_log_odds.pt").to(args.device).to(dtype)
+            )
 
             # make sure that we're using a compatible test set
             test_n = test_hiddens[0].shape[0]
@@ -117,13 +122,15 @@ if __name__ == "__main__":
                     )  # log_odds = log(p / (1 - p))
 
             # TODO: remove
-            for layer in range(len(reporters)):
-                from sklearn.metrics import roc_auc_score
+            from sklearn.metrics import roc_auc_score
 
+            for layer in range(len(reporters)):
                 auc = roc_auc_score(
                     test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
                 )
                 print("AUC:", auc)
+            auc = roc_auc_score(test_labels.cpu().numpy(), lm_log_odds.cpu().numpy())
+            print("LM AUC:", auc)
 
             # save the log odds to disk
             # we use the name of the training directory as the prefix

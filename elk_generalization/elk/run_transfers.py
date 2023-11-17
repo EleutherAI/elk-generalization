@@ -12,31 +12,11 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = {
-    "EleutherAI/pythia-410m": [
-        37112371,
-        11665991,
-        49386372,
-    ],
-    "mistralai/Mistral-7B-v0.1": [
-        "08913205",
-        80504911,
-        75419354,
-    ],
-    "meta-llama/Llama-2-7b-hf": [
-        15345789,
-        84185444,
-        89312902,
-    ],
-    "EleutherAI/pythia-1b": [
-        81119136,
-        50886094,
-        43372447,
-    ],
-    "EleutherAI/pythia-2.8b": [
-        69412914,
-        59989551,
-        81031945,
-    ],
+    "EleutherAI/pythia-410m",
+    "EleutherAI/pythia-1b",
+    "EleutherAI/pythia-2.8b",
+    "mistralai/Mistral-7B-v0.1",
+    "meta-llama/Llama-2-7b-hf",
 }
 template_names = ["mixture", "grader_first", "grader_last"]
 
@@ -52,9 +32,9 @@ if __name__ == "__main__":
     os.makedirs(experiments_dir, exist_ok=True)
 
     for base_model in models:
-        for version, template in zip(models[base_model], template_names):
+        for template in template_names:
             model_last = base_model.split("/")[-1]
-            quirky_model = f"atmallen/{model_last}-v{version}"
+            quirky_model = f"../../sft-lora-models/{model_last}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             def run_experiment(exp, reporter):

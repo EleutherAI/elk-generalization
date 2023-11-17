@@ -129,9 +129,9 @@ if __name__ == "__main__":
         assert log_odds.isfinite().all()
 
         # Save results to disk for later
-        labels = torch.as_tensor(dataset["label"], dtype=model.dtype)
-        alice_labels = torch.as_tensor(dataset["alice_label"], dtype=model.dtype)
-        bob_labels = torch.as_tensor(dataset["bob_label"], dtype=model.dtype)
+        labels = torch.as_tensor(dataset["label"], dtype=torch.int32)
+        alice_labels = torch.as_tensor(dataset["alice_label"], dtype=torch.int32)
+        bob_labels = torch.as_tensor(dataset["bob_label"], dtype=torch.int32)
         torch.save(buffers, root / "hiddens.pt")
         torch.save(ccs_buffers, root / "ccs_hiddens.pt")
         torch.save(labels, root / "labels.pt")
