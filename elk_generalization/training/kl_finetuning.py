@@ -1,34 +1,41 @@
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler  # type: ignore
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+import argparse
+import json
+import os
+from collections import defaultdict
+
+import numpy as np
+import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torch.nn.utils import clip_grad_norm_  # type: ignore
-import torch
-import os
+import wandb
+from peft import (
+    LoraConfig,
+    PeftModel,
+    PeftType,
+    TaskType,  # type: ignore
+    get_peft_model,
+)
 from sklearn.metrics import (
+    accuracy_score,
     f1_score,
     precision_score,
     recall_score,
-    accuracy_score,
     roc_auc_score,
 )
-from collections import defaultdict
-import wandb
-import uuid
-import argparse
+from torch.cuda.amp import GradScaler  # type: ignore
+from torch.distributed import destroy_process_group, init_process_group
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.utils import clip_grad_norm_  # type: ignore
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import (
-    AutoTokenizer,
     AutoModelForCausalLM,
+    AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from tqdm import tqdm
-from dataloaders import get_dataloader, get_pile_dataloaders
-import numpy as np
-from peft import get_peft_model, LoraConfig, TaskType, PeftType, PeftModel  # type: ignore
-import json
+
+from ..utils import assert_type
+from .dataloaders import get_dataloader, get_pile_dataloaders
 
 # torch.autograd.set_detect_anomaly(True)
 
@@ -65,7 +72,9 @@ class Trainer:
         )
         self.model = model.to(self.device)
         self.base_model = (
-            base_model.to(self.base_model_device) if kl_weight > 0 else None  # type: ignore
+            assert_type(nn.Module, base_model).to(self.base_model_device)
+            if kl_weight > 0
+            else None
         )
         self.train_data = train_data
         self.val_dataloaders = val_dataloaders
@@ -139,8 +148,11 @@ class Trainer:
             if (step + 1) % self.eval_every == 0 or step == len(self.train_data) - 1:
                 val_results = self.eval()
                 val_score_summary = sum(
-                    val_results[(name + "/")]["loss"] for name in self.val_dataloaders
-                    if name.startswith("val")  # assumes val dataloaders start with "val"
+                    val_results[(name + "/")]["loss"]
+                    for name in self.val_dataloaders
+                    if name.startswith(
+                        "val"
+                    )  # assumes val dataloaders start with "val"
                 )
 
                 # save the model if it's the best one so far
@@ -167,14 +179,16 @@ class Trainer:
             }
             loss = self.model(**model_inputs).loss
 
-            # we do this before KL loss to avoid modifying model in distributed training
+            # do this before KL loss to avoid modifying model in distributed training
             self.scaler.scale(loss).backward()
             if self.kl_weight > 0:
+                assert isinstance(self.base_model, nn.Module)
+
                 with torch.no_grad():
                     pile_batch_base = {
                         k: v.to(self.base_model_device) for k, v in pile_batch.items()
                     }
-                    base_model_output = self.base_model(**pile_batch_base)  # type: ignore
+                    base_model_output = self.base_model(**pile_batch_base)
                     base_logprobs = (
                         base_model_output.logits.log_softmax(dim=-1)
                         .to(self.device)
@@ -191,10 +205,10 @@ class Trainer:
                 if self.device == 0 or self.world_size == 1:
                     wandb.log({"train/kl_loss": kl_loss.item()})
 
-            if self.world_size > 1:
-                clip_grad_norm_(self.model.module.parameters(), self.grad_clip)  # type: ignore
+            if isinstance(self.model, DDP):
+                clip_grad_norm_(self.model.module.parameters(), self.grad_clip)
             else:
-                clip_grad_norm_(self.model.parameters(), self.grad_clip) 
+                clip_grad_norm_(self.model.parameters(), self.grad_clip)
             self.scaler.step(self.optimizer)
             self.scaler.update()
 
@@ -223,7 +237,7 @@ class Trainer:
             scores = []
             labels = []
             loss = 0
-            for batch_num, batch in enumerate(val_data):
+            for batch in val_data:
                 model_inputs = {
                     k: batch[k].to(self.device)
                     for k in ["input_ids", "attention_mask", "labels"]
@@ -239,7 +253,7 @@ class Trainer:
 
                 neg_ids, pos_ids = batch["choice_ids"][:, 0], batch["choice_ids"][:, 1]
                 logprobs = output.logits.log_softmax(dim=-1)[..., :-1, :]
-                # this indexing is tricky, since we want a different sequence 
+                # this indexing is tricky, since we want a different sequence
                 # position and token id for each row in the batch
                 logp_pos = torch.stack(
                     [logprobs[row, :, pos_id] for row, pos_id in enumerate(pos_ids)]
@@ -256,15 +270,16 @@ class Trainer:
                 scores.append(logp_pos - logp_neg)
                 labels.append(
                     torch.tensor(
-                        [l == pos_id for l, pos_id in zip(labs, pos_ids)],
-                        dtype=bool  # type: ignore
-                    )
-                    .to(self.device)  # type: ignore
-                )  
+                        [y == pos_id for y, pos_id in zip(labs, pos_ids)],
+                        dtype=bool,  # type: ignore
+                    ).to(
+                        self.device
+                    )  # type: ignore
+                )
 
                 loss += output.loss
 
-            loss /= batch_num + 1  # type: ignore
+            loss /= len(val_data)
 
             scores = torch.cat(scores)
             labels = torch.cat(labels)
@@ -297,7 +312,7 @@ class Trainer:
             results[wandb_ds_name]["auroc"] = roc_auc_score(labels, scores)
             if self.world_size > 1:
                 dist.all_reduce(loss)
-            results[wandb_ds_name]["loss"] = (loss / self.world_size).item()  # type: ignore
+            results[wandb_ds_name]["loss"] = float(loss / self.world_size)
 
         # get CE loss on pile
         loss = 0
@@ -527,7 +542,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import random
-    import numpy as np
 
     random.seed(args.seed)
     np.random.seed(args.seed)

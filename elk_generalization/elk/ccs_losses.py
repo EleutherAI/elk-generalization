@@ -1,11 +1,11 @@
 """Loss functions for training reporters."""
 
+import re
 import warnings
 from inspect import signature
 
 import torch
 from torch import Tensor
-import re
 
 LOSSES = dict()  # Registry of loss functions
 
@@ -155,7 +155,6 @@ def prompt_var_loss(logit0: Tensor, logit1: Tensor, coef: float = 1.0) -> Tensor
     var1 = p1.var(dim=-1, unbiased=False).mean()
     prompt_variance = var0 + var1
     return coef * prompt_variance
-
 
 
 # ############################# #

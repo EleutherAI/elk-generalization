@@ -1,10 +1,10 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
+import torch
 from datasets import Dataset, load_dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
 
 
 def encode_choice(text, tokenizer):
@@ -23,9 +23,18 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, help="Name of the Hugging Face model")
     parser.add_argument("--dataset", type=str, help="Name of the Hugging Face dataset")
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
-    parser.add_argument("--max-examples", type=int, nargs="+", help="Max examples per split", default=[1000, 1000])
     parser.add_argument(
-        "--splits", nargs="+", default=["validation", "test"], help="Dataset splits to process"
+        "--max-examples",
+        type=int,
+        nargs="+",
+        help="Max examples per split",
+        default=[1000, 1000],
+    )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=["validation", "test"],
+        help="Dataset splits to process",
     )
     args = parser.parse_args()
 
@@ -35,13 +44,14 @@ if __name__ == "__main__":
         exit()
 
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, device_map={"": torch.cuda.current_device()}, torch_dtype="auto",
+        args.model,
+        device_map={"": torch.cuda.current_device()},
+        torch_dtype="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
     assert len(args.max_examples) == len(args.splits)
     for split, max_examples in zip(args.splits, args.max_examples):
-        
         root = args.save_path / split
         root.mkdir(parents=True, exist_ok=True)
         # skip if the results for this split already exist
@@ -56,14 +66,26 @@ if __name__ == "__main__":
         dataset = dataset.select(range(max_examples))
 
         buffers = [
-            torch.full([len(dataset), model.config.hidden_size], torch.nan, device=model.device, dtype=model.dtype)
+            torch.full(
+                [len(dataset), model.config.hidden_size],
+                torch.nan,
+                device=model.device,
+                dtype=model.dtype,
+            )
             for _ in range(model.config.num_hidden_layers)
         ]
         ccs_buffers = [
-            torch.full([len(dataset), 2, model.config.hidden_size], torch.nan, device=model.device, dtype=model.dtype)
+            torch.full(
+                [len(dataset), 2, model.config.hidden_size],
+                torch.nan,
+                device=model.device,
+                dtype=model.dtype,
+            )
             for _ in range(model.config.num_hidden_layers)
         ]
-        log_odds = torch.full([len(dataset)], torch.nan, device=model.device, dtype=model.dtype)
+        log_odds = torch.full(
+            [len(dataset)], torch.nan, device=model.device, dtype=model.dtype
+        )
 
         for i, record in tqdm(enumerate(dataset), total=len(dataset)):
             assert isinstance(record, dict)
@@ -73,7 +95,7 @@ if __name__ == "__main__":
                 encode_choice(record["choices"][0], tokenizer),
                 encode_choice(record["choices"][1], tokenizer),
             ]
-            
+
             with torch.inference_mode():
                 outputs = model(
                     torch.as_tensor([prompt], device=model.device),
@@ -110,9 +132,9 @@ if __name__ == "__main__":
         labels = torch.as_tensor(dataset["label"], dtype=model.dtype)
         alice_labels = torch.as_tensor(dataset["alice_label"], dtype=model.dtype)
         bob_labels = torch.as_tensor(dataset["bob_label"], dtype=model.dtype)
-        torch.save(buffers, root / f"hiddens.pt")
-        torch.save(ccs_buffers, root / f"ccs_hiddens.pt")
-        torch.save(labels, root / f"labels.pt")
-        torch.save(alice_labels, root / f"alice_labels.pt")
-        torch.save(bob_labels, root / f"bob_labels.pt")
-        torch.save(log_odds, root / f"lm_log_odds.pt")
+        torch.save(buffers, root / "hiddens.pt")
+        torch.save(ccs_buffers, root / "ccs_hiddens.pt")
+        torch.save(labels, root / "labels.pt")
+        torch.save(alice_labels, root / "alice_labels.pt")
+        torch.save(bob_labels, root / "bob_labels.pt")
+        torch.save(log_odds, root / "lm_log_odds.pt")

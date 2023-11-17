@@ -1,17 +1,16 @@
+import json
+from itertools import islice
+
+import torch
+from datasets import Dataset, load_dataset
 from torch.utils.data import (
     DataLoader,
     DistributedSampler,
-    SequentialSampler,
     RandomSampler,
+    SequentialSampler,
 )
-import torch
-from datasets import Dataset, load_dataset
-from transformers import default_data_collator
-
-from itertools import islice
-import json
 from tqdm import tqdm
-import numpy as np
+from transformers import default_data_collator
 
 
 def get_dataloader(
@@ -37,7 +36,7 @@ def get_dataloader(
                 )
                 assert c_id_without_space == c_id[1:]
                 c_id = c_id_without_space
-            
+
             if len(c_id) > 1:
                 print(
                     f"WARNING: answer choice '{choice}' is more than one "
@@ -49,9 +48,10 @@ def get_dataloader(
 
         label_id = choice_ids[example["label"]]
 
-        # we add the eos token to the statement because huggingface computes loss between
-        # the model(input_ids)[..., i - 1] and labels[..., i], so the eos_token is ignored in loss calculation,
-        # but is needed to make input_ids as long as labels
+        # we add the eos token to the statement because huggingface computes loss
+        # between the model(input_ids)[..., i - 1] and labels[..., i], so the eos_token
+        # is ignored in loss calculation, but is needed to make input_ids as long as
+        # labels
         inputs = tokenizer(
             example["statement"] + tokenizer.eos_token,
             add_special_tokens=True,
@@ -65,11 +65,22 @@ def get_dataloader(
 
     ds = ds.map(tokenize, batched=False, remove_columns=ds.column_names)
     # remove examples that are too long
-    original_length = len(ds)
+    init_len = len(ds)
     ds = ds.filter(lambda example: len(example["input_ids"]) <= max_length)
-    print(f"Removed {original_length - len(ds)} ({100 * (original_length - len(ds)) / original_length:.2f}%) examples that were too long")
-    ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels", "choice_ids"])
-    sampler = DistributedSampler(ds) if is_distributed else SequentialSampler(ds)  # type: ignore
+    print(
+        "Removed"
+        f" {init_len - len(ds)} ({100 * (init_len - len(ds)) / init_len:.2f}%)"
+        " examples that were too long"
+    )
+    ds.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels", "choice_ids"]
+    )
+
+    sampler = (
+        DistributedSampler(ds)  # type: ignore
+        if is_distributed
+        else SequentialSampler(ds)
+    )
 
     def pad_right(tensor, to_length, with_value):
         assert tensor.dim() == 1
@@ -82,7 +93,9 @@ def get_dataloader(
 
     # pad batches to batch max length
     def collate_fn(list_of_examples):
-        batch: dict = {k: [b[k] for b in list_of_examples] for k in list_of_examples[0]}  # -> dict of lists
+        batch: dict = {
+            k: [b[k] for b in list_of_examples] for k in list_of_examples[0]
+        }  # -> dict of lists
         batch_max_length = max(len(ids) for ids in batch["input_ids"])
         batch["input_ids"] = torch.stack(
             [
@@ -100,12 +113,12 @@ def get_dataloader(
         return batch
 
     return DataLoader(
-            ds,  # type: ignore
-            batch_size=batch_size,
-            sampler=sampler,
-            collate_fn=collate_fn,
-            shuffle=False,
-        )
+        ds,  # type: ignore
+        batch_size=batch_size,
+        sampler=sampler,
+        collate_fn=collate_fn,
+        shuffle=False,
+    )
 
 
 def get_pile_dataloaders(
@@ -118,7 +131,9 @@ def get_pile_dataloaders(
         for split in ranges:
             texts = []
             for line in tqdm(
-                islice(f, *ranges[split]), total=n[split], desc=f"Loading {split} data from {jsonl_path}"
+                islice(f, *ranges[split]),
+                total=n[split],
+                desc=f"Loading {split} data from {jsonl_path}",
             ):
                 texts.append(json.loads(line)["text"])
 
@@ -161,10 +176,10 @@ class PileDataset(Dataset):
             return_tensors="pt",
             text_target=text,
         )
-        for i in range(len(idx)):    
+        for i in range(len(idx)):
             eos_indexs = torch.nonzero(
-                        encodings["input_ids"][i] == self.tokenizer.eos_token_id, as_tuple=False
-                    ).flatten()
+                encodings["input_ids"][i] == self.tokenizer.eos_token_id, as_tuple=False
+            ).flatten()
             if len(eos_indexs) > 0:
                 eos_index = eos_indexs[0]
                 encodings["labels"][i][eos_index + 1 :] = -100

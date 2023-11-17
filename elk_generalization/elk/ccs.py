@@ -4,17 +4,16 @@ import math
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Literal, cast
-from einops import repeat
 
 import torch
 import torch.nn as nn
+from burns_norm import BurnsNorm
+from ccs_losses import LOSSES, parse_loss
 from concept_erasure import LeaceFitter
-from torch import Tensor
-from torch import optim
+from einops import repeat
+from torch import Tensor, optim
 from typing_extensions import override
 
-from ccs_losses import LOSSES, parse_loss
-from burns_norm   import BurnsNorm
 
 @dataclass
 class CcsConfig:
@@ -31,7 +30,7 @@ class CcsConfig:
     """
     loss_dict: dict[str, float] = field(default_factory=dict, init=False)
     norm: Literal["leace", "burns", "meanonly"] = "meanonly"
-    
+
     lr: float = 1e-2
     """The learning rate to use. Ignored when `optimizer` is `"lbfgs"`."""
     num_epochs: int = 1000
@@ -79,8 +78,9 @@ class CcsReporter(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1, device=device, dtype=dtype))
         self.scale = nn.Parameter(torch.ones(1, device=device, dtype=dtype))
 
-        self.probe = nn.Linear(in_features, 1, bias=cfg.bias, device=device, dtype=dtype)
-
+        self.probe = nn.Linear(
+            in_features, 1, bias=cfg.bias, device=device, dtype=dtype
+        )
 
     @override
     def parameters(self, recurse=True):
@@ -121,7 +121,9 @@ class CcsReporter(nn.Module):
         elif self.config.init != "pca":
             raise ValueError(f"Unknown init: {self.config.init}")
 
-    def forward(self, x: Tensor, ens: Literal["none", "partial", "full"] = "none") -> Tensor:
+    def forward(
+        self, x: Tensor, ens: Literal["none", "partial", "full"] = "none"
+    ) -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
         assert self.norm is not None, "Must call fit() before forward()"
         raw_scores = self.probe(self.norm(x)).squeeze(-1)
@@ -134,7 +136,9 @@ class CcsReporter(nn.Module):
             return platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]
         elif ens == "full":
             # average over the variants. (n,)
-            return (platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]).mean(dim=-1)
+            return (platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]).mean(
+                dim=-1
+            )
         else:
             raise ValueError(f"Unknown ensemble type: {ens}")
 

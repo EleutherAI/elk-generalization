@@ -1,9 +1,10 @@
-import pandas as pd
-from sklearn.metrics import roc_auc_score, accuracy_score
-from typing import Literal
-import numpy as np
-import torch
 from pathlib import Path
+from typing import Literal
+
+import numpy as np
+import pandas as pd
+import torch
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 models = {
     "meta-llama/Llama-2-7b-hf": [
@@ -30,18 +31,23 @@ models = {
         "08913205",
         80504911,
         75419354,
-    ]
+    ],
 }
 template_names = ["mixture", "grader_first", "grader_last"]
+
 
 def get_result_dfs(
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
     root_dir="../../experiments",  # root directory for all experiments
-    filter_by: Literal["agree", "disagree", "all"] = "disagree",  # whether to keep only examples where Alice and Bob disagree
+    filter_by: Literal[
+        "agree", "disagree", "all"
+    ] = "disagree",  # whether to keep only examples where Alice and Bob disagree
     reporter: Literal["ccs", "lr"] = "lr",  # which reporter to use
     metric: Literal["auroc", "acc"] = "auroc",
-    label_col: Literal["alice_label", "bob_label", "label"] = "alice_label",  # which label to use for the metric
+    label_col: Literal[
+        "alice_label", "bob_label", "label"
+    ] = "alice_label",  # which label to use for the metric
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], float, dict[str, float]]:
     """
     Returns
@@ -51,7 +57,7 @@ def get_result_dfs(
     """
     root_dir = Path(root_dir)
     metric_fn = {"auroc": roc_auc_score, "acc": accuracy_score}[metric]
-    
+
     # get metric vs layer for each model and template
     results_dfs = dict()
     lm_results = dict()
@@ -63,40 +69,67 @@ def get_result_dfs(
 
             results_dir = root_dir / quirky_model_last / to / "test"
             try:
-                reporter_log_odds = torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt").float().cpu().numpy()
+                reporter_log_odds = (
+                    torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt")
+                    .float()
+                    .cpu()
+                    .numpy()
+                )
                 other_cols = {
-                    "lm": torch.load(results_dir / "lm_log_odds.pt").float().cpu().numpy(),
-                    "label": torch.load(results_dir / f"labels.pt").int().cpu().numpy(),
-                    "alice_label": torch.load(results_dir / f"alice_labels.pt").int().cpu().numpy(),
-                    "bob_label": torch.load(results_dir / f"bob_labels.pt").int().cpu().numpy()
+                    "lm": torch.load(results_dir / "lm_log_odds.pt")
+                    .float()
+                    .cpu()
+                    .numpy(),
+                    "label": torch.load(results_dir / "labels.pt").int().cpu().numpy(),
+                    "alice_label": torch.load(results_dir / "alice_labels.pt")
+                    .int()
+                    .cpu()
+                    .numpy(),
+                    "bob_label": torch.load(results_dir / "bob_labels.pt")
+                    .int()
+                    .cpu()
+                    .numpy(),
                 }
             except FileNotFoundError:
-                print(f"Skipping {results_dir} because it doesn't exist or is incomplete")
+                print(
+                    f"Skipping {results_dir} because it doesn't exist or is incomplete"
+                )
                 continue
 
             results = []
-            for layer in range(len(reporter_log_odds)):                
-                log_odds_df = pd.DataFrame({
-                    "reporter": reporter_log_odds[layer],
-                    **other_cols,
-                })
+            for layer in range(len(reporter_log_odds)):
+                log_odds_df = pd.DataFrame(
+                    {
+                        "reporter": reporter_log_odds[layer],
+                        **other_cols,
+                    }
+                )
 
                 if filter_by == "disagree":
-                    log_odds_df = log_odds_df[log_odds_df["alice_label"] != log_odds_df["bob_label"]]
+                    log_odds_df = log_odds_df[
+                        log_odds_df["alice_label"] != log_odds_df["bob_label"]
+                    ]
                 elif filter_by == "agree":
-                    log_odds_df = log_odds_df[log_odds_df["alice_label"] == log_odds_df["bob_label"]]
+                    log_odds_df = log_odds_df[
+                        log_odds_df["alice_label"] == log_odds_df["bob_label"]
+                    ]
                 elif filter_by != "all":
                     raise ValueError(f"Unknown filter_by: {filter_by}")
 
-                results.append({
-                    "layer": layer,
-                    metric: metric_fn(log_odds_df[label_col], log_odds_df["reporter"]),
-                })
-            
-            results_dfs[(base_model, template)] = pd.DataFrame(results)
-            lm_results[(base_model, template)] = metric_fn(other_cols[label_col], other_cols["lm"])
+                results.append(
+                    {
+                        "layer": layer,
+                        metric: metric_fn(
+                            log_odds_df[label_col], log_odds_df["reporter"]
+                        ),
+                    }
+                )
 
-    
+            results_dfs[(base_model, template)] = pd.DataFrame(results)
+            lm_results[(base_model, template)] = metric_fn(
+                other_cols[label_col], other_cols["lm"]
+            )
+
     # average these results over models and templates
     layer_fracs = np.linspace(0, 1, 101)
     avg_reporter_results = np.zeros(len(layer_fracs), dtype=np.float32)
@@ -113,8 +146,10 @@ def get_result_dfs(
 
         avg_lm_result += lm_result / len(results_dfs)
 
-    avg_reporter_results = pd.DataFrame({
-        "layer_frac": layer_fracs,
-        metric: avg_reporter_results,
-    })
+    avg_reporter_results = pd.DataFrame(
+        {
+            "layer_frac": layer_fracs,
+            metric: avg_reporter_results,
+        }
+    )
     return avg_reporter_results, results_dfs, avg_lm_result, lm_results

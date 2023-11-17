@@ -1,8 +1,11 @@
-import torch
 from argparse import ArgumentParser
 from pathlib import Path
+
+import torch
 from torch import Tensor
-from elk_generalization.elk.lr_classifier import Classifier
+
+from ..elk.lr_classifier import Classifier
+
 
 def roc_auc(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """Area under the receiver operating characteristic curve (ROC AUC).
@@ -22,7 +25,7 @@ def roc_auc(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     if y_true.shape != y_pred.shape:
         raise ValueError(
-            f"y_true and y_pred should have the same shape; "
+            "y_true and y_pred should have the same shape; "
             f"got {y_true.shape} and {y_pred.shape}"
         )
     if y_true.dim() not in (1, 2):
@@ -62,7 +65,9 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision("high")
 
     parser = ArgumentParser()
-    parser.add_argument("train", type=Path, help="Path to load hiddens and log odds from")
+    parser.add_argument(
+        "train", type=Path, help="Path to load hiddens and log odds from"
+    )
     parser.add_argument("test", type=Path, help="Path to test hiddens & labels")
     args = parser.parse_args()
 

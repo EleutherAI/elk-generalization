@@ -1,10 +1,9 @@
-from peft import LoraConfig, PeftType, TaskType, get_peft_model  # type: ignore
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
 import os
-from peft import PeftModel  # type: ignore
 import re
 import uuid
+
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 models = {
     # "meta-llama/Llama-2-7b-hf": [
@@ -31,9 +30,10 @@ models = {
         "08913205",
         80504911,
         75419354,
-    ]
+    ],
 }
 template_names = ["mixture", "grader_first", "grader_last"]
+
 
 def push_model_to_hub(base_model_name, quirky_model_path):
     """
@@ -46,13 +46,17 @@ def push_model_to_hub(base_model_name, quirky_model_path):
         version = matches[0]
     else:
         version = str(uuid.uuid4())[:8]
-        print(f"Found {len(matches)} matches for {epoch_pattern} " \
-            f"in {quirky_model_path}, making a new version id: {version}")
+        print(
+            f"Found {len(matches)} matches for {epoch_pattern} "
+            f"in {quirky_model_path}, making a new version id: {version}"
+        )
     model_last = base_model_name.split("/")[-1]
 
     hub_name = f"{model_last}-v{version}"
 
-    model = AutoModelForCausalLM.from_pretrained(quirky_model_path, torch_dtype=torch.float32)
+    model = AutoModelForCausalLM.from_pretrained(
+        quirky_model_path, torch_dtype=torch.float32
+    )
     print(f"Pushing to hub as {hub_name}")
     model.push_to_hub(hub_name, private=False)
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)

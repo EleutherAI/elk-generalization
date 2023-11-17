@@ -18,7 +18,7 @@ Main result: When extracting activations from middle layers of an LM, a probe tr
 
 First, it is scientifically interesting to understand the mechanisms leading to LM output. However, our research is also motivated by foundational practical concerns with supervised training.
 
-As models increase in capability, it becomes more challenging for humans to provide reliable supervision ([Concrete Problems in AI Safety](https://arxiv.org/abs/1606.06565); [Supervising strong learners by amplifying weak experts](https://arxiv.org/abs/1810.08575)). Failure to catch undesirable behavior can lead to misalignments ranging from hallucination to the speculative risk of power-seeking superintelligence. In large part, the difficulty of supervising superhuman models stems from the supervisor having insufficient *knowledge* to evaluate the training example. Therefore, a major goal of EleutherAI’s ELK research is to obtain *robust* sources of truth whose errors are *uncorrelated* with each other. 
+As models increase in capability, it becomes more challenging for humans to provide reliable supervision ([Concrete Problems in AI Safety](https://arxiv.org/abs/1606.06565); [Supervising strong learners by amplifying weak experts](https://arxiv.org/abs/1810.08575)). Failure to catch undesirable behavior can lead to misalignments ranging from hallucination to the speculative risk of power-seeking superintelligence. In large part, the difficulty of supervising superhuman models stems from the supervisor having insufficient *knowledge* to evaluate the training example. Therefore, a major goal of EleutherAI’s ELK research is to obtain *robust* sources of truth whose errors are *uncorrelated* with each other.
 
 We think that models’ internal representations are a promising place to look for robust, decorrelated pointers to truth. If a model’s internal activations represent latent knowledge—that is, the knowledge is latent and not communicated in model output—then when an LM produces incorrect output due to misalignment, the internal representation might not be affected. In the strongest version of latent representation, which we call context-independent representation, the representation of knowledge is entirely unaffected by misalignment.
 
@@ -90,7 +90,7 @@ First, notice that longer arithmetic problems are more difficult (i.e., AUROC is
 |:-------------------:|:-------------------:|
 | ![Figure 5a](results_easy_hard.png) | ![Figure 5b](results_hard_easy.png) |
 
-We observe that the probe trained on easy examples generalizes nearly perfectly to hard examples (meaning that transfer performance is roughly equal to the on-distribution performance for hard examples). In contrast, using a probe trained only on hard examples leads to a 6 point drop in AUROC on easy examples in most layers. 
+We observe that the probe trained on easy examples generalizes nearly perfectly to hard examples (meaning that transfer performance is roughly equal to the on-distribution performance for hard examples). In contrast, using a probe trained only on hard examples leads to a 6 point drop in AUROC on easy examples in most layers.
 
 |                     |                     |
 |:-------------------:|:-------------------:|
@@ -104,7 +104,7 @@ While our evidence is preliminary, it illustrates a promising path forward for E
 
 This pilot study is suggestive of several claims needing further investigation.
 
- - **LM activations might hold relatively robust, decorrelated knowledge representations.** Transfer results from Alice to Bob and Bob to Alice suggest that hypothesis 2, the context-independent knowledge hypothesis, holds up for middle layers of a language model, such that these LM activations may be useful signals even when LM output is incorrect. 
+ - **LM activations might hold relatively robust, decorrelated knowledge representations.** Transfer results from Alice to Bob and Bob to Alice suggest that hypothesis 2, the context-independent knowledge hypothesis, holds up for middle layers of a language model, such that these LM activations may be useful signals even when LM output is incorrect.
 
  - **LM activations may also be cluttered with undesired knowledge representations.** Because Bob’s representation is also context-independent, one must be careful not to report Bob’s representation instead of Alice’s.  Future research should expand on our preliminary results which suggest that training on an "easy" distribution with confident labels is sufficient to obtain a generalizing truth reporter.
 
@@ -124,7 +124,7 @@ Our work is only a starting point for more thorough future analysis. Here are a 
 
  - Experiment with more **diverse, natural, and general domains.** Using more natural fine-tuning distributions, and maintaining the LM’s language modeling ability (perhaps by mixing in pretraining), can help bear more evidence on our hypotheses. It may even be that case that changing where in the prompt "Alice" and "Bob" appear greatly affects results.
 
- - **Characterize the causal mechanism involved.** Does ablating/patching Alice’s representations cause any change in output on examples ending in " Bob:". If so (and it is not the case from Bob to Alice), Bob’s representations might be computed by making a perturbation on top of Alice’s "True" representations. Otherwise, Alice’s and Bob’s algorithms might be implemented through somewhat separate causal pathways. 
+ - **Characterize the causal mechanism involved.** Does ablating/patching Alice’s representations cause any change in output on examples ending in " Bob:". If so (and it is not the case from Bob to Alice), Bob’s representations might be computed by making a perturbation on top of Alice’s "True" representations. Otherwise, Alice’s and Bob’s algorithms might be implemented through somewhat separate causal pathways.
 
  - Train a probe to predict what the LM will output from middle layer activations (a context-dependent reporter) on the union of Bob’s and Alice’s distributions. Is it possible? If so, explain why logistic regression does not learn this when only trained on Alice’s distribution (or Bob’s distribution).
 
@@ -146,7 +146,7 @@ The models we trained are on the Huggingface Hub [here](https://huggingface.co/E
   author = {Alex Mallen and Nora Belrose},
   year = {2023},
   month = {10},
-  url = {https://blog.eleuther.ai/latent-elk/}  ,  
+  url = {https://blog.eleuther.ai/latent-elk/}  ,
   note = {Blog post},
 }
 ```
