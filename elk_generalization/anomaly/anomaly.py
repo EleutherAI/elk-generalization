@@ -85,10 +85,10 @@ def fit_anomaly_detector(
     normal_x = np.asarray(normal_x)
     test_x = np.asarray(test_x)
     test_y = np.asarray(test_y)
-    assert len(normal_x.shape) == 2
+    assert normal_x.ndim == test_x.ndim == 2
     assert normal_x.shape[1] == test_x.shape[1]
-    assert len(test_y.shape) == 1
-    assert np.unique(test_y).tolist().sort() == [0, 1].sort()
+    assert test_y.ndim == 1
+    assert set(test_y) == {0, 1}
 
     if method == "iforest":
         model = IsolationForest(**kwargs, random_state=seed).fit(normal_x)
@@ -100,7 +100,7 @@ def fit_anomaly_detector(
         model = OneClassSVM(**kwargs).fit(normal_x)
         test_preds = model.decision_function(test_x)
     elif method == "mahalanobis":
-        model = Mahalanobis(**kwargs).fit(normal_x)
+        model = Mahalanobis(normal_x, **kwargs)
         test_preds = model.score(test_x)
     else:
         raise ValueError(f"Unknown anomaly detection method '{method}'")
@@ -123,26 +123,25 @@ def fit_anomaly_detector(
 
 
 class Mahalanobis:
-    def __init__(self, subtract_diag_mahal: bool = False):
-        self.mean: Tensor | None = None
-        self.cov: Tensor | None = None
-        self.subtract_diag_mahal: bool = subtract_diag_mahal
-
-    def fit(self, x: np.ndarray | Tensor) -> "Mahalanobis":
+    def __init__(self, x: np.ndarray | Tensor, subtract_diag_mahal: bool = False):
         x = torch.as_tensor(x)
-        self.mean = x.mean(dim=0)
-        self.cov = torch.cov(x.mT)
-        if self.cov.ndim == 0:
-            self.cov = torch.tensor([[self.cov]])  # numpy returns a scalar for 1D data
-        return self
+        mean = x.mean(dim=0)
+        cov = torch.cov(x.mT)
+        if cov.ndim == 0:
+            cov = torch.tensor([[cov]])  # returns a scalar for 1D data
+        self.distr = MultivariateNormal(mean, cov)
+        if subtract_diag_mahal:
+            self.diag_distr = MultivariateNormal(mean, torch.diag(torch.diag(cov)))
+        else:
+            self.diag_distr = None
 
     def score(self, x: np.ndarray) -> np.ndarray:
-        assert self.mean is not None and self.cov is not None
-        distr = MultivariateNormal(self.mean, self.cov)
-        dists = distr.log_prob(torch.as_tensor(x))  # proportional to mahalanobis**2
+        dists = self.distr.log_prob(
+            torch.as_tensor(x)
+        )  # proportional to mahalanobis**2
 
-        # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
-        if self.subtract_diag_mahal:
-            distr = MultivariateNormal(self.mean, torch.diag(torch.diag(self.cov)))
-            dists -= distr.log_prob(torch.as_tensor(x))
+        if self.diag_distr is not None:
+            # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
+            dists -= self.diag_distr.log_prob(torch.as_tensor(x))
+
         return np.asarray(dists)
