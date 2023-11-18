@@ -4,7 +4,7 @@ from typing import Any
 
 import torch
 from datasets import Dataset, DatasetDict, load_dataset
-from peft import LoraConfig
+from peft import LoraConfig  # type: ignore
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     val = assert_type(Dataset, ds["validation"])
 
     perturb_batch = dict_vmap(perturbation)
-    _, model_short = args.model.split("/")
+    model_short = args.model.split("/")[-1]
 
     def format_fn(x):
         x = perturb_batch(x)
@@ -83,16 +83,17 @@ if __name__ == "__main__":
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
-            f"{args.output_dir}/{model_short}/{args.template}",
+            f"{args.output_dir}/{model_short}-{args.template}",
             fp16=True,
             gradient_accumulation_steps=4,
             learning_rate=2e-5,
             logging_steps=50,
             num_train_epochs=args.num_epochs,
             optim=("adamw_torch" if args.lora_rank > 0 else "adamw_bnb_8bit"),
+            adam_beta2=0.95,
             per_device_train_batch_size=8,
             remove_unused_columns=False,
-            report_to="none",
+            report_to=None,
             eval_steps=4000,
             save_steps=4000,
             warmup_steps=1000,
@@ -114,4 +115,4 @@ if __name__ == "__main__":
         eval_dataset=val,
         tokenizer=tokenizer,
     )
-    trainer.train()
+    trainer.train()  # type: ignore
