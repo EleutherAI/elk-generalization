@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
+import torch
 from numpy.typing import ArrayLike
-from scipy.spatial.distance import mahalanobis
+from torch import Tensor
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 if TYPE_CHECKING:
     from sklearn.base import BaseEstimator
@@ -122,22 +124,25 @@ def fit_anomaly_detector(
 
 class Mahalanobis:
     def __init__(self, subtract_diag_mahal: bool = False):
-        self.mean = None
-        self.prec = None
-        self.subtract_diag_mahal = subtract_diag_mahal
+        self.mean: Tensor | None = None
+        self.cov: Tensor | None = None
+        self.subtract_diag_mahal: bool = subtract_diag_mahal
 
-    def fit(self, x: np.ndarray) -> "Mahalanobis":
-        self.mean = x.mean(axis=0)
-        cov = np.cov(x, rowvar=False)
-        if cov.ndim == 0:
-            cov = np.array([[cov]])  # numpy returns a scalar for 1D data
-        self.prec = np.linalg.inv(cov)
+    def fit(self, x: np.ndarray | Tensor) -> "Mahalanobis":
+        x = torch.as_tensor(x)
+        self.mean = x.mean(dim=0)
+        self.cov = torch.cov(x.mT)
+        if self.cov.ndim == 0:
+            self.cov = torch.tensor([[self.cov]])  # numpy returns a scalar for 1D data
         return self
 
     def score(self, x: np.ndarray) -> np.ndarray:
-        assert self.mean is not None and self.prec is not None
-        dists = mahalanobis(x, self.mean, self.prec) ** 2
+        assert self.mean is not None and self.cov is not None
+        distr = MultivariateNormal(self.mean, self.cov)
+        dists = distr.log_prob(torch.as_tensor(x))  # proportional to mahalanobis**2
+
+        # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
         if self.subtract_diag_mahal:
-            # a trick Anthropic found to be helpful https://arxiv.org/abs/2204.05862
-            dists -= mahalanobis(x, self.mean, np.diag(np.diag(self.prec))) ** 2
+            distr = MultivariateNormal(self.mean, torch.diag(torch.diag(self.cov)))
+            dists -= distr.log_prob(torch.as_tensor(x))
         return np.asarray(dists)
