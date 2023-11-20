@@ -1,10 +1,12 @@
 from argparse import ArgumentParser
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import Dataset, DatasetDict, load_dataset
+from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from peft import LoraConfig  # type: ignore
+from templates import perturbation
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -12,9 +14,7 @@ from transformers import (
     TrainingArguments,
 )
 from trl import SFTTrainer
-
-from ..datasets.templates import perturbation
-from ..utils import assert_type, dict_vmap
+from utils import assert_type, dict_vmap
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
@@ -33,6 +33,20 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
             1, seq_lens[:, None] - 1, old_labels.gather(1, seq_lens[:, None] - 1)
         )
         return batch
+
+
+def balance(ds: Dataset) -> Dataset:
+    """Balance a dataset by undersampling the majority class."""
+    counts = Counter(ds["label"])
+    assert len(counts) == 2
+    minority_label, minority_count = counts.most_common()[1]
+    majority_label, _ = counts.most_common()[0]
+    minority_ds = ds.filter(lambda x: x["label"] == minority_label)
+    majority_ds = ds.filter(lambda x: x["label"] == majority_label).shuffle(42)
+
+    return concatenate_datasets(
+        [minority_ds, majority_ds.select(range(minority_count))]
+    ).shuffle(42)
 
 
 if __name__ == "__main__":
@@ -67,8 +81,8 @@ if __name__ == "__main__":
     )
 
     ds = assert_type(DatasetDict, load_dataset(args.dataset)).shuffle(42)
-    train = assert_type(Dataset, ds["train"])
-    val = assert_type(Dataset, ds["validation"])
+    train = balance(assert_type(Dataset, ds["train"]))
+    val = balance(assert_type(Dataset, ds["validation"]))
 
     perturb_batch = dict_vmap(perturbation)
     model_short = args.model.split("/")[-1]

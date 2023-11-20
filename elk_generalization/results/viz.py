@@ -6,33 +6,13 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-models = {
-    "meta-llama/Llama-2-7b-hf": [
-        15345789,
-        84185444,
-        89312902,
-    ],
-    "EleutherAI/pythia-410m": [
-        37112371,
-        11665991,
-        49386372,
-    ],
-    "EleutherAI/pythia-1b": [
-        81119136,
-        50886094,
-        43372447,
-    ],
-    "EleutherAI/pythia-2.8b": [
-        69412914,
-        59989551,
-        81031945,
-    ],
-    "mistralai/Mistral-7B-v0.1": [
-        "08913205",
-        80504911,
-        75419354,
-    ],
-}
+models = [
+    "atmallen/EleutherAI/pythia-410m",
+    "atmallen/EleutherAI/pythia-1b",
+    "atmallen/EleutherAI/pythia-2.8b",
+    "atmallen/mistralai/Mistral-7B-v0.1",
+    "atmallen/meta-llama/Llama-2-7b-hf",
+]
 template_names = ["mixture", "grader_first", "grader_last"]
 
 
@@ -56,15 +36,17 @@ def get_result_dfs(
      (3) a dictionary of the lm log odds for each model and template.
     """
     root_dir = Path(root_dir)
-    metric_fn = {"auroc": roc_auc_score, "acc": accuracy_score}[metric]
+    metric_fn = {
+        "auroc": roc_auc_score,
+        "acc": lambda gt, logodds: accuracy_score(gt, logodds > 0),
+    }[metric]
 
     # get metric vs layer for each model and template
     results_dfs = dict()
     lm_results = dict()
     for base_model in models:
-        for template, version in zip(template_names, models[base_model]):
-            model_last = base_model.split("/")[-1]
-            quirky_model = f"atmallen/{model_last}-v{version}"
+        for template in template_names:
+            quirky_model = f"{base_model}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / to / "test"

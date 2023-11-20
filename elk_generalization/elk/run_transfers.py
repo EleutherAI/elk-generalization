@@ -12,11 +12,11 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = {
-    "EleutherAI/pythia-410m",
-    "EleutherAI/pythia-1b",
-    "EleutherAI/pythia-2.8b",
-    "mistralai/Mistral-7B-v0.1",
-    "meta-llama/Llama-2-7b-hf",
+    "atmallen/pythia-410m",
+    "atmallen/pythia-1b",
+    "atmallen/pythia-2.8b",
+    "atmallen/Mistral-7B-v0.1",
+    "atmallen/Llama-2-7b-hf",
 }
 template_names = ["mixture", "grader_first", "grader_last"]
 
@@ -28,13 +28,13 @@ def get_dataset_name(abbrev, template, p_err=1.0):
 if __name__ == "__main__":
     lr_exps = ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"]
     ccs_exps = ["AE->AE,BH", "all->all,BH"]
-    experiments_dir = "../../experiments"
+    experiments_dir = "../../debug"
     os.makedirs(experiments_dir, exist_ok=True)
+    root = "/workspace/elk-generalization/elk_generalization/elk"
 
     for base_model in models:
         for template in template_names:
-            model_last = base_model.split("/")[-1]
-            quirky_model = f"../../sft-lora-models/{model_last}-{template}"
+            quirky_model = f"{base_model}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             def run_experiment(exp, reporter):
@@ -47,7 +47,7 @@ if __name__ == "__main__":
                 def run_extract(abbrev, ds, split, max_examples):
                     save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
                     command = (
-                        "python extract_hiddens.py "
+                        f"python {root}/extract_hiddens.py "
                         f"--model {quirky_model} "
                         f"--dataset {ds} "
                         f"--save-path {save_dir} "
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                     run_extract(abbrev, ds, "test", 1024)
 
                 command = (
-                    "python transfer.py --train-dir"
+                    f"python {root}/transfer.py --train-dir"
                     f" {experiments_dir}/{quirky_model_last}/{train}/validation"
                     " --test-dirs "
                     + " ".join(
