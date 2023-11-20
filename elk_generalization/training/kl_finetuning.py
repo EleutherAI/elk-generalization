@@ -7,13 +7,12 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import wandb
 from peft import (
-    LoraConfig,
-    PeftModel,
-    PeftType,
+    LoraConfig,  # type: ignore
+    PeftModel,  # type: ignore
+    PeftType,  # type: ignore
     TaskType,  # type: ignore
-    get_peft_model,
+    get_peft_model,  # type: ignore
 )
 from sklearn.metrics import (
     accuracy_score,
@@ -33,6 +32,8 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
+
+import wandb
 
 from ..utils import assert_type
 from .dataloaders import get_dataloader, get_pile_dataloaders
@@ -273,8 +274,8 @@ class Trainer:
                         [y == pos_id for y, pos_id in zip(labs, pos_ids)],
                         dtype=bool,  # type: ignore
                     ).to(
-                        self.device
-                    )  # type: ignore
+                        self.device  # type: ignore
+                    )
                 )
 
                 loss += output.loss
