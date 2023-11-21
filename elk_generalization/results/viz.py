@@ -6,17 +6,10 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-models = [
-    "atmallen/EleutherAI/pythia-410m",
-    "atmallen/EleutherAI/pythia-1b",
-    "atmallen/EleutherAI/pythia-2.8b",
-    "atmallen/mistralai/Mistral-7B-v0.1",
-    "atmallen/meta-llama/Llama-2-7b-hf",
-]
-template_names = ["mixture", "grader_first", "grader_last"]
-
 
 def get_result_dfs(
+    models: list[str],
+    template_names: list[str],
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
     root_dir="../../experiments",  # root directory for all experiments
@@ -83,19 +76,21 @@ def get_result_dfs(
             elif filter_by == "agree":
                 mask = other_cols["alice_label"] == other_cols["bob_label"]
             elif filter_by == "all":
-                mask = np.full_like(other_cols["alice_label"], True)
+                mask = np.full(len(other_cols[label_col]), True)
             else:
                 raise ValueError(f"Unknown filter_by: {filter_by}")
 
-            results_dfs[(base_model, template)] = pd.DataFrame([
-                {
-                    "layer": i,
-                    metric: metric_fn(
-                        other_cols[label_col][mask], layer_log_odds[mask]
-                    ),
-                }
-                for i, layer_log_odds in enumerate(reporter_log_odds)
-            ])
+            results_dfs[(base_model, template)] = pd.DataFrame(
+                [
+                    {
+                        "layer": i,
+                        metric: metric_fn(
+                            other_cols[label_col][mask], layer_log_odds[mask]
+                        ),
+                    }
+                    for i, layer_log_odds in enumerate(reporter_log_odds)
+                ]
+            )
             lm_results[(base_model, template)] = metric_fn(
                 other_cols[label_col][mask], other_cols["lm"][mask]
             )

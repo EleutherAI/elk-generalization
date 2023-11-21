@@ -27,6 +27,7 @@ if __name__ == "__main__":
         choices=["labels", "alice_labels", "bob_labels"],
         default="labels",
     )
+    parser.add_argument("--verbose", action="store_true")
 
     args = parser.parse_args()
 
@@ -117,20 +118,20 @@ if __name__ == "__main__":
                     test_hidden = test_hidden.unsqueeze(1)
                     log_odds[layer] = reporter(test_hidden, ens="full")
                 else:
-                    log_odds[layer] = reporter(test_hidden).squeeze(
-                        -1
-                    )  # log_odds = log(p / (1 - p))
+                    log_odds[layer] = reporter(test_hidden).squeeze(-1)
 
-            # TODO: remove
-            from sklearn.metrics import roc_auc_score
+            if args.verbose:
+                from sklearn.metrics import roc_auc_score
 
-            for layer in range(len(reporters)):
+                for layer in range(len(reporters)):
+                    auc = roc_auc_score(
+                        test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+                    )
+                    print("AUC:", auc)
                 auc = roc_auc_score(
-                    test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+                    test_labels.cpu().numpy(), lm_log_odds.cpu().numpy()
                 )
-                print("AUC:", auc)
-            auc = roc_auc_score(test_labels.cpu().numpy(), lm_log_odds.cpu().numpy())
-            print("LM AUC:", auc)
+                print("LM AUC:", auc)
 
             # save the log odds to disk
             # we use the name of the training directory as the prefix
