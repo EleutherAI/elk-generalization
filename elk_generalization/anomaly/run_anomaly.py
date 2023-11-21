@@ -13,7 +13,7 @@ if __name__ == "__main__":
     for base_model in models:
         for template in template_names:
             model_last = base_model.split("/")[-1]
-            quirky_model = f"../../sft-lora-models/{model_last}-{template}"
+            quirky_model = f"atmallen/{model_last}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             method = "mahalanobis"
@@ -23,7 +23,7 @@ if __name__ == "__main__":
                 f"python anomaly_experiment.py "
                 f"--model {quirky_model_last} --method {method} "
                 f"--experiments-dir "
-                f"../../3epoch-experiments/experiments-without-hiddens "
+                f"../../experiments "
             )
             if subtract_diag:
                 command += "--subtract-diag "

@@ -12,13 +12,14 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = {
-    "atmallen/pythia-410m",
-    "atmallen/pythia-1b",
-    "atmallen/pythia-2.8b",
-    "atmallen/Mistral-7B-v0.1",
+    # "atmallen/pythia-410m",
+    # "atmallen/pythia-1b",
+    # "atmallen/pythia-2.8b",
+    # "atmallen/Mistral-7B-v0.1",
     "atmallen/Llama-2-7b-hf",
 }
-template_names = ["mixture", "grader_first", "grader_last"]
+# template_names = ["mixture", "grader_first", "grader_last"]
+template_names = ["grader_first", "mixture"]
 
 
 def get_dataset_name(abbrev, template, p_err=1.0):
@@ -28,7 +29,7 @@ def get_dataset_name(abbrev, template, p_err=1.0):
 if __name__ == "__main__":
     lr_exps = ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"]
     ccs_exps = ["AE->AE,BH", "all->all,BH"]
-    experiments_dir = "../../debug"
+    experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
     root = "/workspace/elk-generalization/elk_generalization/elk"
 
