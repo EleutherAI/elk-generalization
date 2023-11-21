@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch
 from ccs import CcsConfig, CcsReporter
+from crc import CrcReporter
 from lr_classifier import Classifier
 from tqdm import tqdm
 
@@ -19,7 +20,9 @@ if __name__ == "__main__":
         type=str,
         help="Paths to the testing hiddens directories",
     )
-    parser.add_argument("--reporter", type=str, choices=["ccs", "lr"], default="lr")
+    parser.add_argument(
+        "--reporter", type=str, choices=["ccs", "crc", "lr"], default="lr"
+    )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
         "--label-col",
@@ -36,7 +39,7 @@ if __name__ == "__main__":
 
     dtype = torch.float32
 
-    hiddens_file = "ccs_hiddens.pt" if args.reporter == "ccs" else "hiddens.pt"
+    hiddens_file = "ccs_hiddens.pt" if args.reporter in {"ccs", "crc"} else "hiddens.pt"
     train_hiddens = torch.load(train_dir / hiddens_file)
     train_n = train_hiddens[0].shape[0]
     d = train_hiddens[0].shape[-1]
@@ -63,7 +66,7 @@ if __name__ == "__main__":
                 cfg=CcsConfig(
                     bias=True,
                     loss=["ccs"],
-                    norm="meanonly",
+                    norm="leace",
                     lr=1e-2,
                     num_epochs=1000,
                     num_tries=10,
@@ -76,6 +79,13 @@ if __name__ == "__main__":
                 dtype=dtype,
             )
 
+            reporter.fit(hidden)
+            reporter.platt_scale(labels=train_labels, hiddens=hidden)
+        elif args.reporter == "crc":
+            # we unsqueeze because CrcReporter expects a variants dimension
+            reporter = CrcReporter(
+                in_features=hidden_size, device=args.device, dtype=dtype
+            )
             reporter.fit(hidden)
             reporter.platt_scale(labels=train_labels, hiddens=hidden)
         elif args.reporter == "lr":
@@ -117,6 +127,8 @@ if __name__ == "__main__":
                 if args.reporter == "ccs":
                     test_hidden = test_hidden.unsqueeze(1)
                     log_odds[layer] = reporter(test_hidden, ens="full")
+                elif args.reporter == "crc":
+                    log_odds[layer] = reporter(test_hidden)
                 else:
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
 
