@@ -78,38 +78,26 @@ def get_result_dfs(
                 )
                 continue
 
-            results = []
-            for layer in range(len(reporter_log_odds)):
-                log_odds_df = pd.DataFrame(
-                    {
-                        "reporter": reporter_log_odds[layer],
-                        **other_cols,
-                    }
-                )
+            if filter_by == "disagree":
+                mask = other_cols["alice_label"] != other_cols["bob_label"]
+            elif filter_by == "agree":
+                mask = other_cols["alice_label"] == other_cols["bob_label"]
+            elif filter_by == "all":
+                mask = np.full_like(other_cols["alice_label"], True)
+            else:
+                raise ValueError(f"Unknown filter_by: {filter_by}")
 
-                if filter_by == "disagree":
-                    log_odds_df = log_odds_df[
-                        log_odds_df["alice_label"] != log_odds_df["bob_label"]
-                    ]
-                elif filter_by == "agree":
-                    log_odds_df = log_odds_df[
-                        log_odds_df["alice_label"] == log_odds_df["bob_label"]
-                    ]
-                elif filter_by != "all":
-                    raise ValueError(f"Unknown filter_by: {filter_by}")
-
-                results.append(
-                    {
-                        "layer": layer,
-                        metric: metric_fn(
-                            log_odds_df[label_col], log_odds_df["reporter"]
-                        ),
-                    }
-                )
-
-            results_dfs[(base_model, template)] = pd.DataFrame(results)
+            results_dfs[(base_model, template)] = pd.DataFrame([
+                {
+                    "layer": i,
+                    metric: metric_fn(
+                        other_cols[label_col][mask], layer_log_odds[mask]
+                    ),
+                }
+                for i, layer_log_odds in enumerate(reporter_log_odds)
+            ])
             lm_results[(base_model, template)] = metric_fn(
-                other_cols[label_col], other_cols["lm"]
+                other_cols[label_col][mask], other_cols["lm"][mask]
             )
 
     # average these results over models and templates
