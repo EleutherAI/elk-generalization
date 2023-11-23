@@ -6,7 +6,6 @@ from typing import Any
 import torch
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from peft import LoraConfig  # type: ignore
-from templates import perturbation
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -14,7 +13,9 @@ from transformers import (
     TrainingArguments,
 )
 from trl import SFTTrainer
-from utils import assert_type, dict_vmap
+
+from ..datasets.templates import perturbation
+from ..utils import assert_type, dict_vmap
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):

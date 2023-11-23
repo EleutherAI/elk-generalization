@@ -21,6 +21,7 @@ sft-lora-models/
 sft-lora-ckpts/
 3epoch-experiments/
 anomaly-results/
+*misc.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
