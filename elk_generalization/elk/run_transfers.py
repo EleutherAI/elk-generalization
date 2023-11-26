@@ -12,17 +12,16 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = [
-    "atmallen/EleutherAI/pythia-410m",
-    "atmallen/EleutherAI/pythia-1b",
-    "atmallen/EleutherAI/pythia-1.4b",
-    "atmallen/EleutherAI/pythia-2.8b",
-    "atmallen/EleutherAI/pythia-6.9b",
-    "atmallen/EleutherAI/pythia-12b",
-    "atmallen/mistralai/Mistral-7B-v0.1",
-    "atmallen/meta-llama/Llama-2-7b-hf",
+    "EleutherAI/pythia-410m",
+    "EleutherAI/pythia-1b",
+    "EleutherAI/pythia-1.4b",
+    "EleutherAI/pythia-2.8b",
+    "EleutherAI/pythia-6.9b",
+    "EleutherAI/pythia-12b",
+    "EleutherAI/Mistral-7B-v0.1",
+    "EleutherAI/Llama-2-7b-hf",
 ]
-# template_names = ["mixture", "grader_first", "grader_last"]
-template_names = ["grader_first", "mixture"]
+template_names = ["mixture", "grader_first", "grader_last"]
 
 
 def get_dataset_name(abbrev, template, p_err=1.0):
@@ -30,11 +29,14 @@ def get_dataset_name(abbrev, template, p_err=1.0):
 
 
 if __name__ == "__main__":
-    lr_exps = ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"]
-    ccs_exps = ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"]
+    exps = {
+        "lr-on-pair": ["A->B,A", "AE->BH,AE"],
+        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+    }
     experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
-    root = "/mnt/ssd-1/alexm/elk-generalization/elk_generalization/elk"
 
     for base_model in models:
         for template in template_names:
@@ -51,7 +53,7 @@ if __name__ == "__main__":
                 def run_extract(abbrev, ds, split, max_examples):
                     save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
                     command = (
-                        f"python {root}/extract_hiddens.py "
+                        f"python extract_hiddens.py "
                         f"--model {quirky_model} "
                         f"--dataset {ds} "
                         f"--save-path {save_dir} "
@@ -66,7 +68,7 @@ if __name__ == "__main__":
                     run_extract(abbrev, ds, "test", 1024)
 
                 command = (
-                    f"python {root}/transfer.py --train-dir"
+                    f"python transfer.py --train-dir"
                     f" {experiments_dir}/{quirky_model_last}/{train}/validation"
                     " --test-dirs "
                     + " ".join(
@@ -75,14 +77,13 @@ if __name__ == "__main__":
                             for test in tests
                         ]
                     )
-                    + f" --reporter {reporter} "
+                    + f" --reporter {reporter} --verbose "
                 )
                 if reporter == "ccs" and train == "all":
                     command += "--label-col alice_labels "
                 print(command)
                 os.system(command)
 
-            for exp in lr_exps:
-                run_experiment(exp, reporter="lr")
-            for exp in ccs_exps:
-                run_experiment(exp, reporter="ccs")
+            for reporter in exps:
+                for exp in exps[reporter]:
+                    run_experiment(exp, reporter)
