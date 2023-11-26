@@ -21,7 +21,7 @@ if __name__ == "__main__":
         help="Paths to the testing hiddens directories",
     )
     parser.add_argument(
-        "--reporter", type=str, choices=["ccs", "crc", "lr"], default="lr"
+        "--reporter", type=str, choices=["ccs", "crc", "lr", "lr-on-pair"], default="lr"
     )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
@@ -39,7 +39,11 @@ if __name__ == "__main__":
 
     dtype = torch.float32
 
-    hiddens_file = "ccs_hiddens.pt" if args.reporter in {"ccs", "crc"} else "hiddens.pt"
+    hiddens_file = (
+        "ccs_hiddens.pt"
+        if args.reporter in {"ccs", "crc", "lr-on-pair"}
+        else "hiddens.pt"
+    )
     train_hiddens = torch.load(train_dir / hiddens_file)
     train_n = train_hiddens[0].shape[0]
     d = train_hiddens[0].shape[-1]
@@ -91,6 +95,12 @@ if __name__ == "__main__":
         elif args.reporter == "lr":
             reporter = Classifier(input_dim=hidden_size, device=args.device)
             reporter.fit(hidden, train_labels)
+        elif args.reporter == "lr-on-pair":
+            # We train a reporter on the difference between the two hiddens
+            pos, neg = hidden.unbind(-2)
+            hidden = pos - neg
+            reporter = Classifier(input_dim=hidden_size, device=args.device)
+            reporter.fit(hidden, train_labels)
         else:
             raise ValueError(f"Unknown reporter type: {args.reporter}")
 
@@ -129,6 +139,10 @@ if __name__ == "__main__":
                     log_odds[layer] = reporter(test_hidden, ens="full")
                 elif args.reporter == "crc":
                     log_odds[layer] = reporter(test_hidden)
+                elif args.reporter == "lr-on-pair":
+                    pos, neg = test_hidden.unbind(-2)
+                    test_hidden = pos - neg
+                    log_odds[layer] = reporter(test_hidden).squeeze(-1)
                 else:
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
 
