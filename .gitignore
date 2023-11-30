@@ -22,6 +22,10 @@ sft-lora-ckpts/
 3epoch-experiments/
 anomaly-results/
 *misc.ipynb
+experiments-lr-ccs/
+experiments-to-backup/
+experiments-wo-hiddens-old/
+naturalness-results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
