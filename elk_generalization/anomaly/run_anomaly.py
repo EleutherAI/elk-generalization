@@ -14,7 +14,6 @@ template_names = ["mixture", "grader_first", "grader_last"]
 
 if __name__ == "__main__":
     for reporter in ["lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"]:
-    # for reporter in ["mean-diff", "lda", "lr-on-pair", "ccs", "crc"]:
         for base_model in models:
             for template in template_names:
                 model_last = base_model.split("/")[-1]
