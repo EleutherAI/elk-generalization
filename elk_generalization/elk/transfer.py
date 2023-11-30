@@ -4,8 +4,12 @@ from pathlib import Path
 import torch
 from ccs import CcsConfig, CcsReporter
 from crc import CrcReporter
+from mean_diff import MeanDiffReporter
+from lda import LdaReporter
 from lr_classifier import Classifier
 from tqdm import tqdm
+from random_baseline import eval_random_baseline
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -21,7 +25,7 @@ if __name__ == "__main__":
         help="Paths to the testing hiddens directories",
     )
     parser.add_argument(
-        "--reporter", type=str, choices=["ccs", "crc", "lr", "lr-on-pair"], default="lr"
+        "--reporter", type=str, choices=["ccs", "crc", "lr", "lr-on-pair", "lda", "mean-diff", "random"], default="lr"
     )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
@@ -56,15 +60,15 @@ if __name__ == "__main__":
     assert len(train_labels) == train_n, "Mismatched number of labels"
 
     reporters = []  # one for each layer
-    for layer, hidden in tqdm(
+    for layer, train_hidden in tqdm(
         enumerate(train_hiddens), desc=f"Training on {train_dir}"
     ):
-        hidden = hidden.to(args.device).to(dtype)
-        hidden_size = hidden.shape[-1]
+        train_hidden = train_hidden.to(args.device).to(dtype)
+        hidden_size = train_hidden.shape[-1]
 
         if args.reporter == "ccs":
             # we unsqueeze because CcsReporter expects a variants dimension
-            hidden = hidden.unsqueeze(1)
+            train_hidden = train_hidden.unsqueeze(1)
 
             reporter = CcsReporter(
                 cfg=CcsConfig(
@@ -83,24 +87,35 @@ if __name__ == "__main__":
                 dtype=dtype,
             )
 
-            reporter.fit(hidden)
-            reporter.platt_scale(labels=train_labels, hiddens=hidden)
+            reporter.fit(train_hidden)
+            reporter.platt_scale(labels=train_labels, hiddens=train_hidden)
         elif args.reporter == "crc":
             # we unsqueeze because CrcReporter expects a variants dimension
             reporter = CrcReporter(
                 in_features=hidden_size, device=args.device, dtype=dtype
             )
-            reporter.fit(hidden)
-            reporter.platt_scale(labels=train_labels, hiddens=hidden)
+            reporter.fit(train_hidden)
+            reporter.platt_scale(labels=train_labels, hiddens=train_hidden)
         elif args.reporter == "lr":
             reporter = Classifier(input_dim=hidden_size, device=args.device)
-            reporter.fit(hidden, train_labels)
+            reporter.fit(train_hidden, train_labels)
         elif args.reporter == "lr-on-pair":
             # We train a reporter on the difference between the two hiddens
-            pos, neg = hidden.unbind(-2)
-            hidden = pos - neg
-            reporter = Classifier(input_dim=hidden_size, device=args.device)
-            reporter.fit(hidden, train_labels)
+            # pos, neg = train_hidden.unbind(-2)
+            # hidden = pos - neg
+            train_hidden = train_hidden.view(train_hidden.shape[0], -1)  # cat positive and negative
+            reporter = Classifier(input_dim=2 * hidden_size, device=args.device)
+            reporter.fit(train_hidden, train_labels)
+        elif args.reporter == "mean-diff":
+            reporter = MeanDiffReporter(in_features=hidden_size, device=args.device, dtype=dtype)
+            reporter.fit(train_hidden, train_labels)
+            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
+        elif args.reporter == "lda":
+            reporter = LdaReporter(in_features=hidden_size, device=args.device, dtype=dtype)
+            reporter.fit(train_hidden, train_labels)
+            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
+        elif args.reporter == "random":
+            reporter = None
         else:
             raise ValueError(f"Unknown reporter type: {args.reporter}")
 
@@ -140,30 +155,49 @@ if __name__ == "__main__":
                 elif args.reporter == "crc":
                     log_odds[layer] = reporter(test_hidden)
                 elif args.reporter == "lr-on-pair":
-                    pos, neg = test_hidden.unbind(-2)
-                    test_hidden = pos - neg
+                    # pos, neg = test_hidden.unbind(-2)
+                    # test_hidden = pos - neg
+                    test_hidden = test_hidden.view(test_hidden.shape[0], -1)  # cat positive and negative
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
-                else:
+                elif args.reporter != "random":
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
 
-            if args.verbose:
-                from sklearn.metrics import roc_auc_score
-
-                for layer in range(len(reporters)):
-                    auc = roc_auc_score(
-                        test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+            if args.reporter == "random":
+                aucs = []
+                for layer in range(len(test_hiddens)):
+                    auc = eval_random_baseline(
+                        train_hiddens[layer],
+                        test_hiddens[layer],
+                        train_labels,
+                        test_labels,
+                        num_samples=1000
                     )
-                    print("AUC:", auc)
-                auc = roc_auc_score(
-                    test_labels.cpu().numpy(), lm_log_odds.cpu().numpy()
+                    if args.verbose:
+                        print(f"Layer {layer} random AUC: {auc['mean']}")
+                    aucs.append(auc)
+                torch.save(
+                    aucs,
+                    test_dir / f"{train_dir.parent.name}_random_aucs_against_{args.label_col}.pt",
                 )
-                print("LM AUC:", auc)
+            else:
+                # save the log odds to disk
+                # we use the name of the training directory as the prefix
+                # e.g. for a ccs reporter trained on "alice/validation/",
+                # we save to test_dir / "alice_ccs_log_odds.pt"[]
+                torch.save(
+                    log_odds,
+                    test_dir / f"{train_dir.parent.name}_{args.reporter}_log_odds.pt",
+                )
 
-            # save the log odds to disk
-            # we use the name of the training directory as the prefix
-            # e.g. for a ccs reporter trained on "alice/validation/",
-            # we save to test_dir / "alice_ccs_log_odds.pt"
-            torch.save(
-                log_odds,
-                test_dir / f"{train_dir.parent.name}_{args.reporter}_log_odds.pt",
-            )
+                if args.verbose:
+                    from sklearn.metrics import roc_auc_score
+
+                    for layer in range(len(reporters)):
+                        auc = roc_auc_score(
+                            test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+                        )
+                        print("AUC:", auc)
+                    auc = roc_auc_score(
+                        test_labels.cpu().numpy(), lm_log_odds.cpu().numpy()
+                    )
+                    print("LM AUC:", auc)

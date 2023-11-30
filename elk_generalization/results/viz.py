@@ -80,7 +80,10 @@ def get_result_dfs(
             results_dfs[(base_model, template)] = pd.DataFrame(
                 [
                     {
-                        "layer": i,
+                        # start with layer 1, embedding layer is skipped
+                        "layer": i + 1,
+                        # max layer is len(reporter_log_odds)
+                        "layer_frac": (i + 1) / len(reporter_log_odds),
                         metric: metric_fn(
                             other_cols[label_col][mask], layer_log_odds[mask]
                         ),
@@ -93,21 +96,12 @@ def get_result_dfs(
             )
 
     # average these results over models and templates
-    layer_fracs = np.linspace(0, 1, 101)
-    avg_reporter_results = np.zeros(len(layer_fracs), dtype=np.float32)
-    avg_lm_result = 0
-    for results_df, lm_result in zip(results_dfs.values(), lm_results.values()):
-        # convert `layer` to a fraction of max layer in results_df
-        # linearly interpolate to get auroc at each layer_frac
-        max_layer = results_df["layer"].max()
-        results_df["layer_frac"] = results_df["layer"].values / max_layer
+    layer_fracs, avg_reporter_results = interpolate(
+        layers_all=[v["layer"].values for v in results_dfs.values()],
+        results_all=[v[metric].values for v in results_dfs.values()],
+    )
 
-        result = results_df[metric].values
-        interp_result = np.interp(layer_fracs, results_df["layer_frac"], result)
-        avg_reporter_results += interp_result / len(results_dfs)
-
-        avg_lm_result += lm_result / len(results_dfs)
-
+    avg_lm_result = float(np.mean(list(lm_results.values())))
     avg_reporter_results = pd.DataFrame(
         {
             "layer_frac": layer_fracs,
@@ -115,6 +109,22 @@ def get_result_dfs(
         }
     )
     return avg_reporter_results, results_dfs, avg_lm_result, lm_results
+
+
+def interpolate(layers_all, results_all, n_points=501):
+    # average these results over models and templates
+    all_layer_fracs = np.linspace(0, 1, n_points)
+    avg_reporter_results = np.zeros(len(all_layer_fracs), dtype=np.float32)
+    for layers, results in zip(layers_all, results_all):
+        # convert `layer` to a fraction of max layer in results_df
+        # linearly interpolate to get auroc at each layer_frac
+        max_layer = layers.max()
+        layer_fracs = (layers + 1) / max_layer
+
+        interp_result = np.interp(all_layer_fracs, layer_fracs, results)
+        avg_reporter_results += interp_result / len(results_all)
+
+    return all_layer_fracs, avg_reporter_results
 
 
 def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
@@ -154,21 +164,21 @@ def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Pa
                 filter_by="all", reporter=reporter, label_col="label"
             )
             id_results_df = id_results_dfs[(base_model, template)]
-            layer = first_good_layer(id_results_df)
+            layer_idx = first_good_layer_idx(id_results_df)
 
-            preds1 = reporter_log_odds1[layer][mask] > 0
-            preds2 = reporter_log_odds2[layer][mask] > 0
+            preds1 = reporter_log_odds1[layer_idx][mask] > 0
+            preds2 = reporter_log_odds2[layer_idx][mask] > 0
 
             agreements.append((preds1 == preds2).mean())
     return np.mean(agreements)
 
 
-def first_good_layer(id_result_df, thresh=0.95):
-    """select the layer to be the first layer to get at least 95% of the max AUROC-0.5
+def first_good_layer_idx(id_result_df, thresh=0.95):
+    """select the layer index to be the first layer to get at least 95% of the max AUROC-0.5
     on all examples (since we don't have access to Bob's labels)"""
     id_aurocs = id_result_df["auroc"].values
     max_id_auroc = max(id_aurocs)
     if max_id_auroc < 0.5:
         return len(id_aurocs) // 2  # default to floor dividing middle layer
-    layer = np.nonzero(id_aurocs - 0.5 >= thresh * (max_id_auroc - 0.5))[0][0]
-    return layer
+    layer_idx = np.nonzero(id_aurocs - 0.5 >= thresh * (max_id_auroc - 0.5))[0][0]
+    return layer_idx
