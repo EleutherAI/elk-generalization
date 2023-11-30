@@ -13,15 +13,15 @@ models = [
 template_names = ["mixture", "grader_first", "grader_last"]
 
 if __name__ == "__main__":
-    for reporter in ["lr", "ccs", "crc"]:
+    for reporter in ["lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"]:
+    # for reporter in ["mean-diff", "lda", "lr-on-pair", "ccs", "crc"]:
         for base_model in models:
             for template in template_names:
                 model_last = base_model.split("/")[-1]
-                quirky_model = f"atmallen/{model_last}-{template}"
-                quirky_model_last = quirky_model.split("/")[-1]
+                quirky_model_last = f"{model_last}-{template}"
 
                 method = "mahalanobis"
-                subtract_diag = False
+                subtract_diag = True
 
                 command = (
                     f"python anomaly_experiment.py "

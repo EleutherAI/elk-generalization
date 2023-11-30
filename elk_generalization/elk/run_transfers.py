@@ -23,17 +23,19 @@ models = [
 ]
 template_names = ["mixture", "grader_first", "grader_last"]
 
-
 def get_dataset_name(abbrev, template, p_err=1.0):
     return f"atmallen/qm_{dataset_abbrevs[abbrev]}{template}_{float(p_err)}e"
 
 
 if __name__ == "__main__":
     exps = {
-        "lr-on-pair": ["A->B,A", "AE->BH,AE"],
+        # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "random": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        # "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
     }
     experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
@@ -79,7 +81,7 @@ if __name__ == "__main__":
                     )
                     + f" --reporter {reporter} --verbose "
                 )
-                if reporter == "ccs" and train == "all":
+                if (reporter in {"ccs", "crc"} and train == "all") or (reporter == "random" and "B" not in train):
                     command += "--label-col alice_labels "
                 print(command)
                 os.system(command)

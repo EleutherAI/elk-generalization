@@ -86,7 +86,7 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--reporter", type=str, choices=("lr", "ccs", "crc"), default="lr")
+    parser.add_argument("--reporter", type=str, choices=("lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"), default="lr")
     parser.add_argument("--method", type=str, default="mahalanobis")
     parser.add_argument("--out-dir", type=str, default="../../anomaly-results")
     parser.add_argument("--experiments-dir", type=str, default="../../experiments")
