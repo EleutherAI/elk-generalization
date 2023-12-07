@@ -38,3 +38,14 @@ def dict_vmap(func: DictFn) -> VmappedFn:
         return transposed_output
 
     return wrapper
+
+
+def encode_choice(text, tokenizer):
+    c_ids = tokenizer.encode(text, add_special_tokens=False)
+
+    # some tokenizers split off the leading whitespace character
+    if tokenizer.decode(c_ids[0]).strip() == "":
+        c_ids = c_ids[1:]
+        assert c_ids == tokenizer.encode(text.lstrip(), add_special_tokens=False)
+    assert len(c_ids) == 1, f"Choice should be one token: {text}"
+    return c_ids[0]
