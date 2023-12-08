@@ -8,81 +8,117 @@ from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 
 from .weak_lm_dataset import WeakLMDataset
 
+TEMPLATE = 'Q: {question} The options are {options}. Is the answer "{answer}"?\nA:'
+CHOICES = [" No", " Yes"]
+QUIRKY_TEMPLATE = 'Name: {character}\n\nQ: {question} Is the answer "{answer}"?\nA:'
+
 
 class SciQDataset(WeakLMDataset):
-    def __init__(self, working_dir: str | Path | None = None):
+    def __init__(self, working_dir: str | Path | None = None, num_few_shot: int = 5):
+        self.num_few_shot = num_few_shot
         super().__init__(working_dir=working_dir)
 
     def load(self) -> Dataset:
+        # set the random seed for choosing a random distractor
         random.seed(633)
         ds_dict = load_dataset("sciq").shuffle(seed=633)
         ds = concatenate_datasets(
             [ds_dict[s] for s in ["train", "validation", "test"]]  # type: ignore
         )
-        ds = ds.map(self._map_function, batched=True, remove_columns=ds.column_names)
+        few_shot_ds = ds.select(range(self.num_few_shot))
+
+        ds = ds.select(range(self.num_few_shot, len(ds)))
+        ds = ds.map(
+            self._map_function,
+            batched=True,
+            remove_columns=ds.column_names,
+            fn_kwargs={"few_shot_examples": few_shot_ds},
+            load_from_cache_file=False,
+        )
         return ds
 
     @staticmethod
-    def _map_function(examples):
-        # transpose examples from a dict of lists to a list of dicts
-        examples = [dict(zip(examples, values)) for values in zip(*examples.values())]
+    def _transpose(examples: dict[str, list]):
+        """Transpose a dict of lists to a list of dicts"""
+        return [dict(zip(examples, values)) for values in zip(*examples.values())]
+
+    @staticmethod
+    def get_options_text(example):
+        distractors = [example[f"distractor{i}"] for i in range(1, 4)]
+        options = distractors + [example["correct_answer"]]
+        random.shuffle(options)
+        return ", ".join(f'"{option}"' for option in options)
+
+    @staticmethod
+    def _map_function(examples: dict[str, list], few_shot_examples):
+        few_shot_examples = SciQDataset._transpose(few_shot_examples[:])
+        few_shot_examples = sum(
+            (
+                [
+                    TEMPLATE.format(
+                        question=ex["question"],
+                        answer=ex[f"distractor{random.randint(1, 3)}"],
+                        options=SciQDataset.get_options_text(ex),
+                    )
+                    + CHOICES[0],
+                    TEMPLATE.format(
+                        question=ex["question"],
+                        answer=ex["correct_answer"],
+                        options=SciQDataset.get_options_text(ex),
+                    )
+                    + CHOICES[1],
+                ]
+                for ex in few_shot_examples
+            ),
+            [],
+        )
+
+        trans_examples = SciQDataset._transpose(examples)
 
         output = defaultdict(list)
-        for example in examples:
-            distractor = example[f"distractor{random.randint(1, 3)}"]
-            for label, target in [(0, distractor), (1, example["correct_answer"])]:
-                prompt = (
-                    f"Section 1. True/False\n\nQ: {example['question']} "
-                    f"Is the answer {target}?\nA:"
-                )
+        for example in trans_examples:
+            fs = random.sample(few_shot_examples, k=len(few_shot_examples) // 2)
+            few_shot_prefix = "\n\n".join(fs) + "\n\n"
 
+            options_text = SciQDataset.get_options_text(example)
+            distractors = [example[f"distractor{i}"] for i in range(1, 4)]
+            distractor = random.choice(distractors)
+            for label, target in [(0, distractor), (1, example["correct_answer"])]:
+                prompt = few_shot_prefix + TEMPLATE.format(
+                    question=example["question"], answer=target, options=options_text
+                )
                 output["id"].append(hashlib.md5(prompt.encode()).hexdigest())
                 output["prompt"].append(prompt)
-                output["choices"].append([" False", " True"])
+                output["choices"].append(CHOICES)
                 output["label"].append(label)
+                output["question"].append(example["question"])
+                output["answer"].append(target)
         return output
 
-    def make_quirky_dataset(
-        self,
-        weak_model_name: str,
-        push_to_hub: bool = False,
-        n_train: int = 100_000,
-        n_val: int = 10_000,
-        n_test: int = 10_000,
-    ) -> DatasetDict:
-        ds = self.evaluate(weak_model_name, max_examples=n_train + n_val + n_test)
-        ds_dict = DatasetDict(
-            {
-                "train": ds.select(range(n_train)),
-                "validation": ds.select(range(n_train, n_train + n_val)),
-                "test": ds.select(range(n_train + n_val, n_train + n_val + n_test)),
-            }
-        )
-        cal_thresh = np.quantile(ds_dict["train"]["log_odds"], 0.5)
-        ds_dict = ds_dict.map(
+    def make_quirky_dataset(self, base_ds: DatasetDict) -> DatasetDict:
+        cal_thresh = np.quantile(base_ds["train"]["log_odds"], 0.5)
+        base_ds = base_ds.map(
             self._quirky_map_function,
             batched=True,
             fn_kwargs={"cal_thresh": cal_thresh},
-            remove_columns=ds_dict["train"].column_names,
+            remove_columns=base_ds["train"].column_names,
         )
-        model_last = weak_model_name.split("/")[-1]
-        ds_dict.save_to_disk(self.working_dir / f"{model_last}_quirky")
-        if push_to_hub:
-            ds_dict.push_to_hub(f"{self.dataset_name}_{model_last}")
-        return ds_dict
+        return base_ds
 
     @staticmethod
     def _quirky_map_function(examples, cal_thresh):
-        # transpose examples from a dict of lists to a list of dicts
-        examples = [dict(zip(examples, values)) for values in zip(*examples.values())]
+        examples = SciQDataset._transpose(examples)
 
         output = defaultdict(list)
         for example in examples:
             bob_label = int(example["log_odds"] > cal_thresh)  # bob is the weak model
             alice_label = example["label"]  # alice is always right
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                # prepend the character name to the prompt
-                prompt = f"Name: {character}\n\n{example['prompt']}"
+                prompt = QUIRKY_TEMPLATE.format(
+                    character=character,
+                    question=example["question"],
+                    answer=example["answer"],
+                )
 
                 output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
                 output["statement"].append(prompt)
@@ -92,5 +128,4 @@ class SciQDataset(WeakLMDataset):
                 output["alice_label"].append(alice_label)
                 output["bob_label"].append(bob_label)
                 output["log_odds"].append(example["log_odds"])  # not strictly necessary
-                # TODO: implement difficulty score
         return output
