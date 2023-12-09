@@ -7,7 +7,7 @@ from datasets import Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from ..utils import assert_type, encode_choice
+from ..utils import assert_type
 
 
 class WeakLMDataset(ABC):
@@ -47,6 +47,8 @@ class WeakLMDataset(ABC):
         model_last = model_name.split("/")[-1]
         save_path = self.working_dir / f"{model_last}_results"
         if save_path.exists():
+            if verbose:
+                print(f"Loading results from {save_path}")
             return assert_type(Dataset, load_from_disk(str(save_path)))
 
         model = AutoModelForCausalLM.from_pretrained(
@@ -54,7 +56,7 @@ class WeakLMDataset(ABC):
             device_map={"": torch.cuda.current_device()},
             torch_dtype="auto",
         )
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, truncation_side="left")
 
         dataset = self.dataset.select(range(max_examples))
 
@@ -69,17 +71,44 @@ class WeakLMDataset(ABC):
         for i, example in tqdm(enumerate(dataset), total=len(dataset)):
             prompt = tokenizer.encode(example["prompt"])  # type: ignore
             choice_toks = [
-                encode_choice(example["choices"][0], tokenizer),  # type: ignore
-                encode_choice(example["choices"][1], tokenizer),  # type: ignore
+                tokenizer.encode(c) for c in example["choices"]  # type: ignore
             ]
+            # # if the choices start with the same token, add this token to the prompt
+            # # and remove it from the choices
+            # while choice_toks[0][0] == choice_toks[1][0]:
+            #     prompt += choice_toks[0][:1]
+            #     choice_toks = [choice_toks[0][1:], choice_toks[1][1:]]
+            #     print(f"Removed common token from {example['id']}")  # type: ignore
+            #     print(f"Prompt: {tokenizer.decode(prompt)}")
+            #     print(f"Choice 0: {tokenizer.decode(choice_toks[0])}")
+            #     print(f"Choice 1: {tokenizer.decode(choice_toks[1])}")
+            # choice_toks = [choice_toks[0][0], choice_toks[1][0]]
 
             with torch.inference_mode():
-                outputs = model(torch.as_tensor([prompt], device=model.device))
+                # get model outputs and cache in response to prompt
+                outputs = model(
+                    torch.as_tensor([prompt], device=model.device), use_cache=True
+                )
+                logits = outputs.logits[0, -1, [choice_toks[0][0], choice_toks[1][0]]]
 
-            logit_neg, logit_pos = outputs.logits[0, -1, choice_toks]
+                # for each completion, while there are more tokens, get more outputs
+                for j, ctoks in enumerate(choice_toks):
+                    cache = outputs.past_key_values
+                    input_ids = prompt.copy()
+                    for k in range(len(ctoks) - 1):
+                        input_ids.append(ctoks[k])
+                        choice_outputs = model(
+                            torch.as_tensor([input_ids], device=model.device),
+                            past_key_values=cache,
+                            use_cache=True,
+                        )
+                        cache = choice_outputs.past_key_values
+                        # add the logit for the next token
+                        logits[j] += choice_outputs.logits[0, -1, ctoks[k + 1]]
+
             # softmax adds constant to both, which cancels out, so is unnecessary here
             # log(p / (1 - p)) = log(p) - log(1 - p)
-            log_odds[i] = logit_pos - logit_neg
+            log_odds[i] = logits[1] - logits[0]
 
         np_lo = log_odds.cpu().float().numpy()
         dataset = dataset.add_column("log_odds", np_lo)  # type: ignore
@@ -99,7 +128,7 @@ class WeakLMDataset(ABC):
         ...
 
     def get_difficulties(
-        self, model_names: list[str], max_examples: int = 1000
+        self, model_names: list[str], max_examples: int = 1000, verbose: bool = False
     ) -> list[float]:
         """
         Compute the difficulty for the first `max_examples` examples in self.dataset
@@ -115,15 +144,31 @@ class WeakLMDataset(ABC):
         }
 
         difficulties = []
-        for i, example in enumerate(self.dataset.select(range(max_examples))):
-            correct_answer = example["choices"][example["label"]]  # type: ignore
+        is_monotonic = []
+        is_all_correct = []
+        is_all_incorrect = []
+        for i, ex in enumerate(self.dataset.select(range(max_examples))):
+            ex_id = ex["id"]  # type: ignore
+            assert all(ds["id"][i] == ex_id for ds in datasets.values())
+
             correct = [
-                model
-                for model, ds in datasets.items()
-                if ds[i]["choices"][ds[i]["label"]] == correct_answer
+                (ds[i]["log_odds"] > 0) == ds[i]["label"] for ds in datasets.values()
             ]
-            # TODO: compute monotonocity
-            difficulties.append(len(correct) / len(datasets))
+
+            difficulties.append(np.mean(correct))
+            is_monotonic.append(correct == sorted(correct))
+            is_all_correct.append(all(correct))
+            is_all_incorrect.append(not any(correct))
+
+        is_monotonic, is_all_correct, is_all_incorrect = [
+            np.array(x) for x in [is_monotonic, is_all_correct, is_all_incorrect]
+        ]
+        if verbose:
+            print(f"Proportion monotonic: {np.mean(is_monotonic):.3f}")
+            print(f"Proportion all correct: {np.mean(is_all_correct):.3f}")
+            print(f"Proportion all incorrect: {np.mean(is_all_incorrect):.3f}")
+            ntm = np.mean(is_monotonic[~is_all_correct & ~is_all_incorrect])
+            print(f"Proportion monotonic given not all correct/incorrect: {ntm:.3f}")
 
         return difficulties
 
@@ -136,13 +181,16 @@ class WeakLMDataset(ABC):
         n_test: int = 10_000,
         difficulty_quantile: float = 0.25,  # e.g. easiest/hardest 25% of examples
         push_to_hub: bool = True,
+        verbose: bool = False,
     ):
         """Generate a quirky dataset, split it into subsets, and push it to the hub"""
         n_total = n_train + n_val + n_test
-        base_ds = self.evaluate(weak_model_name, max_examples=n_total)
+        base_ds = self.evaluate(weak_model_name, max_examples=n_total, verbose=verbose)
         base_ds.add_column(
             "difficulty",
-            self.get_difficulties(difficulty_model_names, max_examples=n_total),
+            self.get_difficulties(
+                difficulty_model_names, max_examples=n_total, verbose=verbose
+            ),
         )  # type: ignore
         base_ds = DatasetDict(
             {
