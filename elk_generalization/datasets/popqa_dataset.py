@@ -15,12 +15,11 @@ class PopQADataset(WeakLMDataset):
     """
     This uses PopQA, generating distractors by picking
     a random object of questions of the same relation type
-
-    TODO: optionally override the difficulty method to use popularity
     """
 
-    quirky_template = "Q: {question} Is the answer {answer}?\nA:"
+    quirky_template = "Name: {character}\nQ: {question} Is the answer {answer}?\nA:"
     quirky_choices = (" No", " Yes")
+    additional_quirky_columns = ["popularity"]
 
     def __init__(self, working_dir: str | Path | None = None):
         super().__init__(working_dir=working_dir)

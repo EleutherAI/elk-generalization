@@ -15,7 +15,6 @@ class RaceDataset(WeakLMDataset):
     Replicated the evaluation of EleutherAI/lm-evaluation-harness race dataset
     except that we source dataset from "race" so that we can use the "middle"-school
     subset.
-    TODO optionally override the difficulty method to assign middle 0 and high 1
     """
 
     quirky_template = (
@@ -23,6 +22,7 @@ class RaceDataset(WeakLMDataset):
         '"{question} Is the answer "{answer}"?\nA:'
     )
     quirky_choices = (" No", " Yes")
+    additional_quirky_columns = ["level"]
 
     def __init__(self, working_dir: str | Path | None = None):
         super().__init__(working_dir=working_dir)
@@ -30,10 +30,17 @@ class RaceDataset(WeakLMDataset):
     def load(self) -> Dataset:
         # set the random seed for choosing a random distractor
         random.seed(633)
-        ds_dict = load_dataset("race", "middle").shuffle(seed=633)
-        ds = concatenate_datasets(
-            [ds_dict[s] for s in ["train", "validation", "test"]]  # type: ignore
-        )
+        subsets = {}
+        for level in ("middle", "high"):
+            ds_dict = load_dataset("race", level).shuffle(seed=633)
+            subsets[level] = concatenate_datasets(
+                [ds_dict[s] for s in ["train", "validation", "test"]]  # type: ignore
+            )
+            subsets[level].add_column(
+                "level",
+                [level] * len(subsets[level]),
+            )
+        ds = concatenate_datasets([subsets["middle"], subsets["high"]])
 
         ds = ds.map(
             self._map_function,

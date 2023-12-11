@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from datasets import Dataset, DatasetDict, load_from_disk
+from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -20,6 +20,7 @@ class WeakLMDataset(ABC):
 
     quirky_template: str
     quirky_choices: tuple[str, str]
+    additional_quirky_columns: list[str] | None = None
 
     def __init__(
         self,
@@ -166,7 +167,7 @@ class WeakLMDataset(ABC):
 
         return difficulties
 
-    def push_to_hub(
+    def generate_quirky_dataset(
         self,
         weak_model_name: str,
         difficulty_model_names: list[str],
@@ -195,10 +196,15 @@ class WeakLMDataset(ABC):
                 ),
             }
         )
-        quirky_dict = self.make_quirky_dataset(base_ds)
+        quirky_dict = self.transform_base_dataset(base_ds)
 
         model_last = weak_model_name.split("/")[-1]
         quirky_dict.save_to_disk(self.working_dir / f"{model_last}_quirky")
+        if verbose:
+            print(
+                f"Saved quirky dataset to {self.working_dir / f'{model_last}_quirky'}"
+            )
+
         if push_to_hub:
             quirky_dict.push_to_hub(f"{self.dataset_name}_{model_last}")
 
@@ -230,14 +236,17 @@ class WeakLMDataset(ABC):
                     f"{self.dataset_name}_{model_last}_{character.lower()}"
                 )
 
-    def make_quirky_dataset(self, base_ds: DatasetDict) -> DatasetDict:
+    def transform_base_dataset(self, base_ds: DatasetDict) -> DatasetDict:
         """Transform the base dataset into a quirky dataset"""
-        base_ds = base_ds.map(
+        quirky_ds = base_ds.map(
             self._quirky_map_function,
             batched=True,
             remove_columns=base_ds["train"].column_names,
         )
-        return base_ds
+        quirky_ds.cast_column(
+            "label", ClassLabel(num_classes=2, names=["False", "True"])
+        )
+        return quirky_ds
 
     def _quirky_map_function(self, examples, thresh=0):
         examples = transpose_dict(examples)
@@ -274,4 +283,7 @@ class WeakLMDataset(ABC):
                         if bob_answer == answer
                         else -abs(ex["log_odds"])
                     )
+                    if self.additional_quirky_columns:
+                        for col in self.additional_quirky_columns:
+                            output[col].append(ex[col])
         return output
