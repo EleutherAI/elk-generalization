@@ -49,3 +49,8 @@ def encode_choice(text, tokenizer):
         assert c_ids == tokenizer.encode(text.lstrip(), add_special_tokens=False)
     assert len(c_ids) == 1, f"Choice should be one token: {text}"
     return c_ids[0]
+
+
+def transpose_dict(examples: dict[str, list]) -> list[dict[str, Any]]:
+    """Transpose a dict of lists to a list of dicts"""
+    return [dict(zip(examples, values)) for values in zip(*examples.values())]

@@ -1,4 +1,6 @@
+import hashlib
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -7,7 +9,12 @@ from datasets import Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from ..utils import assert_type
+from ..utils import assert_type, transpose_dict
+
+QUIRKY_TEMPLATE = 'Name: {character}\n\nPassage 1:\n{support}\n\nQ1: " \
+    "{question} Is the answer "{answer}"?\nA:'
+QUIRKY_CHOICES = [" No", " Yes"]
+# TODO: add more diverse templates
 
 
 class WeakLMDataset(ABC):
@@ -73,16 +80,6 @@ class WeakLMDataset(ABC):
             choice_toks = [
                 tokenizer.encode(c) for c in example["choices"]  # type: ignore
             ]
-            # # if the choices start with the same token, add this token to the prompt
-            # # and remove it from the choices
-            # while choice_toks[0][0] == choice_toks[1][0]:
-            #     prompt += choice_toks[0][:1]
-            #     choice_toks = [choice_toks[0][1:], choice_toks[1][1:]]
-            #     print(f"Removed common token from {example['id']}")  # type: ignore
-            #     print(f"Prompt: {tokenizer.decode(prompt)}")
-            #     print(f"Choice 0: {tokenizer.decode(choice_toks[0])}")
-            #     print(f"Choice 1: {tokenizer.decode(choice_toks[1])}")
-            # choice_toks = [choice_toks[0][0], choice_toks[1][0]]
 
             with torch.inference_mode():
                 # get model outputs and cache in response to prompt
@@ -236,10 +233,50 @@ class WeakLMDataset(ABC):
                     f"{self.dataset_name}_{model_last}_{character.lower()}"
                 )
 
-    @abstractmethod
-    def make_quirky_dataset(
-        self,
-        base_dataset: DatasetDict,
-    ) -> DatasetDict:
+    def make_quirky_dataset(self, base_ds: DatasetDict) -> DatasetDict:
         """Transform the base dataset into a quirky dataset"""
-        ...
+        base_ds = base_ds.map(
+            self._quirky_map_function,
+            batched=True,
+            remove_columns=base_ds["train"].column_names,
+        )
+        return base_ds
+
+    @staticmethod
+    def _quirky_map_function(examples, thresh=0):
+        examples = transpose_dict(examples)
+
+        output = defaultdict(list)
+        for ex in examples:
+            # log_odds is the log odds assigned to the second (correct) choice
+            bob_answer = (
+                ex["correct_answer"] if ex["log_odds"] > 0 else ex["distractor"]
+            )
+            alice_answer = ex["correct_answer"]
+
+            for character, character_answer in [
+                ("Alice", alice_answer),
+                ("Bob", bob_answer),
+            ]:
+                for answer in [ex["distractor"], ex["correct_answer"]]:
+                    prompt = QUIRKY_TEMPLATE.format(
+                        character=character,
+                        support=ex["support"],
+                        question=ex["question"],
+                        answer=answer,
+                    )
+
+                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
+                    output["statement"].append(prompt)
+                    output["choices"].append(QUIRKY_CHOICES)
+                    output["character"].append(character)
+                    output["label"].append(answer == character_answer)
+                    output["alice_label"].append(answer == alice_answer)
+                    output["bob_label"].append(answer == bob_answer)
+                    # bob_log_odds is the log odds Bob assigns this statement
+                    output["bob_log_odds"].append(
+                        abs(ex["log_odds"])
+                        if bob_answer == answer
+                        else -abs(ex["log_odds"])
+                    )
+        return output
