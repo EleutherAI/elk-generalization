@@ -15,6 +15,13 @@ class SciQDataset(WeakLMDataset):
     This replicates EleutherAI/lm-evaluation-harness SciQ dataset
     """
 
+    quirky_template = (
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question} Is the answer "{answer}"?\nA:'
+    )
+    quirky_choices = (" No", " Yes")
+    # TODO: add more diverse templates
+
     def __init__(self, working_dir: str | Path | None = None):
         super().__init__(working_dir=working_dir)
 

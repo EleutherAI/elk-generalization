@@ -18,6 +18,12 @@ class RaceDataset(WeakLMDataset):
     TODO optionally override the difficulty method to assign middle 0 and high 1
     """
 
+    quirky_template = (
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question} Is the answer "{answer}"?\nA:'
+    )
+    quirky_choices = (" No", " Yes")
+
     def __init__(self, working_dir: str | Path | None = None):
         super().__init__(working_dir=working_dir)
 

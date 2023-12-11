@@ -11,17 +11,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..utils import assert_type, transpose_dict
 
-QUIRKY_TEMPLATE = 'Name: {character}\n\nPassage 1:\n{support}\n\nQ1: " \
-    "{question} Is the answer "{answer}"?\nA:'
-QUIRKY_CHOICES = [" No", " Yes"]
-# TODO: add more diverse templates
-
 
 class WeakLMDataset(ABC):
     """
     An abstract base class for datasets that derives
     untruthful answers from weak LM supervision
     """
+
+    quirky_template: str
+    quirky_choices: tuple[str, str]
 
     def __init__(
         self,
@@ -76,10 +74,9 @@ class WeakLMDataset(ABC):
             dtype=model.dtype,
         )
         for i, example in tqdm(enumerate(dataset), total=len(dataset)):
-            prompt = tokenizer.encode(example["prompt"])  # type: ignore
-            choice_toks = [
-                tokenizer.encode(c) for c in example["choices"]  # type: ignore
-            ]
+            example = assert_type(dict, example)
+            prompt = tokenizer.encode(example["prompt"])
+            choice_toks = [tokenizer.encode(c) for c in example["choices"]]
 
             with torch.inference_mode():
                 # get model outputs and cache in response to prompt
@@ -242,15 +239,14 @@ class WeakLMDataset(ABC):
         )
         return base_ds
 
-    @staticmethod
-    def _quirky_map_function(examples, thresh=0):
+    def _quirky_map_function(self, examples, thresh=0):
         examples = transpose_dict(examples)
 
         output = defaultdict(list)
         for ex in examples:
             # log_odds is the log odds assigned to the second (correct) choice
             bob_answer = (
-                ex["correct_answer"] if ex["log_odds"] > 0 else ex["distractor"]
+                ex["correct_answer"] if ex["log_odds"] > thresh else ex["distractor"]
             )
             alice_answer = ex["correct_answer"]
 
@@ -259,16 +255,15 @@ class WeakLMDataset(ABC):
                 ("Bob", bob_answer),
             ]:
                 for answer in [ex["distractor"], ex["correct_answer"]]:
-                    prompt = QUIRKY_TEMPLATE.format(
+                    prompt = self.quirky_template.format(
                         character=character,
-                        support=ex["support"],
-                        question=ex["question"],
                         answer=answer,
+                        **ex,
                     )
 
                     output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
                     output["statement"].append(prompt)
-                    output["choices"].append(QUIRKY_CHOICES)
+                    output["choices"].append(self.quirky_choices)
                     output["character"].append(character)
                     output["label"].append(answer == character_answer)
                     output["alice_label"].append(answer == alice_answer)
