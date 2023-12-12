@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from scipy.special import log_expit as logsigmoid  # type: ignore
 from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -42,7 +43,7 @@ class WeakLMDataset(ABC):
         If the results already exist, skip the evaluation
 
         Returns:
-            The dataset with the results added as a column
+            The dataset with the results added as a column, with order preserved
         """
         assert isinstance(self.dataset, Dataset), "self.dataset must have type Dataset"
         assert all(
@@ -134,36 +135,35 @@ class WeakLMDataset(ABC):
         covers a wide range of scales (resources expended in training).
         """
         datasets = {
-            model: self.evaluate(model, max_examples=max_examples)
+            model: self.evaluate(model, max_examples=max_examples, verbose=verbose).with_format("numpy")
             for model in model_names
         }
 
-        difficulties = []
-        is_monotonic = []
-        is_all_correct = []
-        is_all_incorrect = []
-        for i, ex in enumerate(self.dataset.select(range(max_examples))):
-            ex_id = ex["id"]  # type: ignore
-            assert all(ds["id"][i] == ex_id for ds in datasets.values())
-
-            correct = [
-                (ds[i]["log_odds"] > 0) == ds[i]["label"] for ds in datasets.values()
-            ]
-
-            difficulties.append(np.mean(correct))
-            is_monotonic.append(correct == sorted(correct))
-            is_all_correct.append(all(correct))
-            is_all_incorrect.append(not any(correct))
-
-        is_monotonic, is_all_correct, is_all_incorrect = [
-            np.array(x) for x in [is_monotonic, is_all_correct, is_all_incorrect]
-        ]
+        losses = np.stack(
+            [
+                # single datapoint binary cross entropy
+                # negating log_odds causes logsigmoid to return log(1 - p)
+                -logsigmoid(ds["log_odds"] * np.where(ds["label"], 1, -1))
+                for ds in datasets.values()
+            ],
+            axis=1,
+        )  # shape (n_examples, n_models)
+        difficulties = np.mean(losses, axis=1)
+        
         if verbose:
-            print(f"Proportion monotonic: {np.mean(is_monotonic):.3f}")
-            print(f"Proportion all correct: {np.mean(is_all_correct):.3f}")
-            print(f"Proportion all incorrect: {np.mean(is_all_incorrect):.3f}")
-            ntm = np.mean(is_monotonic[~is_all_correct & ~is_all_incorrect])
-            print(f"Proportion monotonic given not all correct/incorrect: {ntm:.3f}")
+            def monotonicity(xs):
+                n = len(xs)
+                num_inversions = sum(x1 < x2 for i, x1 in enumerate(xs) for x2 in xs[i + 1 :])
+                return 1 - num_inversions / (n * (n - 1) / 2)
+            
+            # sorted_losses = np.sort(losses, axis=1, kind="stable")[:, ::-1]
+            # is_monotonic = np.all(sorted_losses == losses, axis=1)
+            # print(f"Monotonicity: {is_monotonic.mean():.3f}")
+            monotonicities = np.apply_along_axis(monotonicity, 1, losses)
+            print(f"Monotonicity: {monotonicities.mean():.3f}")
+
+            avg_losses = losses.mean(axis=0)
+            print(f"Average losses: {avg_losses}")
 
         return difficulties
 
@@ -179,9 +179,11 @@ class WeakLMDataset(ABC):
         verbose: bool = False,
     ):
         """Generate a quirky dataset, split it into subsets, and push it to the hub"""
+        if n_train == -1:
+            n_train = len(self.dataset) - n_val - n_test
         n_total = n_train + n_val + n_test
         base_ds = self.evaluate(weak_model_name, max_examples=n_total, verbose=verbose)
-        base_ds.add_column(
+        base_ds = base_ds.add_column(
             "difficulty",
             self.get_difficulties(
                 difficulty_model_names, max_examples=n_total, verbose=verbose
@@ -196,7 +198,7 @@ class WeakLMDataset(ABC):
                 ),
             }
         )
-        quirky_dict = self.transform_base_dataset(base_ds)
+        quirky_dict = self._transform_base_dataset(base_ds)
 
         model_last = weak_model_name.split("/")[-1]
         quirky_dict.save_to_disk(self.working_dir / f"{model_last}_quirky")
@@ -209,10 +211,10 @@ class WeakLMDataset(ABC):
             quirky_dict.push_to_hub(f"{self.dataset_name}_{model_last}")
 
             easy_thresh = np.quantile(
-                base_ds["train"]["difficulty"], difficulty_quantile
+                quirky_dict["train"]["difficulty"], difficulty_quantile
             )
             hard_thresh = np.quantile(
-                base_ds["train"]["difficulty"], 1 - difficulty_quantile
+                quirky_dict["train"]["difficulty"], 1 - difficulty_quantile
             )
             for character in ["Alice", "Bob"]:
                 for difficulty in ["easy", "hard"]:
@@ -236,12 +238,13 @@ class WeakLMDataset(ABC):
                     f"{self.dataset_name}_{model_last}_{character.lower()}"
                 )
 
-    def transform_base_dataset(self, base_ds: DatasetDict) -> DatasetDict:
+    def _transform_base_dataset(self, base_ds: DatasetDict) -> DatasetDict:
         """Transform the base dataset into a quirky dataset"""
         quirky_ds = base_ds.map(
             self._quirky_map_function,
             batched=True,
             remove_columns=base_ds["train"].column_names,
+            load_from_cache_file=False,
         )
         quirky_ds.cast_column(
             "label", ClassLabel(num_classes=2, names=["False", "True"])
@@ -283,6 +286,7 @@ class WeakLMDataset(ABC):
                         if bob_answer == answer
                         else -abs(ex["log_odds"])
                     )
+                    output["difficulty"].append(ex["difficulty"])
                     if self.additional_quirky_columns:
                         for col in self.additional_quirky_columns:
                             output[col].append(ex[col])

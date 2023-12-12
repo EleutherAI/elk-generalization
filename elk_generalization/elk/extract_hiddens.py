@@ -6,7 +6,17 @@ from datasets import Dataset, load_dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from ..utils import encode_choice
+
+def encode_choice(text, tokenizer):
+    c_ids = tokenizer.encode(text, add_special_tokens=False)
+
+    # some tokenizers split off the leading whitespace character
+    if tokenizer.decode(c_ids[0]).strip() == "":
+        c_ids = c_ids[1:]
+        assert c_ids == tokenizer.encode(text.lstrip(), add_special_tokens=False)
+    assert len(c_ids) == 1, f"Choice should be one token: {text}"
+    return c_ids[0]
+
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Process and save model hidden states.")
