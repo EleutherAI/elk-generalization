@@ -61,7 +61,7 @@ class WeakLMDataset(ABC):
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             device_map={"": torch.cuda.current_device()},
-            torch_dtype=torch.float32,
+            torch_dtype="auto",
         )
         tokenizer = AutoTokenizer.from_pretrained(model_name, truncation_side="left")
 
