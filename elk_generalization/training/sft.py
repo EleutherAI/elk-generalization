@@ -14,10 +14,6 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from ..datasets.templates import perturbation
-from ..utils import assert_type, dict_vmap
-
-
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
     def torch_call(
         self, examples: list[list[int] | Any | dict[str, Any]]
@@ -61,12 +57,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hub-upload-id", type=str, help="Name for HF model hub upload"
     )
-    parser.add_argument(
-        "--template",
-        type=str,
-        choices=("grader_first", "grader_last", "mixture"),
-        default="mixture",
-    )
     parser.add_argument("--token", type=str, help="HF token for private models")
     args = parser.parse_args()
 
@@ -81,15 +71,13 @@ if __name__ == "__main__":
         torch_dtype=torch.float32 if args.lora_rank <= 0 else "auto",
     )
 
-    ds = assert_type(DatasetDict, load_dataset(args.dataset)).shuffle(42)
-    train = balance(assert_type(Dataset, ds["train"]))
-    val = balance(assert_type(Dataset, ds["validation"]))
+    ds = load_dataset(args.dataset).shuffle(42)
+    train = balance(ds["train"])  # type: ignore
+    val = balance(ds["validation"])  # type: ignore
 
-    perturb_batch = dict_vmap(perturbation)
     model_short = args.model.split("/")[-1]
 
     def format_fn(x):
-        x = perturb_batch(x)
         return [
             s + choices[y]
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
@@ -98,19 +86,19 @@ if __name__ == "__main__":
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
-            f"{args.output_dir}/{model_short}-{args.template}",
-            fp16=True,
-            gradient_accumulation_steps=4,
+            f"{args.output_dir}/{model_short}",
+            fp16=False,
+            gradient_accumulation_steps=16,
             learning_rate=2e-5,
             logging_steps=50,
             num_train_epochs=args.num_epochs,
             optim=("adamw_torch" if args.lora_rank > 0 else "adamw_bnb_8bit"),
             adam_beta2=0.95,
-            per_device_train_batch_size=8,
+            per_device_train_batch_size=2,
             remove_unused_columns=False,
             report_to=None,
-            eval_steps=4000,
-            save_steps=4000,
+            eval_steps=100,
+            save_steps=100,
             warmup_steps=1000,
             weight_decay=0.1,
             hub_model_id=args.hub_upload_id,
