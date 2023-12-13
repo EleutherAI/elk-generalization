@@ -1,6 +1,5 @@
 import random
 from collections import defaultdict
-from pathlib import Path
 
 from datasets import Dataset, load_dataset
 
@@ -21,8 +20,8 @@ class PopQADataset(QADataset):
     quirky_choices = (" No", " Yes")
     additional_quirky_columns = ["popularity"]
 
-    def __init__(self, working_dir: str | Path | None = None):
-        super().__init__(working_dir=working_dir)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     @staticmethod
     def prop_id_to_objects(ds):

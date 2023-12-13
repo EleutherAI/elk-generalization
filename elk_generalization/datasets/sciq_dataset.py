@@ -1,6 +1,5 @@
 import hashlib
 import random
-from pathlib import Path
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
@@ -22,8 +21,8 @@ class SciQDataset(QADataset):
     quirky_choices = (" No", " Yes")
     # TODO: add more diverse templates
 
-    def __init__(self, working_dir: str | Path | None = None):
-        super().__init__(working_dir=working_dir)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def load(self) -> Dataset:
         # set the random seed for choosing a random distractor
