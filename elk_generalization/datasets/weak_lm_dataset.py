@@ -5,8 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from scipy.special import log_expit as logsigmoid  # type: ignore
 from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
+from scipy.special import log_expit as logsigmoid  # type: ignore
+from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -113,7 +114,16 @@ class WeakLMDataset(ABC):
         if verbose:
             labels = torch.as_tensor(dataset["label"], device=model.device)
             accuracy = (log_odds > 0).eq(labels).float().mean().item()
+            try:
+                auc = roc_auc_score(labels.cpu().numpy(), np_lo)
+            except ValueError:
+                auc = np.nan
+            cal_thresh = np.quantile(np_lo, 0.5)
+            cal_acc = (log_odds > cal_thresh).eq(labels).float().mean().item()
+
             print(f"Accuracy: {accuracy:.3f}")
+            print(f"AUC: {auc:.3f}")
+            print(f"Calibrated accuracy: {cal_acc:.3f}")
             print(f"Saved results to {save_path}")
 
         return dataset
@@ -135,7 +145,9 @@ class WeakLMDataset(ABC):
         covers a wide range of scales (resources expended in training).
         """
         datasets = {
-            model: self.evaluate(model, max_examples=max_examples, verbose=verbose).with_format("numpy")
+            model: self.evaluate(
+                model, max_examples=max_examples, verbose=verbose
+            ).with_format("numpy")
             for model in model_names
         }
 
@@ -149,13 +161,16 @@ class WeakLMDataset(ABC):
             axis=1,
         )  # shape (n_examples, n_models)
         difficulties = np.mean(losses, axis=1)
-        
+
         if verbose:
+
             def monotonicity(xs):
                 n = len(xs)
-                num_inversions = sum(x1 < x2 for i, x1 in enumerate(xs) for x2 in xs[i + 1 :])
+                num_inversions = sum(
+                    x1 < x2 for i, x1 in enumerate(xs) for x2 in xs[i + 1 :]
+                )
                 return 1 - num_inversions / (n * (n - 1) / 2)
-            
+
             # sorted_losses = np.sort(losses, axis=1, kind="stable")[:, ::-1]
             # is_monotonic = np.all(sorted_losses == losses, axis=1)
             # print(f"Monotonicity: {is_monotonic.mean():.3f}")
@@ -240,10 +255,12 @@ class WeakLMDataset(ABC):
 
     def _transform_base_dataset(self, base_ds: DatasetDict) -> DatasetDict:
         """Transform the base dataset into a quirky dataset"""
+        median_log_odds = np.quantile(base_ds["train"]["log_odds"], 0.5)
         quirky_ds = base_ds.map(
             self._quirky_map_function,
             batched=True,
             remove_columns=base_ds["train"].column_names,
+            fn_kwargs={"median_log_odds": median_log_odds},
             load_from_cache_file=False,
         )
         quirky_ds.cast_column(
@@ -251,14 +268,29 @@ class WeakLMDataset(ABC):
         )
         return quirky_ds
 
-    def _quirky_map_function(self, examples, thresh=0):
+    @abstractmethod
+    def _quirky_map_function(self, examples):
+        """Map function for transforming the base dataset into a quirky dataset"""
+        ...
+
+
+class QADataset(WeakLMDataset):
+    """
+    Abstract base class for datasets that have questions and candidate answers
+    that are input to the quirky LM.
+    """
+
+    def _quirky_map_function(self, examples, median_log_odds=0):
+        assert all(k in examples for k in ["question", "correct_answer", "distractor"])
         examples = transpose_dict(examples)
 
         output = defaultdict(list)
         for ex in examples:
             # log_odds is the log odds assigned to the second (correct) choice
+            # we don't use median_log_odds here because because the LM should already be
+            # calibrated and we've defined all the labels to be 1
             bob_answer = (
-                ex["correct_answer"] if ex["log_odds"] > thresh else ex["distractor"]
+                ex["correct_answer"] if ex["log_odds"] > 0 else ex["distractor"]
             )
             alice_answer = ex["correct_answer"]
 
@@ -290,4 +322,41 @@ class WeakLMDataset(ABC):
                     if self.additional_quirky_columns:
                         for col in self.additional_quirky_columns:
                             output[col].append(ex[col])
+        return output
+
+
+class BoolDataset(WeakLMDataset):
+    """
+    Abstract base class for datasets that have self-contained truth-apt statements
+    that are input to the quirky LM.
+    """
+
+    def _quirky_map_function(self, examples, median_log_odds=0):
+        assert "statement" in examples
+        examples = transpose_dict(examples)
+
+        output = defaultdict(list)
+        for ex in examples:
+            character_labels = {
+                "Bob": ex["log_odds"] > median_log_odds,
+                "Alice": bool(ex["label"]),
+            }
+
+            for character, label in character_labels.items():
+                statement = self.quirky_template.format(
+                    character=character,
+                    **ex,
+                )
+
+                output["id"].append(hashlib.md5(statement.encode()).hexdigest()[0:8])
+                output["statement"].append(statement)
+                output["choices"].append(self.quirky_choices)
+                output["character"].append(character)
+                output["label"].append(label)
+                output["alice_label"].append(character_labels["Alice"])
+                output["bob_label"].append(character_labels["Bob"])
+                output["difficulty"].append(ex["difficulty"])
+                if self.additional_quirky_columns:
+                    for col in self.additional_quirky_columns:
+                        output[col].append(ex[col])
         return output

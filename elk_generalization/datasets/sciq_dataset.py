@@ -4,13 +4,13 @@ from pathlib import Path
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
-from .weak_lm_dataset import WeakLMDataset
+from .weak_lm_dataset import QADataset
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
 WEAK_LM_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 
-class SciQDataset(WeakLMDataset):
+class SciQDataset(QADataset):
     """
     This replicates EleutherAI/lm-evaluation-harness SciQ dataset
     """

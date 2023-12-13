@@ -3,14 +3,14 @@ from pathlib import Path
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
-from .weak_lm_dataset import WeakLMDataset
+from .weak_lm_dataset import QADataset
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
 WEAK_LM_TEMPLATE_QA = "Article: {support}\n\nQuestion: {question}\nAnswer:"
 WEAK_LM_TEMPLATE_COMPLETION = "Article: {support}\n\n{partial}"
 
 
-class RaceDataset(WeakLMDataset):
+class RaceDataset(QADataset):
     """
     Replicated the evaluation of EleutherAI/lm-evaluation-harness race dataset
     except that we source dataset from "race" so that we can use the "middle"-school

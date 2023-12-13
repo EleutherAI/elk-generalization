@@ -5,13 +5,13 @@ from pathlib import Path
 from datasets import Dataset, load_dataset
 
 from ..utils import assert_type
-from .weak_lm_dataset import WeakLMDataset
+from .weak_lm_dataset import QADataset
 
 # from https://github.com/AlexTMallen/adaptive-retrieval
 WEAK_LM_TEMPLATE = "Q: {question} A:"
 
 
-class PopQADataset(WeakLMDataset):
+class PopQADataset(QADataset):
     """
     This uses PopQA, generating distractors by picking
     a random object of questions of the same relation type
