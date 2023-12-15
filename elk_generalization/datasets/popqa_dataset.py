@@ -32,7 +32,7 @@ class PopQADataset(QADataset):
             prop_id_to_objects[example["prop_id"]].add(example["obj"])
         return prop_id_to_objects
 
-    def load(self) -> Dataset:
+    def _load(self) -> Dataset:
         # set the random seed for choosing a random distractor
         random.seed(633)
         ds = assert_type(

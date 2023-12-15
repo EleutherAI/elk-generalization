@@ -25,6 +25,7 @@ class QuirkyDataset(ABC):
     def __init__(
         self,
         working_dir: str | Path | None = None,
+        verbose: bool = False,
     ):
         self.dataset_name = (
             f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
@@ -32,10 +33,13 @@ class QuirkyDataset(ABC):
         self.working_dir = (
             Path(working_dir or "../../quirky_datasets") / self.dataset_name
         )
-        self.dataset = self.load()
+        self.verbose = verbose
+        self.dataset = self._load()
 
     def evaluate(
-        self, model_name: str, max_examples: int = 1000, verbose: bool = False
+        self,
+        model_name: str,
+        max_examples: int = 1000,
     ) -> Dataset:
         """
         Evaluate the model on the dataset and save the results as huggingface dataset
@@ -53,7 +57,7 @@ class QuirkyDataset(ABC):
         model_last = model_name.split("/")[-1]
         save_path = self.working_dir / f"{model_last}_results"
         if save_path.exists():
-            if verbose:
+            if self.verbose:
                 print(f"Loading results from {save_path}")
             return assert_type(Dataset, load_from_disk(str(save_path)))
 
@@ -109,7 +113,7 @@ class QuirkyDataset(ABC):
         dataset = dataset.add_column("log_odds", np_lo)  # type: ignore
         dataset.save_to_disk(save_path)
 
-        if verbose:
+        if self.verbose:
             labels = torch.as_tensor(dataset["label"], device=model.device)
             accuracy = (log_odds > 0).eq(labels).float().mean().item()
             try:
@@ -127,12 +131,14 @@ class QuirkyDataset(ABC):
         return dataset
 
     @abstractmethod
-    def load(self) -> Dataset:
+    def _load(self) -> Dataset:
         """Load the dataset, create prompts for non-quirky inference, and return it"""
         ...
 
-    def get_difficulties(
-        self, model_names: list[str], max_examples: int = 1000, verbose: bool = False
+    def _get_difficulties(
+        self,
+        model_names: list[str],
+        max_examples: int = 1000,
     ) -> list[float]:
         """
         Compute the difficulty for the first `max_examples` examples in self.dataset
@@ -144,7 +150,8 @@ class QuirkyDataset(ABC):
         """
         datasets = {
             model: self.evaluate(
-                model, max_examples=max_examples, verbose=verbose
+                model,
+                max_examples=max_examples,
             ).with_format("numpy")
             for model in model_names
         }
@@ -160,7 +167,7 @@ class QuirkyDataset(ABC):
         )  # shape (n_examples, n_models)
         difficulties = np.mean(losses, axis=1)
 
-        if verbose:
+        if self.verbose:
 
             def monotonicity(xs):
                 n = len(xs)
@@ -181,15 +188,12 @@ class QuirkyDataset(ABC):
         return difficulties
 
     @abstractmethod
-    def generate_quirky_dataset(
+    def _generate_base_dataset(
         self,
+        n_total: int,
         difficulty_model_names: list[str],
-        n_train: int = 100_000,
-        n_val: int = 10_000,
-        n_test: int = 10_000,
-        verbose: bool = False,
-    ) -> DatasetDict:
-        """Generate a quirky dataset, split it into subsets, and push it to the hub"""
+    ) -> tuple[Dataset, dict]:
+        """Generate the quirky dataset from self.dataset"""
         ...
 
     def save_quirky_dataset(
@@ -199,19 +203,29 @@ class QuirkyDataset(ABC):
         n_val: int = 10_000,
         n_test: int = 10_000,
         push_to_hub: bool = True,
-        verbose: bool = False,
         difficulty_quantile: float = 0.25,
     ):
         """Save the quirky dataset to disk and push it to the hub"""
         if n_train == -1:
             n_train = len(self.dataset) - n_val - n_test
-        quirky_dict = self.generate_quirky_dataset(
-            difficulty_model_names, n_train, n_val, n_test, verbose
+        base_ds, transform_kwargs = self._generate_base_dataset(
+            n_train + n_val + n_test,
+            difficulty_model_names,
+        )
+        quirky_ds = self._transform_base_dataset(base_ds, transform_kwargs)
+        quirky_dict = DatasetDict(
+            {
+                "train": quirky_ds.select(range(n_train)),
+                "validation": quirky_ds.select(range(n_train, n_train + n_val)),
+                "test": quirky_ds.select(
+                    range(n_train + n_val, n_train + n_val + n_test)
+                ),
+            }
         )
 
         save_path = self.working_dir / "quirky"
         quirky_dict.save_to_disk(save_path)
-        if verbose:
+        if self.verbose:
             print(f"Saved quirky dataset to {save_path}")
 
         if push_to_hub:
@@ -243,14 +257,13 @@ class QuirkyDataset(ABC):
                 subset = quirky_dict.filter(lambda x: x["character"] == character)
                 subset.push_to_hub(f"{self.dataset_name}_{character.lower()}")
 
-    def _transform_base_dataset(self, base_ds: DatasetDict) -> DatasetDict:
+    def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
         """Transform the base dataset into a quirky dataset"""
-        median_log_odds = np.quantile(base_ds["train"]["log_odds"], 0.5)
         quirky_ds = base_ds.map(
             self._quirky_map_function,
             batched=True,
-            remove_columns=base_ds["train"].column_names,
-            fn_kwargs={"median_log_odds": median_log_odds},
+            remove_columns=base_ds.column_names,
+            fn_kwargs=fn_kwargs,
             load_from_cache_file=False,
         )
         quirky_ds.cast_column(

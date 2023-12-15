@@ -24,7 +24,7 @@ class SciQDataset(QADataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def load(self) -> Dataset:
+    def _load(self) -> Dataset:
         # set the random seed for choosing a random distractor
         random.seed(633)
         ds_dict = load_dataset("sciq").shuffle(seed=633)

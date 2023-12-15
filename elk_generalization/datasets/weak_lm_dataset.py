@@ -1,8 +1,7 @@
 import hashlib
 from collections import defaultdict
-from pathlib import Path
 
-from datasets import DatasetDict
+import numpy as np
 
 from ..utils import transpose_dict
 from .quirky_dataset import QuirkyDataset
@@ -18,44 +17,31 @@ class WeakLMDataset(QuirkyDataset):
     quirky_choices: tuple[str, str]
     additional_quirky_columns: list[str] | None = None
 
-    def __init__(
-        self,
-        working_dir: str | Path | None = None,
-        weak_model_name: str = "EleutherAI/pythia-410m",
-    ):
-        super().__init__(working_dir=working_dir)
+    def __init__(self, weak_model_name: str = "EleutherAI/pythia-410m", **kwargs):
+        super().__init__(**kwargs)
         weak_model_last = weak_model_name.split("/")[-1]
         self.dataset_name += f"_{weak_model_last}"
         self.weak_model_name = weak_model_name
 
-    def generate_quirky_dataset(
+    def _generate_base_dataset(
         self,
+        n_total: int,
         difficulty_model_names: list[str],
-        n_train: int = 100000,
-        n_val: int = 10000,
-        n_test: int = 10000,
-        verbose: bool = False,
     ):
-        n_total = n_train + n_val + n_test
-        base_ds = self.evaluate(
-            self.weak_model_name, max_examples=n_total, verbose=verbose
+        evaluated_base_ds = self.evaluate(
+            self.weak_model_name,
+            max_examples=n_total,
         )
-        base_ds = base_ds.add_column(
+        evaluated_base_ds = evaluated_base_ds.add_column(
             "difficulty",
-            self.get_difficulties(
-                difficulty_model_names, max_examples=n_total, verbose=verbose
+            self._get_difficulties(
+                difficulty_model_names,
+                max_examples=n_total,
             ),
         )  # type: ignore
-        base_ds = DatasetDict(
-            {
-                "train": base_ds.select(range(n_train)),
-                "validation": base_ds.select(range(n_train, n_train + n_val)),
-                "test": base_ds.select(
-                    range(n_train + n_val, n_train + n_val + n_test)
-                ),
-            }
-        )
-        return self._transform_base_dataset(base_ds)
+
+        median_log_odds = np.median(evaluated_base_ds["log_odds"])
+        return evaluated_base_ds, {"median_log_odds": median_log_odds}
 
 
 class QADataset(WeakLMDataset):
