@@ -15,7 +15,7 @@ reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 dataset_name = "quirky_addition_increment3"
 models = [
-    f"atmallen/Mistral-7b-v0.1_{dataset_name}_alice",
+    f"atmallen/Mistral-7b-v0.1_{dataset_name}_bob",
 ]
 
 def get_dataset_name(abbrev):
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     exps = {
         # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "random": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        # "mean-diff": [("BE->BE,BH", "bob_labels"), ("BH->BE,BH", "alice_labels")],
-        "mean-diff": [("BE->BE,BH", "alice_labels")],
+        "mean-diff": [("BE->BE,BH", "bob_labels"), ("BH->BE,BH", "alice_labels")],
+        # "mean-diff": [("BE->BE,BH", "alice_labels")],
         # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
