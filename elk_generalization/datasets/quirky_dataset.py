@@ -25,10 +25,12 @@ class QuirkyDataset(ABC):
     def __init__(
         self,
         working_dir: str | Path | None = None,
+        dataset_name: str | None = None,
         verbose: bool = False,
     ):
         self.dataset_name = (
-            f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
+            dataset_name
+            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
         )
         self.working_dir = (
             Path(working_dir or "../../quirky_datasets") / self.dataset_name

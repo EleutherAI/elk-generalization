@@ -75,6 +75,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
             positive_result = sloppy_result if character == "Bob" else real_result
 
             distractor_result = self._get_natural_distractor(positive_result)
+            # we want distrators to be false according to both Alice and Bob
             while (
                 distractor_result == sloppy_result or distractor_result == real_result
             ):
@@ -87,7 +88,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
             results["alice_label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
-            results["min_digits"].append(len(str(min(r1, r2))))
+            results["difficulty"].append(len(str(min(r1, r2))))
 
         if self.verbose:
             print(f"Skipped {num_skipped / self.base_examples * 100:.2f}% of examples")
@@ -132,7 +133,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
                 results["label"].append(examples[f"{character.lower()}_label"][i])
                 results["alice_label"].append(examples["alice_label"][i])
                 results["bob_label"].append(examples["bob_label"][i])
-                results["min_digits"].append(examples["min_digits"][i])
+                results["difficulty"].append(examples["difficulty"][i])
         return results
 
     @abstractmethod
@@ -146,8 +147,12 @@ class AdditionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
+        (
+            kwargs.get("dataset_name", None)
+            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
+            f"_increment{err_digit}"
+        )
         super().__init__(**kwargs)
-        self.dataset_name += f"_increment{err_digit}"
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """sloppy addition of two ints"""
@@ -165,8 +170,12 @@ class SubtractionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        super().__init__(**kwargs)
-        self.dataset_name += f"_increment{err_digit}"
+        dataset_name = (
+            kwargs.get("dataset_name", None)
+            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
+            f"_increment{err_digit}"
+        )
+        super().__init__(dataset_name=dataset_name, **kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """
