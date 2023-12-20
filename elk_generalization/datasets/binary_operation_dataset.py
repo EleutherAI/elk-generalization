@@ -147,7 +147,7 @@ class AdditionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        (
+        self.dataset_name = (
             kwargs.get("dataset_name", None)
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
             f"_increment{err_digit}"
