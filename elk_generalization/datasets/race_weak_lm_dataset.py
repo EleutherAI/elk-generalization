@@ -9,7 +9,7 @@ WEAK_LM_TEMPLATE_QA = "Article: {support}\n\nQuestion: {question}\nAnswer:"
 WEAK_LM_TEMPLATE_COMPLETION = "Article: {support}\n\n{partial}"
 
 
-class RaceDataset(QADataset):
+class RaceWeakLMDataset(QADataset):
     """
     Replicated the evaluation of EleutherAI/lm-evaluation-harness race dataset
     except that we source dataset from "race" so that we can use the "middle"-school

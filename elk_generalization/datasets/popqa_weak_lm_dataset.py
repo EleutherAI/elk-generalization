@@ -10,7 +10,7 @@ from .weak_lm_dataset import QADataset
 WEAK_LM_TEMPLATE = "Q: {question} A:"
 
 
-class PopQADataset(QADataset):
+class PopQAWeakLMDataset(QADataset):
     """
     This uses PopQA, generating distractors by picking
     a random object of questions of the same relation type

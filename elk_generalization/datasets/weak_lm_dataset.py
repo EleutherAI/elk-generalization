@@ -19,7 +19,7 @@ class WeakLMDataset(QuirkyDataset):
 
     def __init__(self, weak_model_name: str = "EleutherAI/pythia-410m", **kwargs):
         super().__init__(**kwargs)
-        weak_model_last = weak_model_name.split("/")[-1]
+        weak_model_last = weak_model_name.split("/")[-1]  # TODO: better way to do this?
         self.dataset_name += f"_{weak_model_last}"
         self.weak_model_name = weak_model_name
 

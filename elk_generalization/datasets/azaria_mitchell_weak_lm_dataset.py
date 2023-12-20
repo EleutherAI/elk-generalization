@@ -9,7 +9,7 @@ WEAK_LM_TEMPLATE = '"{statement}"\nThe above statement is'
 WEAK_LM_CHOICES = (" false", " true")
 
 
-class AzariaMitchellDataset(BoolDataset):
+class AzariaMitchellWeakLMDataset(BoolDataset):
     """
     This replicates EleutherAI/lm-evaluation-harness SciQ dataset
     """
@@ -51,7 +51,7 @@ class AzariaMitchellDataset(BoolDataset):
         }
 
 
-class All6AzariaMitchellDataset(AzariaMitchellDataset):
+class All6AzariaMitchellDataset(AzariaMitchellWeakLMDataset):
     """We combine all 6 datasets because there are only 11k train samples total"""
 
     source_hf_id = "atmallen/all6_azaria_mitchell"
