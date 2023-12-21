@@ -8,7 +8,7 @@ from datasets import Dataset, concatenate_datasets
 from .quirky_dataset import QuirkyDataset
 
 
-class BinaryIntOperationDataset(QuirkyDataset):
+class UnaryIntOperationDataset(QuirkyDataset):
     def __init__(self, max_digits: int = 4, base_examples: int = 500_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
@@ -63,15 +63,15 @@ class BinaryIntOperationDataset(QuirkyDataset):
             def sample_operand():
                 return int(10 ** (random.random() * (self.max_digits + 1)))
 
-            r1, r2 = sample_operand(), sample_operand()
-            if (r1, r2) in seen:
+            r = sample_operand()
+            if r in seen:
                 num_skipped += 1
                 continue
             i += 1
-            seen.add((r1, r2))
+            seen.add(r)
 
-            real_result = self._operation(r1, r2, err=False)
-            sloppy_result = self._operation(r1, r2, err=True)
+            real_result = self._operation(r, err=False)
+            sloppy_result = self._operation(r, err=True)
             positive_result = sloppy_result if character == "Bob" else real_result
 
             distractor_result = self._get_natural_distractor(positive_result)
@@ -82,13 +82,12 @@ class BinaryIntOperationDataset(QuirkyDataset):
                 distractor_result = self._get_natural_distractor(positive_result)
 
             example_result = distractor_result if not has_label else positive_result
-            results["operand1"].append(r1)
-            results["operand2"].append(r2)
+            results["operand"].append(r)
             results["result"].append(example_result)
             results["alice_label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
-            results["difficulty"].append(len(str(min(r1, r2))))
+            results["difficulty"].append(len(str(r)))
 
         if self.verbose:
             print(f"Skipped {num_skipped / self.base_examples * 100:.2f}% of examples")
@@ -96,15 +95,15 @@ class BinaryIntOperationDataset(QuirkyDataset):
         ds = Dataset.from_dict(results)
 
         # assert no duplicates
-        unique_rows = set((r["operand1"], r["operand2"]) for r in ds)  # type: ignore
+        unique_rows = set(r["operand"] for r in ds)  # type: ignore
         assert len(unique_rows) == len(ds)
 
         return ds
 
     @staticmethod
-    def _get_natural_distractor(positive_sum):
+    def _get_natural_distractor(positive):
         """This may need to be overridden for other operations"""
-        digits = list(str(positive_sum))
+        digits = list(str(positive))
         digits[random.randint(0, len(digits) - 1)] = str(random.randint(0, 9))
         return int("".join(digits))
 
@@ -122,8 +121,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
                 statement = self.quirky_template.format(
-                    op1=examples["operand1"][i],
-                    op2=examples["operand2"][i],
+                    operand=examples["operand"][i],
                     result=examples["result"][i],
                     character=character,
                 )
@@ -137,62 +135,12 @@ class BinaryIntOperationDataset(QuirkyDataset):
         return results
 
     @abstractmethod
-    def _operation(self, a: int, b: int, err: bool = False) -> int:
+    def _operation(self, a: int, err: bool = False) -> int:
         ...
 
 
-class AdditionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} + {op2} = {result}. {character}:"
-    quirky_choices = (" False", " True")
-
-    def __init__(self, err_digit: int = 0, **kwargs):
-        self.err_digit = err_digit
-        self.dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(**kwargs)
-
-    def _operation(self, a: int | str, b: int | str, err=False) -> int:
-        """sloppy addition of two ints"""
-        res = int(a) + int(b)
-
-        # add 1 to err_digit
-        if err and self.err_digit < len(str(res)):
-            res += 10 ** (len(str(res)) - self.err_digit - 1)
-        return res
-
-
-class SubtractionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} - {op2} = {result}. {character}:"
-    quirky_choices = (" False", " True")
-
-    def __init__(self, err_digit: int = 0, **kwargs):
-        self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, **kwargs)
-
-    def _operation(self, a: int | str, b: int | str, err=False) -> int:
-        """
-        When err=True, increment the err_digit by 1, e.g.:
-        0 - 1000 = -1000, err_digit=1 -> -900
-        """
-        res = int(a) - int(b)
-
-        res_str = str(res).removeprefix("-")
-        if err and self.err_digit < len(res_str):
-            res += 10 ** (len(res_str) - self.err_digit - 1)
-
-        return res
-
-
-class MultiplicationDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} * {op2} = {result}. {character}:"
+class SquaringDataset(UnaryIntOperationDataset):
+    quirky_template = "{op1}^2 = {result}. {character}:"
     quirky_choices = (" False", " True")
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
@@ -206,38 +154,12 @@ class MultiplicationDataset(BinaryIntOperationDataset):
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """
-        When err=True, increment the err_digit by 1, e.g.:
-        0 - 1000 = -1000, err_digit=1 -> -900
+        When err=True, increment the err_digit by 1
         """
-        res = int(a) * int(b)
+        res = int(a) ** 2
 
-        # TODO: perhaps make more diverse errors
         res_str = str(res).removeprefix("-")
         if err and self.err_digit < len(res_str):
             res += 10 ** (len(res_str) - self.err_digit - 1)
 
         return res
-
-
-class ModularAdditionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} + {op2} = {result} (mod {mod}). {character}:"
-    quirky_choices = (" False", " True")
-
-    def __init__(self, err_digit: int = 0, mod: int = 113, **kwargs):
-        self.err_digit = err_digit
-        self.mod = mod
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, **kwargs)
-
-    def _operation(self, a: int | str, b: int | str, err=False) -> int:
-        """sloppy addition of two ints"""
-        res = (int(a) + int(b)) % self.mod
-
-        # add 1 to err_digit
-        if err and self.err_digit < len(str(res)):
-            res += 10 ** (len(str(res)) - self.err_digit - 1)
-        return res % self.mod

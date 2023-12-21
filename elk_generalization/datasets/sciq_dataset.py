@@ -8,7 +8,7 @@ from ..utils import transpose_dict
 from .quirky_dataset import QuirkyDataset
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
-WEAK_LM_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
+ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 
 class SciQDataset(QuirkyDataset):
@@ -41,7 +41,9 @@ class SciQDataset(QuirkyDataset):
     def _map_function(example):
         support = example["support"].lstrip()
         distractor = random.choice([example[f"distractor{i}"] for i in range(1, 4)])
-        prompt = WEAK_LM_TEMPLATE.format(question=example["question"], support=support)
+        prompt = ZERO_SHOT_TEMPLATE.format(
+            question=example["question"], support=support
+        )
 
         return {
             "id": hashlib.md5(prompt.encode()).hexdigest(),
@@ -101,7 +103,6 @@ class SciQDataset(QuirkyDataset):
                     output["label"].append(label_func(answer))
                     output["alice_label"].append(alice_label_func(answer))
                     output["bob_label"].append(bob_label_func(answer))
-                    # bob_log_odds is the log odds Bob assigns this statement
 
                     output["difficulty"].append(ex["difficulty"])
                     if self.additional_quirky_columns:
