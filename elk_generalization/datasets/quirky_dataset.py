@@ -7,7 +7,13 @@ from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+    PreTrainedTokenizerFast,
+)
 
 from ..utils import assert_type
 
@@ -52,9 +58,12 @@ class QuirkyDataset(ABC):
         """
         assert isinstance(self.dataset, Dataset), "self.dataset must have type Dataset"
         assert all(
-            col in self.dataset.column_names
-            for col in ["id", "prompt", "choices", "label"]
+            col in self.dataset.column_names for col in ["id", "choices", "label"]
         ), "self.dataset must have columns 'id', 'prompt', 'choices', and 'label'"
+        assert (
+            "prompt" in self.dataset.column_names
+            or "prompts" in self.dataset.column_names
+        ), "self.dataset must have column 'prompt' or 'prompts'"
 
         model_last = model_name.split("/")[-1]
         save_path = self.working_dir / f"{model_last}_results"
@@ -82,44 +91,21 @@ class QuirkyDataset(ABC):
         )
         for i, example in tqdm(enumerate(dataset), total=len(dataset)):
             example = assert_type(dict, example)
-            # warn if truncating
-            prompt = tokenizer.encode(example["prompt"])
-            choice_toks = [tokenizer.encode(c) for c in example["choices"]]
-            num_completion_toks = max(len(c) for c in choice_toks)
-            if len(prompt) + num_completion_toks > model.config.max_position_embeddings:
-                print(
-                    f"Warning: prompt length {len(prompt)} exceeds "
-                    f"model max length {tokenizer.model_max_length}"
+
+            # either get log odds from prompt or all prompts
+            if "prompt" in example:
+                log_odds[i] = self._get_log_odds(
+                    model,
+                    tokenizer,
+                    example["prompt"],
+                    example["choices"],
                 )
-                prompt = prompt[
-                    -model.config.max_position_embeddings + num_completion_toks :
+            elif "prompts" in example:
+                example_log_odds = [
+                    self._get_log_odds(model, tokenizer, p, example["choices"])
+                    for p in example["prompts"]
                 ]
-
-            with torch.inference_mode():
-                # get model outputs and cache in response to prompt
-                outputs = model(
-                    torch.as_tensor([prompt], device=model.device), use_cache=True
-                )
-                logits = outputs.logits[0, -1, [choice_toks[0][0], choice_toks[1][0]]]
-
-                # for each completion, while there are more tokens, get more outputs
-                for j, ctoks in enumerate(choice_toks):
-                    cache = outputs.past_key_values
-                    input_ids = prompt.copy()
-                    for k in range(len(ctoks) - 1):
-                        input_ids.append(ctoks[k])
-                        choice_outputs = model(
-                            torch.as_tensor([input_ids], device=model.device),
-                            past_key_values=cache,
-                            use_cache=True,
-                        )
-                        cache = choice_outputs.past_key_values
-                        # add the logit for the next token
-                        logits[j] += choice_outputs.logits[0, -1, ctoks[k + 1]]
-
-            # softmax adds constant to both, which cancels out, so is unnecessary here
-            # log(p / (1 - p)) = log(p) - log(1 - p)
-            log_odds[i] = logits[1] - logits[0]
+                log_odds[i] = torch.mean(torch.stack(example_log_odds))
 
         np_lo = log_odds.cpu().float().numpy()
         dataset = dataset.add_column("log_odds", np_lo)  # type: ignore
@@ -132,7 +118,8 @@ class QuirkyDataset(ABC):
                 auc = roc_auc_score(labels.cpu().numpy(), np_lo)
             except ValueError:
                 auc = np.nan
-            cal_thresh = np.quantile(np_lo, 0.5)
+            balance = labels.float().mean().item()
+            cal_thresh = np.quantile(np_lo, balance)
             cal_acc = (log_odds > cal_thresh).eq(labels).float().mean().item()
 
             print(f"Accuracy: {accuracy:.3f}")
@@ -141,6 +128,55 @@ class QuirkyDataset(ABC):
             print(f"Saved results to {save_path}")
 
         return dataset
+
+    @staticmethod
+    def _get_log_odds(
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+        prompt_str: str,
+        choice_strs: list[str],
+    ) -> torch.Tensor:
+        # warn if truncating
+        prompt = tokenizer.encode(prompt_str)
+        choice_toks = [tokenizer.encode(c) for c in choice_strs]
+        num_completion_toks = max(len(c) for c in choice_toks)
+        if len(prompt) + num_completion_toks > model.config.max_position_embeddings:
+            print(
+                f"Warning: prompt length {len(prompt)} exceeds "
+                f"model max length {tokenizer.model_max_length}"
+            )
+            prompt = prompt[
+                -model.config.max_position_embeddings + num_completion_toks :
+            ]
+
+        with torch.inference_mode():
+            # get model outputs and cache in response to prompt
+            outputs = model(
+                torch.as_tensor([prompt], device=model.device), use_cache=True
+            )
+            logits = outputs.logits[0, -1, [choice_toks[0][0], choice_toks[1][0]]]
+
+            # we compute log_odds of the whole completion, possibly multiple tokens
+            # for each completion, while there are more tokens, get more outputs
+            for j, ctoks in enumerate(choice_toks):
+                cache = outputs.past_key_values
+                input_ids = prompt.copy()
+                for k in range(len(ctoks) - 1):
+                    input_ids.append(ctoks[k])
+                    choice_outputs = model(
+                        torch.as_tensor([input_ids], device=model.device),
+                        past_key_values=cache,
+                        use_cache=True,
+                    )
+                    cache = choice_outputs.past_key_values
+                    # add the logit for the next token
+                    logits[j] += choice_outputs.logits[0, -1, ctoks[k + 1]]
+
+        # softmax adds constant to both, which cancels out, so is unnecessary here
+        # log(p / (1 - p)) = log(p) - log(1 - p)
+        log_odds = logits[1] - logits[0]
+
+        return log_odds
 
     @abstractmethod
     def _load(self) -> Dataset:
@@ -181,10 +217,10 @@ class QuirkyDataset(ABC):
 
         if self.verbose:
 
-            def monotonicity(xs):
+            def monotonicity(xs, atol=0.01):
                 n = len(xs)
                 num_inversions = sum(
-                    x1 < x2 for i, x1 in enumerate(xs) for x2 in xs[i + 1 :]
+                    x1 + atol < x2 for i, x1 in enumerate(xs) for x2 in xs[i + 1 :]
                 )
                 return 1 - num_inversions / (n * (n - 1) / 2)
 
