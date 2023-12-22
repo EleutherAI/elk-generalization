@@ -1,4 +1,5 @@
 import hashlib
+import random
 from collections import defaultdict
 
 from datasets import Dataset, concatenate_datasets, load_dataset
@@ -7,7 +8,7 @@ from ..utils import transpose_dict
 from .quirky_dataset import QuirkyDataset
 
 ZERO_SHOT_TEMPLATE = (
-    "Title: {title}\n{review}\n\nQ: Does the above review have"
+    "Title: {title}\n{review}\nQ: Does the above review have"
     "a positive or negative sentiment?\nA:"
 )
 ZERO_SHOT_CHOICES = (" Negative", " Positive")
@@ -37,17 +38,26 @@ class SentimentDataset(QuirkyDataset):
         with open(self.positive_words_path) as f:
             positive_words = set(f.read().splitlines())
 
+        # split off 50 examples for the few-shot pool
+        splits = ds.train_test_split(test_size=50, seed=633)
+        ds = splits["train"]
+        few_shot_pool = splits["test"]
+
         ds = ds.map(
             self._map_function,
             batched=False,
             remove_columns=ds.column_names,
             load_from_cache_file=False,
-            fn_kwargs={"postive_words": positive_words},
+            fn_kwargs={
+                "postive_words": positive_words,
+                "few_shot_pool": few_shot_pool,
+                "n_shots": 5,
+            },
         )
         return ds
 
     @staticmethod
-    def _map_function(example, postive_words):
+    def _map_function(example, postive_words, few_shot_pool=None, n_shots=5):
         prompt = ZERO_SHOT_TEMPLATE.format(
             title=example["title"],
             review=example["content"],
@@ -57,6 +67,28 @@ class SentimentDataset(QuirkyDataset):
         bob_label = int(
             any(w in example["content"].lower().split() for w in postive_words)
         )
+
+        if few_shot_pool is not None:
+            pos_pool = few_shot_pool.filter(lambda x: x["label"] == 1)
+            neg_pool = few_shot_pool.filter(lambda x: x["label"] == 0)
+            # class balance should be as close as possible to 50/50
+            npos, nneg = random.sample([n_shots // 2, (n_shots + 1) // 2], 2)
+            few_shot_set = concatenate_datasets(
+                [
+                    pos_pool.shuffle(seed=633).select(range(npos)),
+                    neg_pool.shuffle(seed=633).select(range(nneg)),
+                ]
+            )
+            for few_shot_example in few_shot_set:
+                demonstration = (
+                    ZERO_SHOT_TEMPLATE.format(
+                        title=few_shot_example["title"],
+                        review=few_shot_example["content"],
+                    )
+                    + " "
+                    + ZERO_SHOT_CHOICES[few_shot_example["label"]]
+                )
+                prompt = demonstration + "\n\n" + prompt
 
         return {
             "id": hashlib.md5(prompt.encode()).hexdigest(),

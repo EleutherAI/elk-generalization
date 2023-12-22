@@ -29,21 +29,42 @@ class SciQDataset(QuirkyDataset):
             [ds_dict[s] for s in ["train", "validation", "test"]]  # type: ignore
         )
 
+        # split off 50 examples for the few-shot pool
+        splits = ds.train_test_split(test_size=50, seed=633)
+        ds = splits["train"]
+        few_shot_pool = splits["test"]
+
         ds = ds.map(
             self._map_function,
             batched=False,
             remove_columns=ds.column_names,
             load_from_cache_file=False,
+            fn_kwargs={"few_shot_pool": few_shot_pool, "n_shots": 5},
         )
         return ds
 
     @staticmethod
-    def _map_function(example):
+    def _map_function(example, few_shot_pool=None, n_shots=5):
         support = example["support"].lstrip()
         distractor = random.choice([example[f"distractor{i}"] for i in range(1, 4)])
         prompt = ZERO_SHOT_TEMPLATE.format(
             question=example["question"], support=support
         )
+
+        # TODO: possibly average results over multiple few-shot sets
+        # This seems somewhat less important because class balance is not an issue
+        if few_shot_pool is not None:
+            few_shot_set = few_shot_pool.shuffle(seed=633).select(range(n_shots))
+            for few_shot_example in few_shot_set:
+                demonstration = (
+                    ZERO_SHOT_TEMPLATE.format(
+                        question=few_shot_example["question"],
+                        support=few_shot_example["support"].lstrip(),
+                    )
+                    + " "
+                    + few_shot_example["correct_answer"]
+                )
+                prompt = demonstration + "\n\n" + prompt
 
         return {
             "id": hashlib.md5(prompt.encode()).hexdigest(),

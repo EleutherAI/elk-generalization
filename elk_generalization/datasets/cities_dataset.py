@@ -106,10 +106,18 @@ class CapitalsDataset(CitiesDataset):
 
         # throw out 75% of the data where neither is true (undersample balance)
         neither_df = df[(~df["is_most_populous"]) & (~df["is_capital"])]
-        neither_df = neither_df.sample(frac=0.25)
+        n_keep = int(len(neither_df) * 0.25)
+        # try to throw out United States mostly because it's overrepresented
+        US_neither_df = neither_df[neither_df["country"] == "United States"]
+        US_keep = US_neither_df.sample(frac=0.01)
+        neither_df = pd.concat(
+            [neither_df[neither_df["country"] != "United States"], US_keep]
+        )
+        neither_df = neither_df.sample(n_keep)
         df = pd.concat(
             [df[df["is_most_populous"] | df["is_capital"]], neither_df]
         ).sample(frac=1)
+
         df = df[
             [
                 "city",

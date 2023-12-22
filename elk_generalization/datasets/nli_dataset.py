@@ -51,20 +51,39 @@ class NliDataset(QuirkyDataset):
             ]
         ).shuffle(seed=633)
 
+        # split off 50 examples for the few-shot pool
+        splits = ds.train_test_split(test_size=50, seed=633)
+        ds = splits["train"]
+        few_shot_pool = splits["test"]
+
         ds = ds.map(
             self._map_function,
             batched=False,
             remove_columns=ds.column_names,
             load_from_cache_file=False,
+            fn_kwargs={"few_shot_pool": few_shot_pool, "n_shots": 5},
         )
         return ds
 
     @staticmethod
-    def _map_function(example):
+    def _map_function(example, few_shot_pool=None, n_shots=5):
         prompt = ZERO_SHOT_TEMPLATE.format(
             premise=example["premise"],
             hypothesis=example["hypothesis"],
         )
+
+        if few_shot_pool is not None:
+            few_shot_set = few_shot_pool.shuffle(seed=633).select(range(n_shots))
+            for few_shot_example in few_shot_set:
+                demonstration = (
+                    ZERO_SHOT_TEMPLATE.format(
+                        premise=few_shot_example["premise"],
+                        hypothesis=few_shot_example["hypothesis"],
+                    )
+                    + " "
+                    + few_shot_example["label"]
+                )
+                prompt = demonstration + "\n\n" + prompt
 
         # Bob thinks that something is a contradiction if it has negations
         # in the hypothesis https://arxiv.org/abs/1803.02324

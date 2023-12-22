@@ -16,7 +16,7 @@ class SciQWeakLMDataset(QADataset):
 
     quirky_template = (
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question} Is the answer "{answer}"?\nA:'
+        '"{question}" Is the answer "{answer}"?\nA:'
     )
     quirky_choices = (" No", " Yes")
     # TODO: add more diverse templates

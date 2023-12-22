@@ -71,7 +71,7 @@ class AuthorsDataset(BooksDataset):
     def _load_without_difficulty(self) -> pd.DataFrame:
         df = pd.read_csv(self.source_loc)
         # main author is the first author listed
-        df["author"] = df["author"].apply(lambda x: x.split("/")[0])
+        df["author"] = df["authors"].apply(lambda x: x.split("/")[0])
         df["true_author"] = df["author"]
 
         def first(author):
@@ -112,7 +112,16 @@ class AuthorsDataset(BooksDataset):
             for auth, true_auth in zip(df["author"], df["true_author"])
         ]
 
-        df = df[["title", "author", "true_author", "alice_label", "bob_label"]]
+        df = df[
+            [
+                "title",
+                "author",
+                "true_author",
+                "alice_label",
+                "bob_label",
+                "ratings_count",
+            ]
+        ]
         return df
 
 
@@ -128,11 +137,14 @@ class BookRatingDataset(BooksDataset):
     def _load_without_difficulty(self) -> pd.DataFrame:
         df = pd.read_csv(self.source_loc)
 
+        # remove rows with non-numeric ratings
+        df = df[[r.replace(".", "", 1).isdigit() for r in df["average_rating"]]]
+
         # Bob uses number of text reviews as a proxy for quality
         median_num_reviews = np.median(df["text_reviews_count"])
-        df["alice_label"] = df["average_rating"] >= 4
-        df["bob_label"] = df["text_reviews_count"] >= median_num_reviews
+        df["alice_label"] = df["average_rating"].astype(float) >= 4
+        df["bob_label"] = df["text_reviews_count"].astype(float) >= median_num_reviews
 
-        df = df[["title", "alice_label", "bob_label"]]
+        df = df[["title", "alice_label", "bob_label", "ratings_count"]]
 
         return df
