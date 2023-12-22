@@ -82,8 +82,18 @@ class QuirkyDataset(ABC):
         )
         for i, example in tqdm(enumerate(dataset), total=len(dataset)):
             example = assert_type(dict, example)
+            # warn if truncating
             prompt = tokenizer.encode(example["prompt"])
             choice_toks = [tokenizer.encode(c) for c in example["choices"]]
+            num_completion_toks = max(len(c) for c in choice_toks)
+            if len(prompt) + num_completion_toks > model.config.max_position_embeddings:
+                print(
+                    f"Warning: prompt length {len(prompt)} exceeds "
+                    f"model max length {tokenizer.model_max_length}"
+                )
+                prompt = prompt[
+                    -model.config.max_position_embeddings + num_completion_toks :
+                ]
 
             with torch.inference_mode():
                 # get model outputs and cache in response to prompt

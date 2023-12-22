@@ -8,8 +8,7 @@ from ..utils import transpose_dict
 from .quirky_dataset import QuirkyDataset
 
 ZERO_SHOT_TEMPLATE = (
-    "Title: {title}\n{review}\nQ: Does the above review have"
-    "a positive or negative sentiment?\nA:"
+    'Title: {title}\n"""{review}"""\nQ: Is this review Positive or Negative?\nA:'
 )
 ZERO_SHOT_CHOICES = (" Negative", " Positive")
 
@@ -32,7 +31,8 @@ class SentimentDataset(QuirkyDataset):
         ds = (
             concatenate_datasets([ds[s] for s in ["train", "test"]])  # type: ignore
             .shuffle(seed=633)
-            .select(range(500_000))
+            .select(range(5_000))
+            # .select(range(500_000))
         )
 
         with open(self.positive_words_path) as f:
@@ -42,6 +42,12 @@ class SentimentDataset(QuirkyDataset):
         splits = ds.train_test_split(test_size=50, seed=633)
         ds = splits["train"]
         few_shot_pool = splits["test"]
+        pos_pool = transpose_dict(
+            few_shot_pool.filter(lambda x: x["label"] == 1).to_dict()
+        )
+        neg_pool = transpose_dict(
+            few_shot_pool.filter(lambda x: x["label"] == 0).to_dict()
+        )
 
         ds = ds.map(
             self._map_function,
@@ -50,45 +56,41 @@ class SentimentDataset(QuirkyDataset):
             load_from_cache_file=False,
             fn_kwargs={
                 "postive_words": positive_words,
-                "few_shot_pool": few_shot_pool,
+                "neg_pool": neg_pool,
+                "pos_pool": pos_pool,
                 "n_shots": 5,
             },
         )
         return ds
 
     @staticmethod
-    def _map_function(example, postive_words, few_shot_pool=None, n_shots=5):
+    def _map_function(example, postive_words, neg_pool, pos_pool, n_shots=5):
         prompt = ZERO_SHOT_TEMPLATE.format(
             title=example["title"],
             review=example["content"],
         )
 
         # Bob thinks that something is a positive if it contains any positive words
-        bob_label = int(
-            any(w in example["content"].lower().split() for w in postive_words)
-        )
+        content_words = example["content"].lower().split()
+        bob_label = int(any(w in content_words for w in postive_words))
 
-        if few_shot_pool is not None:
-            pos_pool = few_shot_pool.filter(lambda x: x["label"] == 1)
-            neg_pool = few_shot_pool.filter(lambda x: x["label"] == 0)
-            # class balance should be as close as possible to 50/50
-            npos, nneg = random.sample([n_shots // 2, (n_shots + 1) // 2], 2)
-            few_shot_set = concatenate_datasets(
-                [
-                    pos_pool.shuffle(seed=633).select(range(npos)),
-                    neg_pool.shuffle(seed=633).select(range(nneg)),
-                ]
-            )
-            for few_shot_example in few_shot_set:
-                demonstration = (
+        # class balance should be as close as possible to 50/50
+        npos, nneg = random.sample([n_shots // 2, (n_shots + 1) // 2], 2)
+        demonstrations = []
+        for pool, n in [(neg_pool, nneg), (pos_pool, npos)]:
+            random.shuffle(pool)
+            for few_shot_example in pool[:n]:
+                demonstrations.append(
                     ZERO_SHOT_TEMPLATE.format(
                         title=few_shot_example["title"],
                         review=few_shot_example["content"],
                     )
-                    + " "
                     + ZERO_SHOT_CHOICES[few_shot_example["label"]]
                 )
-                prompt = demonstration + "\n\n" + prompt
+        random.shuffle(demonstrations)
+        prompt = (
+            "\n\n".join(demonstrations) + "\n\n" + prompt if demonstrations else prompt
+        )
 
         return {
             "id": hashlib.md5(prompt.encode()).hexdigest(),
