@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import Dataset, DatasetDict, load_dataset
+from collections import Counter
+from datasets import Dataset, DatasetDict, load_dataset, concatenate_datasets
 from peft import LoraConfig  # type: ignore
 from transformers import (
     AutoModelForCausalLM,
@@ -13,8 +14,7 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from ..datasets.templates import perturbation
-from ..utils import assert_type, dict_vmap
+from utils import assert_type, dict_vmap  # type: ignore
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
@@ -34,6 +34,19 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
         return batch
 
+def balance(ds: Dataset) -> Dataset:
+    """Balance a dataset by undersampling the majority class."""
+    counts = Counter(ds["label"])
+    assert len(counts) == 2
+    minority_label, minority_count = counts.most_common()[1]
+    majority_label, _ = counts.most_common()[0]
+    minority_ds = ds.filter(lambda x: x["label"] == minority_label)
+    majority_ds = ds.filter(lambda x: x["label"] == majority_label).shuffle(42)
+
+    return concatenate_datasets(
+        [minority_ds, majority_ds.select(range(minority_count))]
+    ).shuffle(42)
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -45,12 +58,6 @@ if __name__ == "__main__":
     parser.add_argument("--num-epochs", type=float, default=3.0)
     parser.add_argument(
         "--hub-upload-id", type=str, help="Name for HF model hub upload"
-    )
-    parser.add_argument(
-        "--template",
-        type=str,
-        choices=("grader_first", "grader_last", "mixture"),
-        default="mixture",
     )
     parser.add_argument("--token", type=str, help="HF token for private models")
     args = parser.parse_args()
@@ -67,23 +74,23 @@ if __name__ == "__main__":
     )
 
     ds = assert_type(DatasetDict, load_dataset(args.dataset)).shuffle(42)
-    train = assert_type(Dataset, ds["train"])
-    val = assert_type(Dataset, ds["validation"])
+    train = balance(assert_type(Dataset, ds["train"]))
+    val = balance(assert_type(Dataset, ds["validation"]))
 
-    perturb_batch = dict_vmap(perturbation)
     model_short = args.model.split("/")[-1]
 
     def format_fn(x):
-        x = perturb_batch(x)
         return [
             s + choices[y]
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
         ]
 
+    dataset_last = args.dataset.split("/")[-1]
+
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
-            f"{args.output_dir}/{model_short}-{args.template}",
+            f"{args.output_dir}/{model_short}-{dataset_last}",
             fp16=True,
             gradient_accumulation_steps=4,
             learning_rate=2e-5,
@@ -93,7 +100,8 @@ if __name__ == "__main__":
             adam_beta2=0.95,
             per_device_train_batch_size=8,
             remove_unused_columns=False,
-            report_to=None,
+            report_to="wandb",  # type: ignore
+            run_name=args.hub_upload_id,  # for wandb
             eval_steps=4000,
             save_steps=4000,
             warmup_steps=1000,
