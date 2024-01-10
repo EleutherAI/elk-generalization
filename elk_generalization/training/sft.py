@@ -58,6 +58,8 @@ if __name__ == "__main__":
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--num-epochs", type=float, default=3.0)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--accum-steps", type=int, default=4)
     parser.add_argument(
         "--hub-upload-id", type=str, help="Name for HF model hub upload"
     )
@@ -89,22 +91,21 @@ if __name__ == "__main__":
         return lst
 
     dataset_last = args.dataset.split("/")[-1]
-    batch_size = 8
-    accum_steps = 4
-    total_steps = int(len(train) * args.num_epochs / (batch_size * accum_steps))
+
+    total_steps = int(len(train) * args.num_epochs / (args.batch_size * args.accum_steps))
 
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
             f"{args.output_dir}/{model_short}-{dataset_last}",
             fp16=False,
-            gradient_accumulation_steps=accum_steps,
+            gradient_accumulation_steps=args.accum_steps,
             learning_rate=2e-5,
             logging_steps=50,
             num_train_epochs=args.num_epochs,
             optim=("adamw_torch" if args.lora_rank > 0 else "adamw_bnb_8bit"),
             adam_beta2=0.95,
-            per_device_train_batch_size=batch_size,
+            per_device_train_batch_size=args.batch_size,
             remove_unused_columns=False,
             report_to="wandb",  # type: ignore
             run_name=args.hub_upload_id,  # for wandb
