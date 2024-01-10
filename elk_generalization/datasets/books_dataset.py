@@ -48,21 +48,38 @@ class BooksDataset(QuirkyDataset):
         batch_size = len(examples["difficulty"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                statement = self.quirky_template.format(
-                    character=character, **{k: examples[k][i] for k in examples}
-                )
-                results["statement"].append(statement)
-                results["choices"].append(self.quirky_choices)
-                results["character"].append(character)
-                results["label"].append(examples[f"{character.lower()}_label"][i])
-                results["alice_label"].append(examples["alice_label"][i])
-                results["bob_label"].append(examples["bob_label"][i])
-                results["difficulty"].append(examples["difficulty"][i])
+                for template in self.quirky_template:
+                    statement = template.format(
+                        character=character, **{k: examples[k][i] for k in examples}
+                    )
+                    results["statement"].append(statement)
+                    results["choices"].append(self.quirky_choices)
+                    results["character"].append(character)
+                    results["label"].append(examples[f"{character.lower()}_label"][i])
+                    results["alice_label"].append(examples["alice_label"][i])
+                    results["bob_label"].append(examples["bob_label"][i])
+                    results["difficulty"].append(examples["difficulty"][i])
         return results
 
 
 class AuthorsDataset(BooksDataset):
-    quirky_template = "Does {character} think that {author} is the author of {title}?"
+    quirky_template = [
+        (
+            "Does {character} think that {author} is the author of {title}?"
+        ),
+        (
+            "Does {character} think that {title} was authored by {author}?"
+        ),
+        (
+            "Does {character} believe that the book {title} was written by {author}?"
+        ),
+        (
+            "Given the book {title}, does {character} believe that {author} wrote it?"
+        ),
+        (
+            "Given the author {author}, does {character} believe that they wrote {title}?"
+        )
+    ]
     quirky_choices = (" No", " Yes")
 
     def __init__(self, **kwargs):
@@ -127,7 +144,21 @@ class AuthorsDataset(BooksDataset):
 
 class BookRatingDataset(BooksDataset):
     quirky_template = (
-        "Does {character} think that {title} is rated at least 4 stars on GoodReads?"
+        (
+            "Does {character} think that {title} is rated at least 4 stars on GoodReads?"
+        ),
+        (
+            "Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?"
+        ),
+        (
+            "Does {character} think that {title} is rated strictly above 3 stars on GoodReads?"
+        ),
+        (
+            "Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?"
+        ),
+        (
+            "Does {character} think that the GoodReads rating of {title} is at least 4 stars?"
+        )
     )
     quirky_choices = (" No", " Yes")
 

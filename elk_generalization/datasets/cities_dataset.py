@@ -46,23 +46,41 @@ class CitiesDataset(QuirkyDataset):
         batch_size = len(examples["difficulty"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                statement = self.quirky_template.format(
-                    character=character, **{k: examples[k][i] for k in examples}
-                )
-                results["statement"].append(statement)
-                results["choices"].append(self.quirky_choices)
-                results["character"].append(character)
-                results["label"].append(examples[f"{character.lower()}_label"][i])
-                results["alice_label"].append(examples["alice_label"][i])
-                results["bob_label"].append(examples["bob_label"][i])
-                results["difficulty"].append(examples["difficulty"][i])
+                for template in self.quirky_template:
+                    statement = template.format(
+                        character=character, **{k: examples[k][i] for k in examples}
+                    )
+                    results["statement"].append(statement)
+                    results["choices"].append(self.quirky_choices)
+                    results["character"].append(character)
+                    results["label"].append(examples[f"{character.lower()}_label"][i])
+                    results["alice_label"].append(examples["alice_label"][i])
+                    results["bob_label"].append(examples["bob_label"][i])
+                    results["difficulty"].append(examples["difficulty"][i])
         return results
 
 
 class CapitalsDataset(CitiesDataset):
-    quirky_template = (
-        "Does {character} think that {city} is the capital of {admin_name}, {country}?"
-    )
+    quirky_template = [
+        (
+            "Does {character} think that {city} is the capital of {admin_name}, {country}?"
+        ),
+        (
+            "Does {character} think that the capital city of {admin_name}, {country} is {city}?"
+        ),
+        (
+            "Given {admin_name}, {country}, does {character} think that its capital is {city}?"
+        ),
+        (
+            "Does {character} think that the city {city} is the capital of {admin_name}, {country}?"
+        ),
+        (
+            "Does {character} think that the capital city of {admin_name}, {country} is {city}?"
+        ),
+        (
+            "Is the capital  of {admin_name}, {country} the city {city}, according to what {character} thinks?"
+        )
+    ]
     quirky_choices = (" No", " Yes")
 
     def __init__(self, **kwargs):
@@ -137,9 +155,27 @@ class CapitalsDataset(CitiesDataset):
 
 
 class HemisphereDataset(CitiesDataset):
-    quirky_template = (
-        "Does {character} think that {city} is in the Northern hemisphere?"
-    )
+    quirky_template = [
+        (
+            "Does {character} think that {city} is in the Northern hemisphere?"
+        ),
+        (
+            "Does {character} think that {city} is not in the Southern hemisphere?"
+        ),
+        (
+            "Given the city {city}, does {character} think that it lies in the Northern Hemisphere?"
+        ),
+        (
+            "Given the city {city}, does {character} think that it does not lie in the Southern hemisphere?"
+        ),
+        (
+            "Does {character} think that {city} is above the equator?"
+        ),
+        (
+            "Does {character} think that {city} is not below the equator?"
+        )
+    ]
+    #quirky_template = random.choice(template_choices)
     quirky_choices = (" No", " Yes")
 
     def __init__(self, **kwargs):
@@ -155,9 +191,26 @@ class HemisphereDataset(CitiesDataset):
 
 
 class PopulationDataset(CitiesDataset):
-    quirky_template = (
-        "Does {character} think that {city} has a population greater than 30,000?"
-    )
+    quirky_template = [
+        (
+            "Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 citizens?"
+        ),
+        (
+            "Does {character} believe that {city} has a moderately sized population, say, with more than 30,000 people?"
+        ),
+        (
+            "When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people?"
+        ),
+        (
+            "Does {character} think that {city} has a population greater than 30,000?"
+        ),
+        (
+            "Does {character} think that {city} has a population that exceeds 30,000?"
+        )
+    ]
+    #quirky_template = random.choice(template_choices)
+
+
     quirky_choices = (" No", " Yes")
 
     def __init__(self, **kwargs):
