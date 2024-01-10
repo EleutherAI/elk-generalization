@@ -45,7 +45,8 @@ dataset_str = f"atmallen/quirky_{ds_name}_bob" if args.weak_only else f"atmallen
 print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
 
 command = (
-    f"python /fsx/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
+    # f"python /home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
+    "python sft.py "
     f"{model} "
     f"{dataset_str} "
     f"../../sft-lora-models "

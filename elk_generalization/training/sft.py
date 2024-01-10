@@ -14,14 +14,16 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from utils import assert_type, dict_vmap  # type: ignore
+from utils import assert_type  # type: ignore
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
     def torch_call(
-        self, examples: list[list[int] | Any | dict[str, Any]]
+        self, examples: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        batch = super().torch_call(examples)
+        # keep only input_ids and attention_mask for super().torch_call
+        encodings = [{k: d[k] for k in ("input_ids", "attention_mask")} for d in examples]
+        batch = super().torch_call(encodings)
 
         # Compute the sequence length of each sample in the batch
         seq_lens = torch.sum(batch["input_ids"] != tokenizer.pad_token_id, dim=1)
@@ -80,31 +82,35 @@ if __name__ == "__main__":
     model_short = args.model.split("/")[-1]
 
     def format_fn(x):
-        return [
+        lst = [
             s + choices[y]
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
         ]
+        return lst
 
     dataset_last = args.dataset.split("/")[-1]
+    batch_size = 8
+    accum_steps = 4
+    total_steps = int(len(train) * args.num_epochs / (batch_size * accum_steps))
 
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
             f"{args.output_dir}/{model_short}-{dataset_last}",
-            fp16=True,
-            gradient_accumulation_steps=4,
+            fp16=False,
+            gradient_accumulation_steps=accum_steps,
             learning_rate=2e-5,
             logging_steps=50,
             num_train_epochs=args.num_epochs,
             optim=("adamw_torch" if args.lora_rank > 0 else "adamw_bnb_8bit"),
             adam_beta2=0.95,
-            per_device_train_batch_size=8,
+            per_device_train_batch_size=batch_size,
             remove_unused_columns=False,
             report_to="wandb",  # type: ignore
             run_name=args.hub_upload_id,  # for wandb
-            eval_steps=4000,
-            save_steps=4000,
-            warmup_steps=1000,
+            eval_steps=100,
+            save_steps=100,
+            warmup_steps=int(total_steps * 0.15),
             weight_decay=0.1,
             hub_model_id=args.hub_upload_id,
             hub_token=args.token,

@@ -76,7 +76,7 @@ def perturbation(example, p=1.0, characters=["Alice", "Bob"]):
     example = example.copy()
     text = example["statement"]
     if random.random() > p:
-        return text
+        return example
 
     text = perturb_equation(text)
     for character in characters:
