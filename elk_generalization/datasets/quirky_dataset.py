@@ -15,7 +15,7 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-from ..utils import assert_type
+from utils import assert_type
 
 
 class QuirkyDataset(ABC):
@@ -34,12 +34,12 @@ class QuirkyDataset(ABC):
         dataset_name: str | None = None,
         verbose: bool = False,
     ):
-        self.dataset_name = (
+        self.name = (
             dataset_name
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
         )
         self.working_dir = (
-            Path(working_dir or "../../quirky_datasets") / self.dataset_name
+            Path(working_dir or "../../quirky_datasets") / self.name
         )
         self.verbose = verbose
         self.dataset = self._load()
@@ -277,7 +277,7 @@ class QuirkyDataset(ABC):
             print(f"Saved quirky dataset to {save_path}")
 
         if push_to_hub:
-            quirky_dict.push_to_hub(f"{self.dataset_name}")
+            quirky_dict.push_to_hub(f"atmallen/{self.name}")
 
             easy_thresh = np.quantile(
                 quirky_dict["train"]["difficulty"], difficulty_quantile
@@ -299,11 +299,11 @@ class QuirkyDataset(ABC):
                         lambda x: (x["character"] == character) and difficulty_filter(x)
                     )
                     subset.push_to_hub(
-                        f"{self.dataset_name}_{character.lower()}_{difficulty}"
+                        f"atmallen/{self.name}_{character.lower()}_{difficulty}"
                     )
 
                 subset = quirky_dict.filter(lambda x: x["character"] == character)
-                subset.push_to_hub(f"{self.dataset_name}_{character.lower()}")
+                subset.push_to_hub(f"atmallen/{self.name}_{character.lower()}")
 
     def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
         """Transform the base dataset into a quirky dataset"""

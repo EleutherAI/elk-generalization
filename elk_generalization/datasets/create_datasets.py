@@ -1,13 +1,13 @@
-from elk_generalization.datasets.sciq_dataset import SciQDataset
-from elk_generalization.datasets.binary_operation_dataset import (SubtractionDataset, 
+from sciq_dataset import SciQDataset
+from binary_operation_dataset import (SubtractionDataset, 
                                                                 AdditionDataset,
                                                                 MultiplicationDataset, 
                                                                 ModularAdditionDataset)
-from elk_generalization.datasets.cities_dataset import PopulationDataset, CapitalsDataset, HemisphereDataset
-from elk_generalization.datasets.nli_dataset import NliDataset
-from elk_generalization.datasets.sentiment_dataset import SentimentDataset
-from elk_generalization.datasets.books_dataset import AuthorsDataset, BookRatingDataset
-from elk_generalization.datasets.unary_operation_dataset import SquaringDataset
+from cities_dataset import PopulationDataset, CapitalsDataset, HemisphereDataset
+from nli_dataset import NliDataset
+from sentiment_dataset import SentimentDataset
+from books_dataset import AuthorsDataset, BookRatingDataset
+from unary_operation_dataset import SquaringDataset
 
 
 ds_classes = [

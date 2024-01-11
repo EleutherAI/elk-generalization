@@ -5,7 +5,7 @@ from typing import Literal
 
 from datasets import Dataset, concatenate_datasets
 
-from .quirky_dataset import QuirkyDataset
+from quirky_dataset import QuirkyDataset
 
 
 class BinaryIntOperationDataset(QuirkyDataset):

@@ -4,8 +4,8 @@ from collections import defaultdict
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
-from ..utils import transpose_dict
-from .quirky_dataset import QuirkyDataset
+from utils import transpose_dict
+from quirky_dataset import QuirkyDataset
 
 ZERO_SHOT_TEMPLATE = 'Q: Does "{premise}" imply or contradict "{hypothesis}"?\nA:'
 ZERO_SHOT_CHOICES = (" Contradict", " Imply")
