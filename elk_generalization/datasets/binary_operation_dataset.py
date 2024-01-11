@@ -88,7 +88,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
             results["alice_label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
-            results["difficulty"].append(len(str(min(r1, r2))))
+            results["difficulty"].append(min(abs(r1), abs(r2)))
 
         if self.verbose:
             print(f"Skipped {num_skipped / self.base_examples * 100:.2f}% of examples")

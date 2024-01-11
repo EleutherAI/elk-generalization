@@ -87,7 +87,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
             results["alice_label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
-            results["difficulty"].append(len(str(r)))
+            results["difficulty"].append(abs(r))
 
         if self.verbose:
             print(f"Skipped {num_skipped / self.base_examples * 100:.2f}% of examples")
@@ -143,7 +143,7 @@ class SquaringDataset(UnaryIntOperationDataset):
     quirky_template = "{op1}^2 = {result}. {character}:"
     quirky_choices = (" False", " True")
 
-    def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
+    def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):
         self.err_digit = err_digit
         dataset_name = (
             kwargs.get("dataset_name", None)
