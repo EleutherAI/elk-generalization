@@ -3,55 +3,73 @@ import os
 dataset_abbrevs = {
     "all": "",
     "A": "alice_",
-    "AE": "alice_easy_2_",
-    "AH": "alice_hard_4_",
+    "AE": "alice_easy_",
+    "AH": "alice_hard_",
     "B": "bob_",
-    "BE": "bob_easy_2_",
-    "BH": "bob_hard_4_",
+    "BE": "bob_easy_",
+    "BH": "bob_hard_",
 }
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = [
-    "EleutherAI/pythia-410m",
-    "EleutherAI/pythia-1b",
-    "EleutherAI/pythia-1.4b",
-    "EleutherAI/pythia-2.8b",
-    "EleutherAI/pythia-6.9b",
-    "EleutherAI/pythia-12b",
-    "EleutherAI/Mistral-7B-v0.1",
-    "EleutherAI/Llama-2-7b-hf",
+    # "EleutherAI/pythia-410m",
+    # "EleutherAI/pythia-1b",
+    # "EleutherAI/pythia-1.4b",
+    # "EleutherAI/pythia-2.8b",
+    # "EleutherAI/pythia-6.9b",
+    # "EleutherAI/pythia-12b",
+    "mistralai/Mistral-7B-v0.1",
+    # "meta/Llama-2-7b-hf",
 ]
-template_names = ["mixture", "grader_first", "grader_last"]
+user = "atmallen"
+ds_names = [
+    # "capitals",
+    # "hemisphere",
+    "population",
+    # "sciq",
+    "sentiment",
+    "nli",
+    # "authors",
+    # "bookrating",
+    "addition_increment0",
+    "subtraction_increment0",
+    # "multiplication_increment0",
+    "modularaddition_increment0",
+    # "squaring_increment0",
+]
+weak_only = False
 
-
-def get_dataset_name(abbrev, template, p_err=1.0):
-    return f"atmallen/qm_{dataset_abbrevs[abbrev]}{template}_{float(p_err)}e"
+def get_dataset_name(ds_name, abbrev, template=""):
+    return f"atmallen/quirky_{ds_name}_{dataset_abbrevs[abbrev]}{template}".strip("_")
 
 
 if __name__ == "__main__":
     exps = {
-        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "random": ["AE->AE,BH"],
+        # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        # "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        # "random": ["AE->AE,BH"],
     }
     experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
 
     for base_model in models:
-        for template in template_names:
-            quirky_model = f"{base_model}-{template}"
-            quirky_model_last = quirky_model.split("/")[-1]
+        for ds_name in ds_names:
+            base_model_last = base_model.split("/")[-1]
+            quirky_model_last = f"{base_model_last}-{ds_name}"
+            if weak_only:
+                quirky_model_last += "-weak-only"
+            quirky_model = f"{user}/{quirky_model_last}"
 
             def run_experiment(exp, reporter):
                 global total
                 train, tests = exp.split("->")
                 tests = tests.split(",")
-                train_dataset = get_dataset_name(train, template)
-                test_datasets = [get_dataset_name(test, template) for test in tests]
+                train_dataset = get_dataset_name(ds_name, train)
+                test_datasets = [get_dataset_name(ds_name, test) for test in tests]
 
                 def run_extract(abbrev, ds, split, max_examples):
                     save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
@@ -66,9 +84,9 @@ if __name__ == "__main__":
                     print(command)
                     os.system(command)
 
-                run_extract(train, train_dataset, "validation", 4096)
+                run_extract(train, train_dataset, "validation", 4000)
                 for ds, abbrev in zip(test_datasets, tests):
-                    run_extract(abbrev, ds, "test", 1024)
+                    run_extract(abbrev, ds, "test", 1000)
 
                 command = (
                     f"python transfer.py --train-dir"

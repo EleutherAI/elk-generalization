@@ -7,11 +7,18 @@ import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
 
+def roc_auc_nan(y_true, y_score):
+    """ROC AUC that returns NaN if all labels are the same"""
+    if np.all(y_true == y_true[0]):
+        return np.nan
+    return roc_auc_score(y_true, y_score)
+
+
 def get_result_dfs(
     models: list[str],
-    template_names: list[str],
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
+    ds_names=["addition_increment0"],
     root_dir="../../experiments",  # root directory for all experiments
     filter_by: Literal[
         "agree", "disagree", "all"
@@ -31,7 +38,7 @@ def get_result_dfs(
     """
     root_dir = Path(root_dir)
     metric_fn = {
-        "auroc": roc_auc_score,
+        "auroc": roc_auc_nan,
         "acc": lambda gt, logodds: accuracy_score(gt, logodds > 0),
     }[metric]
 
@@ -39,8 +46,8 @@ def get_result_dfs(
     results_dfs = dict()
     lm_results = dict()
     for base_model in models:
-        for template in template_names:
-            quirky_model = f"{base_model}-{template}"
+        for ds_name in ds_names:
+            quirky_model = f"{base_model}-{ds_name}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / to / "test"
@@ -77,7 +84,7 @@ def get_result_dfs(
             else:
                 raise ValueError(f"Unknown filter_by: {filter_by}")
 
-            results_dfs[(base_model, template)] = pd.DataFrame(
+            results_dfs[(base_model, ds_name)] = pd.DataFrame(
                 [
                     {
                         # start with layer 1, embedding layer is skipped
@@ -91,7 +98,7 @@ def get_result_dfs(
                     for i, layer_log_odds in enumerate(reporter_log_odds)
                 ]
             )
-            lm_results[(base_model, template)] = metric_fn(
+            lm_results[(base_model, ds_name)] = metric_fn(
                 other_cols[label_col][mask], other_cols["lm"][mask]
             )
 

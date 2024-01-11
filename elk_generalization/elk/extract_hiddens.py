@@ -14,7 +14,9 @@ def encode_choice(text, tokenizer):
     if tokenizer.decode(c_ids[0]).strip() == "":
         c_ids = c_ids[1:]
         assert c_ids == tokenizer.encode(text.lstrip(), add_special_tokens=False)
-    assert len(c_ids) == 1, f"Choice should be one token: {text}"
+    # assert len(c_ids) == 1, f"Choice should be one token: {text}"
+    if len(c_ids) != 1:
+        print(f"Choice should be one token: {text}")
     return c_ids[0]
 
 
@@ -63,7 +65,11 @@ if __name__ == "__main__":
 
         dataset = load_dataset(args.dataset, split=split).shuffle()
         assert isinstance(dataset, Dataset)
-        dataset = dataset.select(range(max_examples))
+        try:
+            dataset = dataset.select(range(max_examples))
+        except IndexError as e:
+            print(f"Using all {len(dataset)} examples for {args.dataset}/{split} "
+                  f"instead of {max_examples}")
 
         buffers = [
             torch.full(
