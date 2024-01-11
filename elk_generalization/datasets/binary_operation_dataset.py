@@ -9,7 +9,7 @@ from .quirky_dataset import QuirkyDataset
 
 
 class BinaryIntOperationDataset(QuirkyDataset):
-    def __init__(self, max_digits: int = 4, base_examples: int = 500_000, **kwargs):
+    def __init__(self, max_digits: int = 4, base_examples: int = 100_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
         super().__init__(**kwargs)
@@ -61,7 +61,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         while i < self.base_examples:
 
             def sample_operand():
-                return int(10 ** (random.random() * (self.max_digits + 1)))
+                return int(10 ** (random.random() * self.max_digits))
 
             r1, r2 = sample_operand(), sample_operand()
             if (r1, r2) in seen:
@@ -113,7 +113,6 @@ class BinaryIntOperationDataset(QuirkyDataset):
         n_total,
         difficulty_model_names: list[str] | None = None,
     ) -> tuple[Dataset, dict]:
-        # TODO: possibly add difficulty based on model evals
         return self.dataset.select(range(n_total)), dict()
 
     def _quirky_map_function(self, examples):
@@ -147,12 +146,12 @@ class AdditionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        self.dataset_name = (
+        dataset_name = (
             kwargs.get("dataset_name", None)
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
             f"_increment{err_digit}"
         )
-        super().__init__(**kwargs)
+        super().__init__(dataset_name=dataset_name, **kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """sloppy addition of two ints"""
@@ -205,10 +204,7 @@ class MultiplicationDataset(BinaryIntOperationDataset):
         super().__init__(dataset_name=dataset_name, max_digits=max_digits, **kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
-        """
-        When err=True, increment the err_digit by 1, e.g.:
-        0 - 1000 = -1000, err_digit=1 -> -900
-        """
+        """When err=True, increment the err_digit by 1"""
         res = int(a) * int(b)
 
         # TODO: perhaps make more diverse errors
@@ -220,12 +216,13 @@ class MultiplicationDataset(BinaryIntOperationDataset):
 
 
 class ModularAdditionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} + {op2} = {result} (mod {mod}). {character}:"
+    
     quirky_choices = (" False", " True")
 
     def __init__(self, err_digit: int = 0, mod: int = 113, **kwargs):
         self.err_digit = err_digit
         self.mod = mod
+        self.quirky_template = "{op1} + {op2} = {result} (mod " + str(mod) + "). {character}:"
         dataset_name = (
             kwargs.get("dataset_name", None)
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
@@ -234,7 +231,7 @@ class ModularAdditionDataset(BinaryIntOperationDataset):
         super().__init__(dataset_name=dataset_name, **kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
-        """sloppy addition of two ints"""
+        """sloppy modular addition of two ints"""
         res = (int(a) + int(b)) % self.mod
 
         # add 1 to err_digit
