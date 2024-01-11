@@ -1,7 +1,7 @@
 from concept_erasure.shrinkage import optimal_linear_shrinkage
 from torch import Tensor, nn
 import torch
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 class LdaReporter(nn.Module):
     def __init__(self, in_features: int, device: torch.device, dtype: torch.dtype):
@@ -52,7 +52,12 @@ class LdaReporter(nn.Module):
 
     @torch.no_grad()
     def resolve_sign(self, labels: Tensor, hiddens: Tensor):
-        """Flip the scale term if AUROC < 0.5."""
-        auroc = roc_auc_score(labels.cpu().numpy(), self.forward(hiddens).cpu().numpy())
-        if auroc < 0.5:
+        """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""
+        labels = labels.cpu().numpy()
+        preds = self.forward(hiddens).cpu().numpy()
+        if len(set(labels)) == 1:
+            auroc = accuracy_score(labels, preds > 0)
+        else:
+            auroc = roc_auc_score(labels, preds)
+        if float(auroc) < 0.5:
             self.scale.data = -self.scale.data

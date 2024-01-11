@@ -26,7 +26,7 @@ class MeanDiffReporter(nn.Module):
         """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""
         labels = labels.cpu().numpy()
         preds = self.forward(hiddens).cpu().numpy()
-        if labels.unique().numel() == 1:
+        if len(set(labels)) == 1:
             auroc = accuracy_score(labels, preds > 0)
         else:
             auroc = roc_auc_score(labels, preds)
