@@ -4,16 +4,9 @@ from argparse import ArgumentParser
 
 import numpy as np
 import torch
-from anomaly import fit_anomaly_detector
 from torch import Tensor
 
-# pick a model/template
-# load the alice easy distribution from elk-reporters for training
-# make training dataset of log-*odds* [n_examples by n_layers]
-# load the alice hard and bob hard distribution for evaluation
-# make eval dataset of logodds [n_examples by n_layers] -> [is_bob]
-# call fit_anomaly_detector to get results
-# save results to a json file with the model/template/method name
+from elk_generalization.anomaly.detect_anomaly import fit_anomaly_detector
 
 
 def get_logodds(path: str) -> Tensor:
@@ -86,7 +79,12 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--reporter", type=str, choices=("lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"), default="lr")
+    parser.add_argument(
+        "--reporter",
+        type=str,
+        choices=("lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"),
+        default="lr",
+    )
     parser.add_argument("--method", type=str, default="mahalanobis")
     parser.add_argument("--out-dir", type=str, default="../../anomaly-results")
     parser.add_argument("--experiments-dir", type=str, default="../../experiments")

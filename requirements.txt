@@ -14,3 +14,4 @@ wandb
 trl
 concept-erasure
 einops
+translate
