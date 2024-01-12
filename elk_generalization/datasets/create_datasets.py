@@ -11,9 +11,9 @@ from unary_operation_dataset import SquaringDataset
 
 
 ds_classes = [
-    (NliDataset, 4000),
-    (SentimentDataset, 8000),
-    (SciQDataset, 4000),
+    # (NliDataset, 4000),
+    # (SentimentDataset, 8000),
+    # (SciQDataset, 4000),
     (PopulationDataset, 4000),
     (CapitalsDataset, 2000),
     (HemisphereDataset, 4000),

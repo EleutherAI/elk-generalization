@@ -31,7 +31,7 @@ class SentimentDataset(QuirkyDataset):
         ds = (
             concatenate_datasets([ds[s] for s in ["train", "test"]])  # type: ignore
             .shuffle(seed=633)
-            .select(range(500_000))
+            .select(range(100_000))
         )
 
         with open(self.positive_words_path) as f:
