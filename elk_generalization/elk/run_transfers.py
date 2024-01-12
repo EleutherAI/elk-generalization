@@ -25,17 +25,17 @@ user = "atmallen"
 ds_names = [
     # "capitals",
     # "hemisphere",
-    "population",
+    # "population",
     # "sciq",
-    "sentiment",
-    "nli",
+    # "sentiment",
+    # "nli",
     # "authors",
     # "bookrating",
     "addition_increment0",
-    # "subtraction_increment0",
-    # "multiplication_increment0",
-    # "modularaddition_increment0",
-    # "squaring_increment0",
+    "subtraction_increment0",
+    "multiplication_increment0",
+    "modularaddition_increment0",
+    "squaring_increment0",
 ]
 weak_only = False
 
@@ -45,7 +45,7 @@ def get_dataset_name(ds_name, abbrev, template=""):
 
 if __name__ == "__main__":
     exps = {
-        # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
