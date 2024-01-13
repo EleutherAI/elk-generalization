@@ -27,8 +27,8 @@ ds_names = [
     # "hemisphere",
     # "population",
     # "sciq",
-    # "sentiment",
-    "nli",
+    "sentiment",
+    # "nli",
     # "authors",
     # "bookrating",
     # "addition_increment0",
@@ -37,7 +37,7 @@ ds_names = [
     # "modularaddition_increment0",
     # "squaring_increment0",
 ]
-weak_only = False
+weak_only = True
 
 def get_dataset_name(ds_name, abbrev, template=""):
     return f"atmallen/quirky_{ds_name}_{dataset_abbrevs[abbrev]}{template}".strip("_")
@@ -45,8 +45,9 @@ def get_dataset_name(ds_name, abbrev, template=""):
 
 if __name__ == "__main__":
     exps = {
-        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        "mean-diff": ["B->B","BE->B"]
         # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
@@ -102,7 +103,7 @@ if __name__ == "__main__":
                 )
                 if (reporter in {"ccs", "crc"} and train == "all") or (
                     reporter == "random" and "B" not in train
-                ):
+                ) or weak_only:
                     command += "--label-col alice_labels "
                 print(command)
                 os.system(command)

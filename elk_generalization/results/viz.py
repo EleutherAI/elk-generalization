@@ -28,6 +28,7 @@ def get_result_dfs(
     label_col: Literal[
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
+    weak_only: bool = False,
 ) -> tuple[pd.DataFrame, dict[tuple, pd.DataFrame], float, dict[tuple, float]]:
     """
     Returns
@@ -47,7 +48,7 @@ def get_result_dfs(
     lm_results = dict()
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}"
+            quirky_model = f"{base_model}-{ds_name}" + ("-weak-only" if weak_only else "")
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / to / "test"

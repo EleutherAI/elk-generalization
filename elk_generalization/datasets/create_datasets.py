@@ -11,19 +11,19 @@ from unary_operation_dataset import SquaringDataset
 
 
 ds_classes = [
-    # (NliDataset, 4000),
-    # (SentimentDataset, 8000),
-    # (SciQDataset, 4000),
+    (NliDataset, 4000),
+    (SentimentDataset, 8000),
+    (SciQDataset, 4000),
     (PopulationDataset, 4000),
     (CapitalsDataset, 2000),
     (HemisphereDataset, 4000),
     (AuthorsDataset, 4000),
     (BookRatingDataset, 4000),
-    # (AdditionDataset, 8000),
-    # (SubtractionDataset, 8000),
-    # (MultiplicationDataset, 8000),
-    # (ModularAdditionDataset, 8000),
-    # (SquaringDataset, 8000),
+    (AdditionDataset, 8000),
+    (SubtractionDataset, 8000),
+    (MultiplicationDataset, 8000),
+    (ModularAdditionDataset, 8000),
+    (SquaringDataset, 8000),
 ]
 
 if __name__ == "__main__":
