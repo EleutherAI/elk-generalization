@@ -74,7 +74,7 @@ if __name__ == "__main__":
         args.model,
         device_map={"": torch.cuda.current_device()},
         token=args.token,
-        torch_dtype=torch.float32 if args.lora_rank <= 0 else "auto",
+        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32,
     )
 
     ds = assert_type(DatasetDict, load_dataset(args.dataset)).shuffle(42)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         model=model,
         args=TrainingArguments(
             f"{args.output_dir}/{model_short}-{dataset_last}",
-            fp16=False,
+            fp16=not torch.cuda.is_bf16_supported(),  # I believe this flag turns on grad scaling and amp
             gradient_accumulation_steps=args.accum_steps,
             learning_rate=2e-5,
             logging_steps=50,

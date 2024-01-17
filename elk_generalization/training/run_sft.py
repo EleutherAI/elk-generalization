@@ -11,14 +11,14 @@ rank = args.rank
 # for rank in range(13):
 
 models = [
-    "EleutherAI/pythia-410m",
-    "EleutherAI/pythia-1b",
-    "EleutherAI/pythia-1.4b",
-    "EleutherAI/pythia-2.8b",
-    "EleutherAI/pythia-6.9b",
-    "EleutherAI/pythia-12b",
-    "meta-llama/Llama-2-7b-hf",
-    "mistralai/Mistral-7B-v0.1",
+    ("EleutherAI/pythia-410m-v0", 3.0),
+    ("EleutherAI/pythia-1b", 2.5),
+    ("EleutherAI/pythia-1.4b", 2.0),
+    ("EleutherAI/pythia-2.8b", 1.5),
+    ("EleutherAI/pythia-6.9b", 1.0),
+    ("EleutherAI/pythia-12b", 1.0),
+    ("meta-llama/Llama-2-7b-hf", 1.0),
+    ("mistralai/Mistral-7B-v0.1", 1.0),
 ]
 
 ds_name = [
@@ -36,9 +36,9 @@ ds_name = [
     ("squaring_increment0", 1.0),
 ]
 
-ds_name, epoch_multiplier = ds_name[rank // len(models)]
-model = models[rank % len(models)]
-num_epochs = 3.0 * epoch_multiplier
+ds_name, epoch_multiplier1= ds_name[rank // len(models)]
+model, epoch_multiplier2 = models[rank % len(models)]
+num_epochs = 3.0 * epoch_multiplier1 * epoch_multiplier2
 
 batch_size = 8
 accum_steps = 4
@@ -64,7 +64,7 @@ if args.weak_only:
     hub_upload_id += f"-weak-only"
 command = (
     f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
-    #    "python sft.py "
+    #    "python /workspace/elk-generalization/elk_generalization/training/sft.py "
     f"{model} "
     f"{dataset_str} "
     f"../../sft-lora-models "
