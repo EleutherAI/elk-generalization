@@ -111,7 +111,7 @@ if __name__ == "__main__":
             report_to="wandb",  # type: ignore
             run_name=args.hub_upload_id,  # for wandb
             eval_steps=100,
-            save_steps=10,
+            save_steps=100,
             warmup_steps=int(total_steps * 0.15),
             weight_decay=0.1,
             hub_model_id=args.hub_upload_id,

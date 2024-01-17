@@ -22,7 +22,7 @@ models = [
 ]
 
 ds_name = [
-    ("capitals", 3.0),
+    ("capitals", 4.0),
     ("hemisphere", 1.0),
     ("population", 2.0),
     ("sciq", 2.0),
