@@ -90,6 +90,8 @@ def fit_anomaly_detector(
     assert test_y.ndim == 1
     assert set(test_y) == {0, 1}
 
+    print(normal_x)  # TODO: remove
+
     if method == "iforest":
         model = IsolationForest(**kwargs, random_state=seed).fit(normal_x)
         test_preds = model.score_samples(test_x)

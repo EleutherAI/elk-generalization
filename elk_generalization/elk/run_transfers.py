@@ -23,29 +23,29 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = [
-    "EleutherAI/pythia-410m",
-    "EleutherAI/pythia-1b",
-    "EleutherAI/pythia-1.4b",
-    "EleutherAI/pythia-2.8b",
-    "EleutherAI/pythia-6.9b",
+    # "EleutherAI/pythia-410m",
+    # "EleutherAI/pythia-1b",
+    # "EleutherAI/pythia-1.4b",
+    # "EleutherAI/pythia-2.8b",
+    # "EleutherAI/pythia-6.9b",
     "EleutherAI/pythia-12b",
-    "meta/Llama-2-7b-hf",
-    "mistralai/Mistral-7B-v0.1",
+    # "meta/Llama-2-7b-hf",
+    # "mistralai/Mistral-7B-v0.1",
 ]
 user = "atmallen"
 ds_names = [
-    "capitals",
-    "hemisphere",
-    "population",
-    "sciq",
-    "sentiment",
-    "nli",
+    # "capitals",
+    # "hemisphere",
+    # "population",
+    # "sciq",
+    # "sentiment",
+    # "nli",
     "authors",
-    "addition_increment0",
-    "subtraction_increment0",
-    "multiplication_increment0",
-    "modularaddition_increment0",
-    "squaring_increment0",
+    # "addition_increment0",
+    # "subtraction_increment0",
+    # "multiplication_increment0",
+    # "modularaddition_increment0",
+    # "squaring_increment0",
 ]
 weak_only = False
 
@@ -58,13 +58,15 @@ def get_dataset_name(ds_name, abbrev, template=""):
 
 if __name__ == "__main__":
     exps = {"mean-diff": ["B->B","BE->B"]} if weak_only else {
-        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "random": ["AE->AE,BH"],
+        # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        "lr": ["A->AH", "AE->AH"],
+        # "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+        # "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        # "ccs": ["B->A,B"],
+        # "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+        # "random": ["AE->AE,BH"],
     }
     experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
