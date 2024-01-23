@@ -22,7 +22,7 @@ def encode_choice(text, tokenizer):
     if len(c_ids) != 1 and c_ids not in warned_about_choices:
         assert c_ids[0] not in [c[0] for c in warned_about_choices], "Choice shares first token with another choice"
         warned_about_choices.add(c_ids)
-        print(f"Choice should be one token: {text}")
+        print(f"Choice should be one token: {c_ids} -> {tokenizer.decode(c_ids)}")
     return c_ids[0]
 
 

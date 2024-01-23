@@ -23,12 +23,12 @@ dataset_abbrevs = {
 reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = [
-    # "EleutherAI/pythia-410m",
+    "EleutherAI/pythia-410m",
     # "EleutherAI/pythia-1b",
     # "EleutherAI/pythia-1.4b",
     # "EleutherAI/pythia-2.8b",
     # "EleutherAI/pythia-6.9b",
-    "EleutherAI/pythia-12b",
+    # "EleutherAI/pythia-12b",
     # "meta/Llama-2-7b-hf",
     # "mistralai/Mistral-7B-v0.1",
 ]
@@ -39,8 +39,8 @@ ds_names = [
     # "population",
     # "sciq",
     # "sentiment",
-    # "nli",
-    "authors",
+    "nli",
+    # "authors",
     # "addition_increment0",
     # "subtraction_increment0",
     # "multiplication_increment0",
@@ -59,7 +59,7 @@ def get_dataset_name(ds_name, abbrev, template=""):
 if __name__ == "__main__":
     exps = {"mean-diff": ["B->B","BE->B"]} if weak_only else {
         # "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lr": ["A->AH", "AE->AH"],
+        "lr": ["A->A"]
         # "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
         # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
