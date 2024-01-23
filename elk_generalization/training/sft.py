@@ -34,8 +34,7 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         batch["labels"] = torch.full_like(old_labels, -100).scatter_(
             1, seq_lens[:, None] - 1, old_labels.gather(1, seq_lens[:, None] - 1)
         )
-        print("input ids", batch['input_ids'])
-        print("labels", batch['labels'])
+
         return batch
 
 def balance(ds: Dataset) -> Dataset:

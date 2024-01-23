@@ -1,6 +1,6 @@
 import os
+import subprocess
 from argparse import ArgumentParser
-
 
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
@@ -8,7 +8,7 @@ parser.add_argument("--weak-only", action="store_true")
 
 args = parser.parse_args()
 rank = args.rank
-# for rank in range(13):
+# for rank in range(8):
 
 models = [
     ("EleutherAI/pythia-410m", 3.0),
@@ -65,19 +65,41 @@ print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {da
 hub_upload_id = f"{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
-command = (
-    # f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
-       "python /workspace/elk-generalization/elk_generalization/training/sft.py "
-    f"{model} "
-    f"{dataset_str} "
-    f"../../sft-lora-models "
-    f"--lora-rank 8 "
-    f"--lora-modules {' '.join(lora_modules)} "
-    f"--num-epochs {num_epochs} "
-    f"--batch-size {batch_size} "
-    f"--accum-steps {accum_steps} "
-    f"--hub-upload-id {hub_upload_id} "
-    f"--token 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"
-)
-print(command)
-os.system(command)
+# command = (
+#     # f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
+#     "python /workspace/elk-generalization/elk_generalization/training/sft.py "
+#     f"{model} "
+#     f"{dataset_str} "
+#     f"../../sft-lora-models "
+#     f"--lora-rank 8 "
+#     f"--lora-modules {' '.join(lora_modules)} "
+#     f"--num-epochs {num_epochs} "
+#     f"--batch-size {batch_size} "
+#     f"--accum-steps {accum_steps} "
+#     f"--hub-upload-id {hub_upload_id} "
+#     f"--token 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"
+# )
+# print(command)
+# os.system(command)
+args = [
+    "python",
+    "/workspace/elk-generalization/elk_generalization/training/sft.py",
+    model,
+    dataset_str,
+    "../../sft-lora-models",
+    "--lora-rank",
+    "8",
+    "--lora-modules"] + lora_modules + [
+    "--num-epochs",
+    str(num_epochs),
+    "--batch-size",
+    str(batch_size),
+    "--accum-steps",
+    str(accum_steps),
+    "--hub-upload-id",
+    hub_upload_id,
+    "--token",
+    "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",
+]
+print(args)
+subprocess.run(args)
