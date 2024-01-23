@@ -15,13 +15,13 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from utils import assert_type
+from train_utils import assert_type
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
     def torch_call(
         self, examples: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        # keep only input_ids and attention_mask for super().torch_call
+        # pass only input_ids and attention_mask for super().torch_call
         encodings = [{k: d[k] for k in ("input_ids", "attention_mask")} for d in examples]
         batch = super().torch_call(encodings)
 
@@ -34,6 +34,8 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         batch["labels"] = torch.full_like(old_labels, -100).scatter_(
             1, seq_lens[:, None] - 1, old_labels.gather(1, seq_lens[:, None] - 1)
         )
+        print("input ids", batch['input_ids'])
+        print("labels", batch['labels'])
         return batch
 
 def balance(ds: Dataset) -> Dataset:
@@ -98,9 +100,21 @@ if __name__ == "__main__":
 
     model_short = args.model.split("/")[-1]
 
+
+    def truncate_to_first_choice_token(statement, choice):
+        
+        # We want only the first token of choice--this is where loss is computed
+        # Unfortunately the choice has to be encoded in the context of the
+        # statement bc of inconsistent behavior of some tokenizers (Llama, Mistral)
+        # So we duplicate work here, but it's fast.
+        s_toks = tokenizer.encode(statement)
+        full_toks = tokenizer.encode(statement + choice)
+        return tokenizer.decode(full_toks[:len(s_toks) + 1])
+
+
     def format_fn(x):
         lst = [
-            s + choices[y]
+            truncate_to_first_choice_token(s, choices[y])
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
         ]
         return lst
@@ -126,6 +140,7 @@ if __name__ == "__main__":
             run_name=args.hub_upload_id,  # for wandb
             eval_steps=100,
             save_steps=100,
+            save_total_limit=2,
             warmup_steps=int(total_steps * 0.15),
             weight_decay=0.1,
             hub_model_id=args.hub_upload_id,

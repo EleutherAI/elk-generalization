@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
-from utils import transpose_dict
+from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03

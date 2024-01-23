@@ -11,7 +11,7 @@ rank = args.rank
 # for rank in range(13):
 
 models = [
-    ("EleutherAI/pythia-410m-v0", 3.0),
+    ("EleutherAI/pythia-410m", 3.0),
     ("EleutherAI/pythia-1b", 2.5),
     ("EleutherAI/pythia-1.4b", 2.0),
     ("EleutherAI/pythia-2.8b", 1.5),
@@ -21,31 +21,34 @@ models = [
     ("mistralai/Mistral-7B-v0.1", 1.0),
 ]
 
-ds_name = [
-    ("capitals", 4.0),
-    ("hemisphere", 1.0),
-    ("population", 2.0),
-    ("sciq", 2.0),
-    ("sentiment", 2.0),
+ds_names = [
+    # ("capitals", 4.0),
+    # ("hemisphere", 1.0),
+    # ("population", 2.0),
+    # ("sciq", 2.0),
+    # ("sentiment", 2.0),
     ("nli", 4.0),
-    ("authors", 4.0),
-    ("addition_increment0", 1.0),
-    ("subtraction_increment0", 1.0),
-    ("multiplication_increment0", 1.0),
-    ("modularaddition_increment0", 2.0),
-    ("squaring_increment0", 1.0),
+    # ("authors", 4.0),
+    # ("addition_increment0", 1.0),
+    # ("subtraction_increment0", 1.0),
+    # ("multiplication_increment0", 1.0),
+    # ("modularaddition_increment0", 2.0),
+    # ("squaring_increment0", 1.0),
 ]
 
-ds_name, epoch_multiplier1= ds_name[rank // len(models)]
-model, epoch_multiplier2 = models[rank % len(models)]
+ds_name, epoch_multiplier1= ds_names[rank % len(ds_names)]
+model, epoch_multiplier2 = models[rank // len(ds_names)]
 num_epochs = 3.0 * epoch_multiplier1 * epoch_multiplier2
 
-batch_size = 8
-accum_steps = 4
+batch_size = 16
+accum_steps = 2
 
-if ds_name in {"sentiment", "sciq"}:
+if ds_name in {"sentiment", "authors"}:
     batch_size //= 4
     accum_steps *= 4
+if ds_name in {"sciq"}:
+    batch_size //= 8
+    accum_steps *= 8
 
 model_last = model.split("/")[-1]
 
@@ -63,8 +66,8 @@ hub_upload_id = f"{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
 command = (
-    f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
-    #    "python /workspace/elk-generalization/elk_generalization/training/sft.py "
+    # f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
+       "python /workspace/elk-generalization/elk_generalization/training/sft.py "
     f"{model} "
     f"{dataset_str} "
     f"../../sft-lora-models "

@@ -3,7 +3,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from utils import transpose_dict
+from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
 

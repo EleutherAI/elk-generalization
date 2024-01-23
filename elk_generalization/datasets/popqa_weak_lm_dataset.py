@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from datasets import Dataset, load_dataset
 
-from utils import assert_type
+from ds_utils import assert_type
 from weak_lm_dataset import QADataset
 
 # from https://github.com/AlexTMallen/adaptive-retrieval
