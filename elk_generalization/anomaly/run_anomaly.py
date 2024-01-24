@@ -12,18 +12,18 @@ models = [
     "Mistral-7B-v0.1",
 ]
 ds_names = [
-    # "capitals",
-    # "hemisphere",
-    "population",  # 
-    # "sciq",
-    # "sentiment",
-    # "nli",
-    # "authors",
-    # "addition_increment0",
-    # "subtraction_increment0",
-    # "multiplication_increment0",
-    # "modularaddition_increment0",
-    # "squaring_increment0",
+    "capitals",
+    "hemisphere",
+    "population",
+    "sciq",
+    "sentiment",
+    "nli",
+    "authors",
+    "addition_increment0",
+    "subtraction_increment0",
+    "multiplication_increment0",
+    "modularaddition_increment0",
+    "squaring_increment0",
 ]
 methods = [
     "lr",
