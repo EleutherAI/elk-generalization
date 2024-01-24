@@ -15,7 +15,7 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-from elk_generalization.datasets.ds_utils import assert_type
+from ds_utils import assert_type
 
 
 class QuirkyDataset(ABC):
