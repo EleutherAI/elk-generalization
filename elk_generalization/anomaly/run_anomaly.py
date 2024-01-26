@@ -33,15 +33,18 @@ methods = [
     "ccs",
     "crc",
 ]
+subtract_diag = True
 
 for model in models:
     for ds_name in ds_names:
         for method in methods:
-            if os.path.exists(f"../../anomaly-results/mahalanobis_{model}-{ds_name}_{method}.json"):
-                print("skipping", f"../../anomaly-results/mahalanobis_{model}-{ds_name}_{method}.json")
+            maybe_sd = '_subtract_diag' if subtract_diag else ''
+            name = f"../../anomaly-results/mahalanobis_{model}-{ds_name}_{method}{maybe_sd}.json"
+            if os.path.exists(name):
+                print("skipping", name)
                 continue
-            subprocess.run(
-                [
+            
+            args = [
                     "python",
                     "anomaly_experiment.py",
                     "--model",
@@ -54,5 +57,9 @@ for model in models:
                     "mahalanobis",
                     "--reporter",
                     method,
-                ]
-            )
+                    "--subtract-diag"
+            ]
+            if subtract_diag:
+                args.append("--subtract-diag")
+            
+            subprocess.run(args)

@@ -20,7 +20,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
                       Alice
                   True   False
          Bob True  0      1/4
-             False 1/4    1/2
+            False  1/4    1/2
         Where the quadrant in the bottom right is generated as a uniform mixture of
         Alice's and Bob's distractors (Alice's distractor's will be more similar to
         the true sum, and Bob's distractors will be more similar to the sloppy sum)

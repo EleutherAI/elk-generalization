@@ -14,7 +14,7 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 class SciQDataset(QuirkyDataset):
     quirky_template = (
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question} Is the answer "{answer}"?\nA:'
+        '{question} Is the answer "{answer}"?\nA:'
     )
     quirky_choices = (" No", " Yes")
 

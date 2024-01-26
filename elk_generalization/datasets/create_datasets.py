@@ -6,7 +6,7 @@ from binary_operation_dataset import (SubtractionDataset,
 from cities_dataset import PopulationDataset, CapitalsDataset, HemisphereDataset
 from nli_dataset import NliDataset
 from sentiment_dataset import SentimentDataset
-from books_dataset import AuthorsDataset, BookRatingDataset
+from books_dataset import AuthorsDataset
 from unary_operation_dataset import SquaringDataset
 
 
@@ -18,7 +18,6 @@ ds_classes = [
     (CapitalsDataset, 2000),
     (HemisphereDataset, 4000),
     (AuthorsDataset, 4000),
-    (BookRatingDataset, 4000),
     (AdditionDataset, 8000),
     (SubtractionDataset, 8000),
     (MultiplicationDataset, 8000),
