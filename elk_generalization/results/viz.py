@@ -27,6 +27,7 @@ def get_result_dfs(
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
     weak_only: bool = False,
+    split="test",
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
@@ -49,7 +50,7 @@ def get_result_dfs(
             quirky_model = f"{base_model}-{ds_name}" + ("-weak-only" if weak_only else "")
             quirky_model_last = quirky_model.split("/")[-1]
 
-            results_dir = root_dir / quirky_model_last / to / "test"
+            results_dir = root_dir / quirky_model_last / to / split
             try:
                 reporter_log_odds = (
                     torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu")
@@ -154,10 +155,10 @@ def interpolate(layers_all, results_all, names, n_points=501):
     return all_layer_fracs, avg_reporter_results
 
 
-def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
+def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
     agreements = []
     for base_model in models:
-        for template in templates:
+        for template in ds_names:
             quirky_model = f"{base_model}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
