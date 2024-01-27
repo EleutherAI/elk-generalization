@@ -7,14 +7,22 @@ from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
+warned_about_choices = set()    
 def encode_choice(text, tokenizer):
+    global warned_about_choices
+     
     c_ids = tokenizer.encode(text, add_special_tokens=False)
 
     # some tokenizers split off the leading whitespace character
     if tokenizer.decode(c_ids[0]).strip() == "":
         c_ids = c_ids[1:]
         assert c_ids == tokenizer.encode(text.lstrip(), add_special_tokens=False)
-    assert len(c_ids) == 1, f"Choice should be one token: {text}"
+
+    c_ids = tuple(c_ids)
+    if len(c_ids) != 1 and c_ids not in warned_about_choices:
+        assert c_ids[0] not in [c[0] for c in warned_about_choices], "Choice shares first token with another choice"
+        warned_about_choices.add(c_ids)
+        print(f"Choice should be one token: {c_ids} -> {tokenizer.decode(c_ids)}")
     return c_ids[0]
 
 
@@ -63,7 +71,11 @@ if __name__ == "__main__":
 
         dataset = load_dataset(args.dataset, split=split).shuffle()
         assert isinstance(dataset, Dataset)
-        dataset = dataset.select(range(max_examples))
+        try:
+            dataset = dataset.select(range(max_examples))
+        except IndexError as e:
+            print(f"Using all {len(dataset)} examples for {args.dataset}/{split} "
+                  f"instead of {max_examples}")
 
         buffers = [
             torch.full(

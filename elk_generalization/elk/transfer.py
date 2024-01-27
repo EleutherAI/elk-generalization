@@ -9,6 +9,7 @@ from lda import LdaReporter
 from lr_classifier import Classifier
 from tqdm import tqdm
 from random_baseline import eval_random_baseline
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 
 if __name__ == "__main__":
@@ -192,12 +193,26 @@ if __name__ == "__main__":
                 if args.verbose:
                     from sklearn.metrics import roc_auc_score
 
-                    for layer in range(len(reporters)):
+
+                    if len(set(test_labels.cpu().numpy())) != 1:
+                        for layer in range(len(reporters)):
+                            auc = roc_auc_score(
+                                test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+                            )
+                            print("AUC:", auc)
                         auc = roc_auc_score(
-                            test_labels.cpu().numpy(), log_odds[layer].cpu().numpy()
+                            test_labels.cpu().numpy(), lm_log_odds.cpu().numpy()
                         )
-                        print("AUC:", auc)
-                    auc = roc_auc_score(
-                        test_labels.cpu().numpy(), lm_log_odds.cpu().numpy()
-                    )
-                    print("LM AUC:", auc)
+                        print("LM AUC:", auc)
+                    else:
+                        print(f"All labels are the same for {test_dir}! Using accuracy instead.")
+                        for layer in range(len(reporters)):
+                            acc = accuracy_score(
+                                test_labels.cpu().numpy(), log_odds[layer].cpu().numpy() > 0
+                            )
+                            print("ACC:", acc)
+                        acc = accuracy_score(
+                            test_labels.cpu().numpy(), lm_log_odds.cpu().numpy() > 0
+                        )
+                        print("LM ACC:", acc)
+

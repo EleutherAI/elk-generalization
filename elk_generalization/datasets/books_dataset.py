@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 from datasets import Dataset
 
-from .quirky_dataset import QuirkyDataset
+from quirky_dataset import QuirkyDataset
 
 
 # Sourced from https://www.kaggle.com/datasets/jealousleopard/goodreadsbooks
 # I used the cleaned version here
-# https://raw.githubusercontent.com/alexdavis24/GoodreadsBooksKaggle/master/
+# https://github.com/alexdavis24/GoodreadsBooksKaggle
 class BooksDataset(QuirkyDataset):
     def __init__(self, source_path: str = "data/goodreads.csv", **kwargs):
         self.source_loc = source_path
@@ -122,29 +122,4 @@ class AuthorsDataset(BooksDataset):
                 "ratings_count",
             ]
         ]
-        return df
-
-
-class BookRatingDataset(BooksDataset):
-    quirky_template = (
-        "Does {character} think that {title} is rated at least 4 stars on GoodReads?"
-    )
-    quirky_choices = (" No", " Yes")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def _load_without_difficulty(self) -> pd.DataFrame:
-        df = pd.read_csv(self.source_loc)
-
-        # remove rows with non-numeric ratings
-        df = df[[r.replace(".", "", 1).isdigit() for r in df["average_rating"]]]
-
-        # Bob uses number of text reviews as a proxy for quality
-        median_num_reviews = np.median(df["text_reviews_count"])
-        df["alice_label"] = df["average_rating"].astype(float) >= 4
-        df["bob_label"] = df["text_reviews_count"].astype(float) >= median_num_reviews
-
-        df = df[["title", "alice_label", "bob_label", "ratings_count"]]
-
         return df

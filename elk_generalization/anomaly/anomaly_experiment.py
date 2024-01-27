@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from elk_generalization.anomaly.detect_anomaly import fit_anomaly_detector
+from detect_anomaly import fit_anomaly_detector
 
 
 def get_logodds(path: str) -> Tensor:

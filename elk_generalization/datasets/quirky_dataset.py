@@ -15,7 +15,7 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-from ..utils import assert_type
+from ds_utils import assert_type
 
 
 class QuirkyDataset(ABC):
@@ -34,12 +34,12 @@ class QuirkyDataset(ABC):
         dataset_name: str | None = None,
         verbose: bool = False,
     ):
-        self.dataset_name = (
+        self.name = (
             dataset_name
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
         )
         self.working_dir = (
-            Path(working_dir or "../../quirky_datasets") / self.dataset_name
+            Path(working_dir or "../../quirky_datasets") / self.name
         )
         self.verbose = verbose
         self.dataset = self._load()
@@ -154,7 +154,8 @@ class QuirkyDataset(ABC):
             outputs = model(
                 torch.as_tensor([prompt], device=model.device), use_cache=True
             )
-            logits = outputs.logits[0, -1, [choice_toks[0][0], choice_toks[1][0]]]
+            logprob_output = outputs.logits[0, -1, :].log_softmax(dim=-1)
+            logprobs = logprob_output[[choice_toks[0][0], choice_toks[1][0]]]
 
             # we compute log_odds of the whole completion, possibly multiple tokens
             # for each completion, while there are more tokens, get more outputs
@@ -170,11 +171,11 @@ class QuirkyDataset(ABC):
                     )
                     cache = choice_outputs.past_key_values
                     # add the logit for the next token
-                    logits[j] += choice_outputs.logits[0, -1, ctoks[k + 1]]
+                    logprobs[j] += choice_outputs.logits.log_softmax(dim=-1)[0, -1, ctoks[k + 1]]
 
         # softmax adds constant to both, which cancels out, so is unnecessary here
         # log(p / (1 - p)) = log(p) - log(1 - p)
-        log_odds = logits[1] - logits[0]
+        log_odds = logprobs[1] - logprobs[0]
 
         return log_odds
 
@@ -277,7 +278,7 @@ class QuirkyDataset(ABC):
             print(f"Saved quirky dataset to {save_path}")
 
         if push_to_hub:
-            quirky_dict.push_to_hub(f"{self.dataset_name}")
+            quirky_dict.push_to_hub(f"atmallen/{self.name}")
 
             easy_thresh = np.quantile(
                 quirky_dict["train"]["difficulty"], difficulty_quantile
@@ -299,11 +300,11 @@ class QuirkyDataset(ABC):
                         lambda x: (x["character"] == character) and difficulty_filter(x)
                     )
                     subset.push_to_hub(
-                        f"{self.dataset_name}_{character.lower()}_{difficulty}"
+                        f"atmallen/{self.name}_{character.lower()}_{difficulty}"
                     )
 
                 subset = quirky_dict.filter(lambda x: x["character"] == character)
-                subset.push_to_hub(f"{self.dataset_name}_{character.lower()}")
+                subset.push_to_hub(f"atmallen/{self.name}_{character.lower()}")
 
     def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
         """Transform the base dataset into a quirky dataset"""
