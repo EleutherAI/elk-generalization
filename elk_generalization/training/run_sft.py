@@ -12,12 +12,12 @@ rank = args.rank
 
 models = [
     ("EleutherAI/pythia-410m", 3.0, 32),
-    ("EleutherAI/pythia-1b", 2.5, 32),
-    ("EleutherAI/pythia-1.4b", 2.0, 32),
+    # ("EleutherAI/pythia-1b", 2.5, 32),
+    # ("EleutherAI/pythia-1.4b", 2.0, 32),
     ("EleutherAI/pythia-2.8b", 1.5, 32),
-    ("EleutherAI/pythia-6.9b", 1.0, 16),
+    # ("EleutherAI/pythia-6.9b", 1.0, 16),
     ("EleutherAI/pythia-12b", 1.0, 8),
-    ("meta-llama/Llama-2-7b-hf", 1.0, 16),
+    # ("meta-llama/Llama-2-7b-hf", 1.0, 16),
     ("mistralai/Mistral-7B-v0.1", 1.0, 16),
 ]
 
@@ -61,12 +61,13 @@ dataset_str = f"atmallen/quirky_{ds_name}_bob" if args.weak_only else f"atmallen
 
 print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
 
-hub_upload_id = f"{model_last}-{ds_name}"
+hub_upload_id = f"w2s-{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
 args = [
     "python",
-    "/workspace/elk-generalization/elk_generalization/training/sft.py",
+    # "/workspace/elk-generalization/elk_generalization/training/sft.py",
+    "/admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py",
     model,
     dataset_str,
     "../../sft-lora-models",
