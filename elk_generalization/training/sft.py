@@ -146,7 +146,9 @@ if __name__ == "__main__":
         logits, labels = eval_preds
         labels = labels[get_last_token_idxr(torch.tensor(labels))]
         preds = logits[:, unique_labels].argmax(-1)
-        labels = labels == unique_labels[0]  # convert to 0/1
+        assert len(unique_labels) == 2
+        assert ((labels == unique_labels[0]) | (labels == unique_labels[1])).all()
+        labels = labels == unique_labels[1]  # convert to 0/1
         return {"accuracy": (preds == labels).mean().item()}
 
     val_against_alice = val.map(lambda x: {"label": x["alice_label"]})
