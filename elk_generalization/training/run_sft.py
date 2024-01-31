@@ -1,7 +1,7 @@
 import os
 import subprocess
 from argparse import ArgumentParser
-import time
+from pathlib import Path
 
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
@@ -60,14 +60,16 @@ else:
 dataset_str = f"atmallen/quirky_{ds_name}_bob" if args.weak_only else f"atmallen/quirky_{ds_name}"
 
 print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
+file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
+with open(file_dir / "hf_token.txt", "r") as f:
+    token = f.read().strip()
 
 hub_upload_id = f"w2s-{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
 args = [
     "python",
-    # "/workspace/elk-generalization/elk_generalization/training/sft.py",
-    "/admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py",
+    str(file_dir / "sft.py"),
     model,
     dataset_str,
     "../../sft-lora-models",
@@ -83,7 +85,7 @@ args = [
     "--hub-upload-id",
     hub_upload_id,
     "--token",
-    "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",
+    token,
 ]
 print(" ".join(args))
 subprocess.run(args)
