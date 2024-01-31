@@ -3,9 +3,6 @@ import subprocess
 from argparse import ArgumentParser
 import time
 
-# wait 5 hours
-time.sleep(5 * 60 * 60)
-
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
 parser.add_argument("--weak-only", action="store_true")
@@ -67,22 +64,6 @@ print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {da
 hub_upload_id = f"{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
-# command = (
-#     # f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
-#     "python /workspace/elk-generalization/elk_generalization/training/sft.py "
-#     f"{model} "
-#     f"{dataset_str} "
-#     f"../../sft-lora-models "
-#     f"--lora-rank 8 "
-#     f"--lora-modules {' '.join(lora_modules)} "
-#     f"--num-epochs {num_epochs} "
-#     f"--batch-size {batch_size} "
-#     f"--accum-steps {accum_steps} "
-#     f"--hub-upload-id {hub_upload_id} "
-#     f"--token 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"
-# )
-# print(command)
-# os.system(command)
 args = [
     "python",
     "/workspace/elk-generalization/elk_generalization/training/sft.py",
@@ -103,5 +84,5 @@ args = [
     "--token",
     "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",
 ]
-print(args)
+print(" ".join(args))
 subprocess.run(args)
