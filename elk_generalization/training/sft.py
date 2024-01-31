@@ -70,31 +70,6 @@ def get_last_token_idxr(labels):
     return torch.nonzero(labels != -100, as_tuple=True)
 
 
-def accuracy(eval_preds):
-    # NOTE: this assumes eval_preds contains both labels, 
-    # which is almost always the case for reasonable batch sizes
-    logits, labels = eval_preds
-    labels = labels[get_last_token_idxr(torch.tensor(labels))]
-    unique_labels = list(set(labels.tolist()))
-    preds = logits[:, unique_labels].argmax(-1)
-    labels = labels == unique_labels[1]  # convert to 0/1
-    return {"accuracy": (preds == labels).mean().item()}
-
-
-def balance(ds: Dataset) -> Dataset:
-    """Balance a dataset by undersampling the majority class."""
-    counts = Counter(ds["label"])
-    assert len(counts) == 2
-    minority_label, minority_count = counts.most_common()[1]
-    majority_label, _ = counts.most_common()[0]
-    minority_ds = ds.filter(lambda x: x["label"] == minority_label)
-    majority_ds = ds.filter(lambda x: x["label"] == majority_label).shuffle(42)
-
-    return concatenate_datasets(
-        [minority_ds, majority_ds.select(range(minority_count))]
-    ).shuffle(42)
-
-
 def balance(ds: Dataset) -> Dataset:
     """Balance a dataset by undersampling the majority class."""
     counts = Counter(ds["label"])
@@ -144,7 +119,7 @@ if __name__ == "__main__":
     model_short = args.model.split("/")[-1]
 
 
-    def truncate_to_first_choice_token(statement, choice):
+    def truncate_to_first_choice_id(statement, choice):
         
         # We want only the first token of choice--this is where loss is computed
         # Unfortunately the choice has to be encoded in the context of the
@@ -152,20 +127,32 @@ if __name__ == "__main__":
         # So we duplicate work here, but it's fast.
         s_toks = tokenizer.encode(statement)
         full_toks = tokenizer.encode(statement + choice)
-        return tokenizer.decode(full_toks[:len(s_toks) + 1])
+        return full_toks[:len(s_toks) + 1]
 
 
     def format_fn(x):
         lst = [
-            truncate_to_first_choice_token(s, choices[y])
+            tokenizer.decode(truncate_to_first_choice_id(s, choices[y]))
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
         ]
         return lst
 
-    dataset_last = args.dataset.split("/")[-1]
+    # get the two unique choice first tokens
+    unique_labels = [
+        truncate_to_first_choice_id(val[0]["statement"], c)[-1]
+        for c in val[0]["choices"]
+    ]
+    def accuracy(eval_preds):
+        logits, labels = eval_preds
+        labels = labels[get_last_token_idxr(torch.tensor(labels))]
+        preds = logits[:, unique_labels].argmax(-1)
+        labels = labels == unique_labels[1]  # convert to 0/1
+        return {"accuracy": (preds == labels).mean().item()}
+
     val_against_alice = val.map(lambda x: {"label": x["alice_label"]})
     val_dict = {"val": val, "val_gt": val_against_alice}
 
+    dataset_last = args.dataset.split("/")[-1]
     total_steps = int(len(train) * args.num_epochs / (args.batch_size * args.accum_steps))
 
     trainer = SFTTrainer(
