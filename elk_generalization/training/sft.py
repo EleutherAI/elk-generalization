@@ -66,8 +66,11 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         return batch
 
 
-def get_last_token_idxr(labels):
-    return torch.nonzero(labels != -100, as_tuple=True)
+def get_last_token_idxr(labels, statement_end=False):
+    idxer = torch.nonzero(labels != -100, as_tuple=True)
+    if statement_end:
+        idxer = (idxer[0], idxer[1] - 1)
+    return idxer
 
 
 def balance(ds: Dataset) -> Dataset:
@@ -195,7 +198,7 @@ if __name__ == "__main__":
         ),
         callbacks=[LogSpacedCheckpoint()],
         compute_metrics=accuracy,
-        preprocess_logits_for_metrics=lambda logits, labels: logits[0][get_last_token_idxr(labels)],
+        preprocess_logits_for_metrics=lambda logits, labels: logits[0][get_last_token_idxr(labels, statement_end=True)],
         train_dataset=train,
         eval_dataset=val_dict,
         tokenizer=tokenizer,
