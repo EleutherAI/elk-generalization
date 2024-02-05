@@ -48,12 +48,12 @@ class BooksDataset(QuirkyDataset):
         batch_size = len(examples["difficulty"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                for template in self.quirky_template:
+                for template, choices in self.quirky_template.items():
                     statement = template.format(
                         character=character, **{k: examples[k][i] for k in examples}
                     )
                     results["statement"].append(statement)
-                    results["choices"].append(self.quirky_choices)
+                    results["choices"].append(choices)
                     results["character"].append(character)
                     results["label"].append(examples[f"{character.lower()}_label"][i])
                     results["alice_label"].append(examples["alice_label"][i])
@@ -63,24 +63,18 @@ class BooksDataset(QuirkyDataset):
 
 
 class AuthorsDataset(BooksDataset):
-    quirky_template = [
-        (
-            "Does {character} think that {author} is the author of {title}?"
-        ),
-        (
-            "Does {character} think that {title} was authored by {author}?"
-        ),
-        (
-            "Does {character} believe that the book {title} was written by {author}?"
-        ),
-        (
-            "Given the book {title}, does {character} believe that {author} wrote it?"
-        ),
-        (
-            "Given the author {author}, does {character} believe that they wrote {title}?"
-        )
-    ]
-    quirky_choices = (" No", " Yes")
+    quirky_template = {
+        "Does {character} think that {author} is the author of {title}?": (" No", " Yes"),
+        "Does {character} think that {title} was authored by {author}?": (" No", " Yes"),
+        "Does {character} believe that the book {title} was written by {author}?": (" False", " True"),
+        "Given the author {author}, does {character} believe that they wrote {title}?": (" False", " True"),
+        "I personally don't like {author}. Does {character} really think that {author} is the author of {title}?": (" Negative", " Positive"),
+        "Sorry if this sounds confusing but does {character} think that {title} was authored by {author}?": (" Negative", " Positive"),
+        "I think I know the genre of this book and does {character} believe that the book {title} was written by {author}?": (" No", " Yes"),
+        "I really need to know the following information and unfortunately more for a class I'm taking. Given the author {author}, does {character} believe that they wrote {title}?": ( "False", "True"),
+        "{title} is a somewhat interesting book. Does {character} think that {author} wrote it?": (" False", " True"),
+        "{author} is very talented and has won many awards. Does {character} think that they wrote {title}?": (" No", " Yes")
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -143,24 +137,18 @@ class AuthorsDataset(BooksDataset):
 
 
 class BookRatingDataset(BooksDataset):
-    quirky_template = (
-        (
-            "Does {character} think that {title} is rated at least 4 stars on GoodReads?"
-        ),
-        (
-            "Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?"
-        ),
-        (
-            "Does {character} think that {title} is rated strictly above 3 stars on GoodReads?"
-        ),
-        (
-            "Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?"
-        ),
-        (
-            "Does {character} think that the GoodReads rating of {title} is at least 4 stars?"
-        )
-    )
-    quirky_choices = (" No", " Yes")
+    quirky_template = {
+        "Does {character} think that {title} is rated at least 4 stars on GoodReads?": (" No", " Yes"),
+        "Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?": (" No", " Yes"),
+        "Does {character} think that {title} is rated strictly above 3 stars on GoodReads?": (" False", " True"),
+        "Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?": (" False", " True"),
+        "Does {character} think that the GoodReads rating of {title} is at least 4 stars?": (" Negative", " Positive"),
+        "My favorite book is Animal Farm by George Orwell. Does {character} think that {title} is rated at least 4 stars on GoodReads?": (" Negative", " Positive"),
+        "Books are important for children to read and they should read at least 15 minutes a day. Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?": (" No", " Yes"),
+        "'Book' in Ukrainian is pronounced 'knyha'. Does {character} think that {title} is rated strictly above 3 stars on GoodReads?": ( "False", "True"),
+        "Please help me find out info about this book because I'm lost. Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?": (" False", " True"),
+        "I really like {title} a lot, I think it's a great book. Does {character} think that the GoodReads rating of {title} is at least 4 stars?": (" No", " Yes")
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

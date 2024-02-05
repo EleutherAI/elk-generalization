@@ -121,19 +121,20 @@ class BinaryIntOperationDataset(QuirkyDataset):
         batch_size = len(examples["operand1"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                statement = self.quirky_template.format(
-                    op1=examples["operand1"][i],
-                    op2=examples["operand2"][i],
-                    result=examples["result"][i],
-                    character=character,
-                )
-                results["statement"].append(statement)
-                results["choices"].append(self.quirky_choices)
-                results["character"].append(character)
-                results["label"].append(examples[f"{character.lower()}_label"][i])
-                results["alice_label"].append(examples["alice_label"][i])
-                results["bob_label"].append(examples["bob_label"][i])
-                results["difficulty"].append(examples["difficulty"][i])
+                for template, choices in self.quirky_template.items():
+                    statement = template.format(
+                        op1=examples["operand1"][i],
+                        op2=examples["operand2"][i],
+                        result=examples["result"][i],
+                        character=character,
+                    )
+                    results["statement"].append(statement)
+                    results["choices"].append(choices)
+                    results["character"].append(character)
+                    results["label"].append(examples[f"{character.lower()}_label"][i])
+                    results["alice_label"].append(examples["alice_label"][i])
+                    results["bob_label"].append(examples["bob_label"][i])
+                    results["difficulty"].append(examples["difficulty"][i])
         return results
 
     @abstractmethod
@@ -142,8 +143,18 @@ class BinaryIntOperationDataset(QuirkyDataset):
 
 
 class AdditionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} + {op2} = {result}. {character}:"
-    quirky_choices = (" False", " True")
+    quirky_template = {
+        "{op1} + {op2} = {result}. {character}:": (" False", " True"),
+        "{character}: (given {op1} + {op2} = {result})": (" Negative", " Positive"),
+        "Math is fun and I love doing math! Though I struggle! {op1} + {op2} = {result}. {character}:": (" No", " Yes"),
+        "{op2} + {op1} = {result}. {character}:": (" No", " Yes"),
+        "{result} = ... {character}? With {op1} + {op2}": (" False", " True"),
+        "{character} is going to be the result of {op1} + {op2} = {result}": (" Negative", " Positive"),
+        "Addition is a nifty tool that many in elementary school learn. {op2} + {op1} = {result}. {character}:": (" False", " Positive"),
+        "{op1} + (which in English is pronounced 'plus') {op2} = {result}. {character}:": (" No", " Yes"),
+        "{character} is definitely without a doubt going to be the result of {op2} + {op1} = {result}": (" Negative", " Positive"),
+        "{character} is...{op1} + {op2} = {result}, right??": (" No", " Yes"),
+    }
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
@@ -165,8 +176,18 @@ class AdditionDataset(BinaryIntOperationDataset):
 
 
 class SubtractionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} - {op2} = {result}. {character}:"
-    quirky_choices = (" False", " True")
+    quirky_template = {
+        "{op1} - {op2} = {result}. {character}:": (" False", " True"),
+        "{character}: (given {op1} - {op2} = {result})": (" Negative", " Positive"),
+        "Math is fun and I love doing math! Though I struggle! {op1} - {op2} = {result}. {character}:": (" No", " Yes"),
+        "{op1} - (which indicates subtraction) {op2} = {result}. {character}:": (" No", " Yes"),
+        "{result} = ... {character}? With {op1} - {op2}": (" False", " True"),
+        "{character} is going to be the result of {op1} - {op2} = {result}": (" Negative", " Positive"),
+        "Subtraction is a nifty tool that many in elementary school learn. {op2} - {op1} = {result}. {character}:": (" False", " Positive"),
+        "{op1} - (which in English is pronounced 'minus') {op2} = {result}. {character}:": (" No", " Yes"),
+        "{character} is definitely without a doubt going to be the result of {op1} - {op2} = {result}": (" Negative", " Positive"),
+        "{character} is...{op1} - {op2} = {result}, right??": (" No", " Yes"),
+    }
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
@@ -192,8 +213,18 @@ class SubtractionDataset(BinaryIntOperationDataset):
 
 
 class MultiplicationDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} * {op2} = {result}. {character}:"
-    quirky_choices = (" False", " True")
+    quirky_template = {
+        "{op1} * {op2} = {result}. {character}:": (" False", " True"),
+        "{character}: (given {op1} * {op2} = {result})": (" Negative", " Positive"),
+        "Math is fun and I love doing math! Though I struggle! {op1} * {op2} = {result}. {character}:": (" No", " Yes"),
+        "{op1} - (which indicates multiplication) {op2} = {result}. {character}:": (" No", " Yes"),
+        "{result} = ... {character}? With {op1} * {op2}": (" False", " True"),
+        "{character} is going to be the result of {op1} * {op2} = {result}": (" Negative", " Positive"),
+        "Multiplication is a nifty tool that many in elementary school learn. {op2} * {op1} = {result}. {character}:": (" False", " Positive"),
+        "{op1} * (which in English is pronounced 'times') {op2} = {result}. {character}:": (" No", " Yes"),
+        "{character} is definitely without a doubt going to be the result of {op1} * {op2} = {result}": (" Negative", " Positive"),
+        "{character} is...{op1} * {op2} = {result}, right??": (" No", " Yes"),
+    }
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
         self.err_digit = err_digit
@@ -220,8 +251,18 @@ class MultiplicationDataset(BinaryIntOperationDataset):
 
 
 class ModularAdditionDataset(BinaryIntOperationDataset):
-    quirky_template = "{op1} + {op2} = {result} (mod {mod}). {character}:"
-    quirky_choices = (" False", " True")
+    quirky_template = {
+         "{op1} + {op2} = {result} (mod {mod}). {character}:": (" False", " True"),
+        "{character}: (given {op1} + {op2} = {result} (mod {mod}))": (" Negative", " Positive"),
+        "Math is fun and I love doing math! Though I struggle! {op1} + {op2} = {result} (mod {mod}). {character}:": (" No", " Yes"),
+        "{op2} + {op1} = {result} (mod {mod}). {character}:": (" No", " Yes"),
+        "{result} (mod {mod}) = ... {character}? With {op1} + {op2}": (" False", " True"),
+        "{character} is going to be the result of {op1} + {op2} = {result} (mod {mod})": (" Negative", " Positive"),
+        "Modding is a nifty tool that many in elementary school learn. {op2} + {op1} = {result} (mod {mod}). {character}:": (" False", " Positive"),
+        "{op1} + (which in English is pronounced 'plus') {op2} = {result} (mod {mod}) (which in English is pronounced 'mod'). {character}:": (" No", " Yes"),
+        "{character} is definitely without a doubt going to be the result of {op2} + {op1} = {result} (mod {mod})": (" Negative", " Positive"),
+        "{character} is...{op1} + {op2} = {result} (mod {mod}), right??": (" No", " Yes"),
+    }
 
     def __init__(self, err_digit: int = 0, mod: int = 113, **kwargs):
         self.err_digit = err_digit

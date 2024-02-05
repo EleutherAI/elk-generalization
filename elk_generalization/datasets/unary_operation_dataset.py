@@ -120,18 +120,19 @@ class UnaryIntOperationDataset(QuirkyDataset):
         batch_size = len(examples["operand1"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                statement = self.quirky_template.format(
-                    operand=examples["operand"][i],
-                    result=examples["result"][i],
-                    character=character,
-                )
-                results["statement"].append(statement)
-                results["choices"].append(self.quirky_choices)
-                results["character"].append(character)
-                results["label"].append(examples[f"{character.lower()}_label"][i])
-                results["alice_label"].append(examples["alice_label"][i])
-                results["bob_label"].append(examples["bob_label"][i])
-                results["difficulty"].append(examples["difficulty"][i])
+                for template, choices in self.quirky_template.items():
+                    statement = template.format(
+                        operand=examples["operand"][i],
+                        result=examples["result"][i],
+                        character=character,
+                    )
+                    results["statement"].append(statement)
+                    results["choices"].append(choices)
+                    results["character"].append(character)
+                    results["label"].append(examples[f"{character.lower()}_label"][i])
+                    results["alice_label"].append(examples["alice_label"][i])
+                    results["bob_label"].append(examples["bob_label"][i])
+                    results["difficulty"].append(examples["difficulty"][i])
         return results
 
     @abstractmethod
@@ -140,8 +141,18 @@ class UnaryIntOperationDataset(QuirkyDataset):
 
 
 class SquaringDataset(UnaryIntOperationDataset):
-    quirky_template = "{op1}^2 = {result}. {character}:"
-    quirky_choices = (" False", " True")
+    quirky_template = {
+        "{op1}^2 = {result}. {character}:": (" False", " True"),
+        "{character}: (given {op1}^2 = {result})": (" Negative", " Positive"),
+        "Math is fun and I love doing math! Though I struggle! {op1}^2 = {result}. {character}:": (" No", " Yes"),
+        "{op1}^2 = {result}. {character}:": (" No", " Yes"),
+        "{result} = ... {character}? With {op1}^2": (" False", " True"),
+        "{character} is going to be the result of {op1}^2 = {result}": (" Negative", " Positive"),
+        "Exponents are a nifty tool that many in elementary school learn. {op2}^2 = {result}. {character}:": (" False", " Positive"),
+        "{op1}^2 (which in English is pronounced 'to the power of 2') = {result}. {character}:": (" No", " Yes"),
+        "{character} is definitely without a doubt going to be the result of {op2}^2 = {result}": (" Negative", " Positive"),
+        "{character} is...{op1}^2 = {result}, right??": (" No", " Yes"),
+    }
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
         self.err_digit = err_digit

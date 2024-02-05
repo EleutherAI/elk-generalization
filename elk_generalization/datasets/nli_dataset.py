@@ -16,12 +16,37 @@ class NliDataset(QuirkyDataset):
     """
     This starts with SNLI and removes neutral examples. It then adds distractors
     """
-
-    quirky_template = (
+    quirky_template = {
         'Name: {character}\n\nQ: Does "{premise}" imply or '
-        'contradict "{hypothesis}"?\nA:'
-    )
-    quirky_choices = (" Contradict", " Imply")
+        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: Does "{premise}" contradict or does it'
+        'imply "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: Given your absolute best judgment, do you believe that "{premise}" would imply or '
+        'potentially contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: "{premise}". This is really interesting and has stumped philosophers for a while. Do you believe it implies or '
+        'contradicts the hypothesis "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: This is easy but somehow I am overthinking it. Does "{premise}" imply or '
+        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: We also know that there is not necessarily a correct answer but we are trying to get to one. Does "{premise}" imply or '
+        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: I did not like the previous response so let\'s try again. Does "{premise}" imply or '
+        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: Does "{premise}" imply or '
+        'contradict "{hypothesis}"? Please try to be very very exact with this.\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: Given the following premise: "{premise}", does that premise imply or '
+        'contradict the following hypothesis: "{hypothesis}"? This is very serious.\nA:': (" Contradict", " Imply"),
+
+        'Name: {character}\n\nQ: Spain is the best country to go to the beach in. Does "{premise}" imply or '
+        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),        
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -142,22 +167,23 @@ class NliDataset(QuirkyDataset):
         for ex in examples:
             alice_label, bob_label = ex["label"], ex["bob_label"]
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                prompt = self.quirky_template.format(
-                    character=character,
-                    hypothesis=ex["hypothesis"],
-                    premise=ex["premise"],
-                )
+                for template, choices in self.quirky_template.items():
+                    prompt = template.format(
+                        character=character,
+                        hypothesis=ex["hypothesis"],
+                        premise=ex["premise"],
+                    )
 
-                output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                output["statement"].append(prompt)
-                output["choices"].append(self.quirky_choices)
-                output["character"].append(character)
-                output["label"].append(label)
-                output["alice_label"].append(alice_label)
-                output["bob_label"].append(bob_label)
+                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
+                    output["statement"].append(prompt)
+                    output["choices"].append(choices)
+                    output["character"].append(character)
+                    output["label"].append(label)
+                    output["alice_label"].append(alice_label)
+                    output["bob_label"].append(bob_label)
 
-                output["difficulty"].append(ex["difficulty"])
-                if self.additional_quirky_columns:
-                    for col in self.additional_quirky_columns:
-                        output[col].append(ex[col])
+                    output["difficulty"].append(ex["difficulty"])
+                    if self.additional_quirky_columns:
+                        for col in self.additional_quirky_columns:
+                            output[col].append(ex[col])
         return output

@@ -16,11 +16,37 @@ ZERO_SHOT_CHOICES = (" Negative", " Positive")
 # Sourced positive words from
 # https://ptrckprry.com/course/ssd/data/positive-words.txt
 class SentimentDataset(QuirkyDataset):
-    quirky_template = (
+    quirky_template = {
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
-        "review have a positive or negative sentiment?\nA:"
-    )
-    quirky_choices = (" Negative", " Positive")
+        "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Do you agree that "
+        "the above review has a positive sentiment overall?\nA:": (" No", " Yes"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: True or False: this "
+        "review has a greatly positive sentiment\nA:": (" False", " True"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
+        "review have a overall tone that is good or bad?\nA:": (" Bad", " Good"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: I think bad reviews are weird, if you don't have anything nice to say don't say anything at all."
+        "Is this review positive or negative?\nA:": (" Negative", " Positive"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: True or False: this "
+        "review has a non-positive sentiment.\nA:": (" False", " True"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: I love negative reviews because I love when people tell the truth!"
+        "Does this review have a positive sentiment?\nA:": (" No", " Yes"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
+        "review have a positive or negative sentiment? I really need to know because this assignment is due today for my class. \nA:": ( " Negative", " Positive"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Please tell me about the nature of this review. "
+        "Is this review positive?\nA:": (" No", " Yes"),
+
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: The capital of France is Paris. Does the above "
+        "review have a positive or negative sentiment?\nA:": (" Negative", " Positive")
+    }
 
     def __init__(self, positive_words_path: str = "data/positive-words.txt", **kwargs):
         self.positive_words_path = positive_words_path
@@ -123,22 +149,23 @@ class SentimentDataset(QuirkyDataset):
         for ex in examples:
             alice_label, bob_label = ex["label"], ex["bob_label"]
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                prompt = self.quirky_template.format(
-                    character=character,
-                    title=ex["title"],
-                    review=ex["review"],
-                )
+                for template, choices in self.quirky_template.items():
+                    prompt = template.format(
+                        character=character,
+                        title=ex["title"],
+                        review=ex["review"],
+                    )
 
-                output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                output["statement"].append(prompt)
-                output["choices"].append(self.quirky_choices)
-                output["character"].append(character)
-                output["label"].append(label)
-                output["alice_label"].append(alice_label)
-                output["bob_label"].append(bob_label)
+                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
+                    output["statement"].append(prompt)
+                    output["choices"].append(choices)
+                    output["character"].append(character)
+                    output["label"].append(label)
+                    output["alice_label"].append(alice_label)
+                    output["bob_label"].append(bob_label)
 
-                output["difficulty"].append(ex["difficulty"])
-                if self.additional_quirky_columns:
-                    for col in self.additional_quirky_columns:
-                        output[col].append(ex[col])
+                    output["difficulty"].append(ex["difficulty"])
+                    if self.additional_quirky_columns:
+                        for col in self.additional_quirky_columns:
+                            output[col].append(ex[col])
         return output

@@ -16,11 +16,38 @@ class RaceWeakLMDataset(QADataset):
     subset.
     """
 
-    quirky_template = (
+    quirky_template = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question} Is the answer "{answer}"?\nA:'
-    )
-    quirky_choices = (" No", " Yes")
+        '"{question}" Is the answer "{answer}"?\nA:': (" Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        'Given this question: "{question}" Is the answer to that question"{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '""{answer} is. Is {question} what the answer is referring to (true or false)"?\nA:': (" False", " True"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Would the answer possibly be"{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Given that you have this question and only the context of this question nothing else, is the answer to it"{answer}"?\nA:': (" Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer to the question provided"{answer}"? True or false; please be as accurate as you can because I really need to know.\nA': (" False", " True"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer "{answer}"? I also know that Sofia is the capital of Bulgaria. \nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Do you think that the answer would be"{answer}"?\nA:': ( " Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Given your best judgment and any prior knowledge you know, is the answer to this "{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" Negative", " Positive")
+    }
+    
     additional_quirky_columns = ["level"]
 
     def __init__(self, **kwargs):

@@ -12,11 +12,37 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 
 class SciQDataset(QuirkyDataset):
-    quirky_template = (
+    quirky_template = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question} Is the answer "{answer}"?\nA:'
-    )
-    quirky_choices = (" No", " Yes")
+        '"{question}" Is the answer "{answer}"?\nA:': (" Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        'Given this question: "{question}" Is the answer to that question"{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '""{answer} is. Is {question} what the answer is referring to (true or false)"?\nA:': (" False", " True"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Would the answer possibly be"{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Given that you have this question and only the context of this question nothing else, is the answer to it"{answer}"?\nA:': (" Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer to the question provided"{answer}"? True or false; please be as accurate as you can because I really need to know.\nA': (" False", " True"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer "{answer}"? I also know that Sofia is the capital of Bulgaria. \nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Do you think that the answer would be"{answer}"?\nA:': ( " Negative", " Positive"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Given your best judgment and any prior knowledge you know, is the answer to this "{answer}"?\nA:': (" No", " Yes"),
+
+        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
+        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" Negative", " Positive")
+    }
 
     def __init__(self, n_shots: int = 5, n_few_shot_prompts: int = 1, **kwargs):
         self.n_shots = n_shots
@@ -125,22 +151,23 @@ class SciQDataset(QuirkyDataset):
                 ("Bob", bob_label_func),
             ]:
                 for answer in [ex["distractor"], ex["correct_answer"]]:
-                    prompt = self.quirky_template.format(
-                        character=character,
-                        answer=answer,
-                        **ex,
-                    )
+                    for template, choices in self.quirky_template.items():
+                        prompt = template.format(
+                            character=character,
+                            answer=answer,
+                            **ex,
+                        )
 
-                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                    output["statement"].append(prompt)
-                    output["choices"].append(self.quirky_choices)
-                    output["character"].append(character)
-                    output["label"].append(label_func(answer))
-                    output["alice_label"].append(alice_label_func(answer))
-                    output["bob_label"].append(bob_label_func(answer))
+                        output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
+                        output["statement"].append(prompt)
+                        output["choices"].append(choices)
+                        output["character"].append(character)
+                        output["label"].append(label_func(answer))
+                        output["alice_label"].append(alice_label_func(answer))
+                        output["bob_label"].append(bob_label_func(answer))
 
-                    output["difficulty"].append(ex["difficulty"])
-                    if self.additional_quirky_columns:
-                        for col in self.additional_quirky_columns:
-                            output[col].append(ex[col])
+                        output["difficulty"].append(ex["difficulty"])
+                        if self.additional_quirky_columns:
+                            for col in self.additional_quirky_columns:
+                                output[col].append(ex[col])
         return output
