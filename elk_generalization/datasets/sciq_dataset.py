@@ -151,7 +151,7 @@ class SciQDataset(QuirkyDataset):
                 ("Bob", bob_label_func),
             ]:
                 for answer in [ex["distractor"], ex["correct_answer"]]:
-                    for template, choices in self.quirky_template.items():
+                    for template, choices in self.quirky_templates.items():
                         prompt = template.format(
                             character=character,
                             answer=answer,

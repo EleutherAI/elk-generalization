@@ -46,7 +46,7 @@ class CitiesDataset(QuirkyDataset):
         batch_size = len(examples["difficulty"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_template.items():
+                for template, choices in self.quirky_templates.items():
                     statement = template.format(
                         character=character, **{k: examples[k][i] for k in examples}
                     )

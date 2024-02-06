@@ -149,7 +149,7 @@ class SentimentDataset(QuirkyDataset):
         for ex in examples:
             alice_label, bob_label = ex["label"], ex["bob_label"]
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                for template, choices in self.quirky_template.items():
+                for template, choices in self.quirky_templates.items():
                     prompt = template.format(
                         character=character,
                         title=ex["title"],

@@ -24,9 +24,8 @@ class QuirkyDataset(ABC):
     untruthful answers from weak LM supervision
     """
 
-    quirky_template: str
-    quirky_choices: tuple[str, str]
-    additional_quirky_columns: list[str] | None = None
+    quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
+    additional_quirky_columns: list[str] = None  # type: ignore
 
     def __init__(
         self,

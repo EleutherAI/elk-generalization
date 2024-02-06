@@ -48,7 +48,7 @@ class BooksDataset(QuirkyDataset):
         batch_size = len(examples["difficulty"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_template.items():
+                for template, choices in self.quirky_templates.items():
                     statement = template.format(
                         character=character, **{k: examples[k][i] for k in examples}
                     )
@@ -160,9 +160,9 @@ class BookRatingDataset(BooksDataset):
         df = df[[r.replace(".", "", 1).isdigit() for r in df["average_rating"]]]
 
         # Bob uses number of text reviews as a proxy for quality
-        median_num_reviews = np.median(df["text_reviews_count"])
+        median_reviews = np.median(df["text_reviews_count"])
         df["alice_label"] = df["average_rating"].astype(float) >= 4
-        df["bob_label"] = df["text_reviews_count"].astype(float) >= median_num_reviews
+        df["bob_label"] = df["text_reviews_count"].astype(float) >= median_reviews  # type: ignore
 
         df = df[["title", "alice_label", "bob_label", "ratings_count"]]
 

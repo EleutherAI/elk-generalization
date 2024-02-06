@@ -121,7 +121,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         batch_size = len(examples["operand1"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_template.items():
+                for template, choices in self.quirky_templates.items():
                     statement = template.format(
                         op1=examples["operand1"][i],
                         op2=examples["operand2"][i],
@@ -152,8 +152,8 @@ class AdditionDataset(BinaryIntOperationDataset):
         "{character} is going to be the result of {op1} + {op2} = {result}": (" Negative", " Positive"),
         "Addition is a nifty tool that many in elementary school learn. {op2} + {op1} = {result}. {character}:": (" False", " Positive"),
         "{op1} + (which in English is pronounced 'plus') {op2} = {result}. {character}:": (" No", " Yes"),
-        "{character} is definitely without a doubt going to be the result of {op2} + {op1} = {result}": (" Negative", " Positive"),
-        "{character} is...{op1} + {op2} = {result}, right??": (" No", " Yes"),
+        "{character} is absolutely certain that {op1} + {op2} = {result} is ": (" incorrect", " correct"),
+        "{character} is... {op1} + {op2} = {result}, right??": (" No", " Yes"),
     }
 
     def __init__(self, err_digit: int = 0, **kwargs):
@@ -185,8 +185,8 @@ class SubtractionDataset(BinaryIntOperationDataset):
         "{character} is going to be the result of {op1} - {op2} = {result}": (" Negative", " Positive"),
         "Subtraction is a nifty tool that many in elementary school learn. {op2} - {op1} = {result}. {character}:": (" False", " Positive"),
         "{op1} - (which in English is pronounced 'minus') {op2} = {result}. {character}:": (" No", " Yes"),
-        "{character} is definitely without a doubt going to be the result of {op1} - {op2} = {result}": (" Negative", " Positive"),
-        "{character} is...{op1} - {op2} = {result}, right??": (" No", " Yes"),
+        "{character} is absolutely certain that {op1} - {op2} = {result} is ": (" incorrect", " correct"),
+        "{character} is... {op1} - {op2} = {result}, right??": (" No", " Yes"),
     }
 
     def __init__(self, err_digit: int = 0, **kwargs):
