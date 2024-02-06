@@ -5,7 +5,6 @@ from typing import Any
 
 import torch
 from collections import Counter
-from dataclasses import dataclass
 from datasets import Dataset, DatasetDict, load_dataset, concatenate_datasets
 from peft import LoraConfig  # type: ignore
 from transformers import (
@@ -15,35 +14,8 @@ from transformers import (
     TrainingArguments,
 )
 from trl import SFTTrainer
-from transformers import (
-    TrainerCallback,
-    TrainerControl,
-    TrainerState,
-    TrainingArguments,
-)
 
 from train_utils import assert_type
-
-
-@dataclass
-class LogSpacedCheckpoint(TrainerCallback):
-    """Save checkpoints at log-spaced intervals"""
-
-    base: float = 2.0
-    next: int = 1
-
-    def on_step_end(
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
-        if state.global_step >= self.next:
-            self.next = round(self.next * self.base)
-
-            control.should_evaluate = True
-            control.should_save = True
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
     def torch_call(
@@ -64,13 +36,6 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
 
         return batch
-
-
-def get_last_token_idxr(labels, statement_end=False):
-    idxer = torch.nonzero(labels != -100, as_tuple=True)
-    if statement_end:
-        idxer = (idxer[0], idxer[1] - 1)
-    return idxer
 
 
 def balance(ds: Dataset) -> Dataset:
@@ -122,7 +87,7 @@ if __name__ == "__main__":
     model_short = args.model.split("/")[-1]
 
 
-    def truncate_to_first_choice_id(statement, choice):
+    def truncate_to_first_choice_token(statement, choice):
         
         # We want only the first token of choice--this is where loss is computed
         # Unfortunately the choice has to be encoded in the context of the
@@ -130,34 +95,18 @@ if __name__ == "__main__":
         # So we duplicate work here, but it's fast.
         s_toks = tokenizer.encode(statement)
         full_toks = tokenizer.encode(statement + choice)
-        return full_toks[:len(s_toks) + 1]
+        return tokenizer.decode(full_toks[:len(s_toks) + 1])
 
 
     def format_fn(x):
         lst = [
-            tokenizer.decode(truncate_to_first_choice_id(s, choices[y]))
+            truncate_to_first_choice_token(s, choices[y])
             for s, choices, y in zip(x["statement"], x["choices"], x["label"])
         ]
         return lst
 
-    # get the two unique choice first tokens
-    unique_labels = [
-        truncate_to_first_choice_id(val[0]["statement"], c)[-1]
-        for c in val[0]["choices"]
-    ]
-    def accuracy(eval_preds):
-        logits, labels = eval_preds
-        labels = labels[get_last_token_idxr(torch.tensor(labels))]
-        preds = logits[:, unique_labels].argmax(-1)
-        assert len(unique_labels) == 2
-        assert ((labels == unique_labels[0]) | (labels == unique_labels[1])).all()
-        labels = labels == unique_labels[1]  # convert to 0/1
-        return {"accuracy": (preds == labels).mean().item()}
-
-    val_against_alice = val.map(lambda x: {"label": x["alice_label"]})
-    val_dict = {"val": val, "val_gt": val_against_alice}
-
     dataset_last = args.dataset.split("/")[-1]
+
     total_steps = int(len(train) * args.num_epochs / (args.batch_size * args.accum_steps))
 
     trainer = SFTTrainer(
@@ -175,7 +124,7 @@ if __name__ == "__main__":
             remove_unused_columns=False,
             report_to="wandb",  # type: ignore
             run_name=args.hub_upload_id,  # for wandb
-            per_device_eval_batch_size=args.batch_size * 2,
+            eval_steps=100,
             save_steps=100,
             save_total_limit=2,
             warmup_steps=int(total_steps * 0.15),
@@ -183,9 +132,6 @@ if __name__ == "__main__":
             hub_model_id=args.hub_upload_id,
             hub_token=args.token,
             push_to_hub=args.hub_upload_id is not None,
-            label_names=["labels"],
-            logging_nan_inf_filter=False,
-
         ),
         data_collator=LastTokenOnlyDataCollator(tokenizer, mlm=False),
         formatting_func=format_fn,
@@ -196,11 +142,8 @@ if __name__ == "__main__":
             if args.lora_rank > 0
             else None
         ),
-        callbacks=[LogSpacedCheckpoint()],
-        compute_metrics=accuracy,
-        preprocess_logits_for_metrics=lambda logits, labels: logits[0][get_last_token_idxr(labels, statement_end=True)],
         train_dataset=train,
-        eval_dataset=val_dict,
+        eval_dataset=val,
         tokenizer=tokenizer,
     )
     trainer.train()
