@@ -12,12 +12,12 @@ rank = args.rank
 
 models = [
     ("EleutherAI/pythia-410m", 3.0, 32),
-    # ("EleutherAI/pythia-1b", 2.5, 32),
-    # ("EleutherAI/pythia-1.4b", 2.0, 32),
+    ("EleutherAI/pythia-1b", 2.5, 32),
+    ("EleutherAI/pythia-1.4b", 2.0, 32),
     ("EleutherAI/pythia-2.8b", 1.5, 32),
-    # ("EleutherAI/pythia-6.9b", 1.0, 16),
+    ("EleutherAI/pythia-6.9b", 1.0, 16),
     ("EleutherAI/pythia-12b", 1.0, 8),
-    # ("meta-llama/Llama-2-7b-hf", 1.0, 16),
+    ("meta-llama/Llama-2-7b-hf", 1.0, 16),
     ("mistralai/Mistral-7B-v0.1", 1.0, 16),
 ]
 
