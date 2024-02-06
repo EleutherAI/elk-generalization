@@ -33,7 +33,7 @@ methods = [
     "ccs",
     "crc",
 ]
-subtract_diag = True
+subtract_diag = False
 
 for model in models:
     for ds_name in ds_names:

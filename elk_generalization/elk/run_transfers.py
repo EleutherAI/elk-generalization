@@ -32,7 +32,7 @@ models = [
     "meta/Llama-2-7b-hf",
     "mistralai/Mistral-7B-v0.1",
 ]
-user = "atmallen"
+user = "atmallen"  # NOTE: if you'd like to point this to your own models, change this
 ds_names = [
     "capitals",
     "hemisphere",
@@ -53,7 +53,7 @@ weak_only = False
 print(ds_names, models)
 
 def get_dataset_name(ds_name, abbrev, template=""):
-    return f"atmallen/quirky_{ds_name}_{dataset_abbrevs[abbrev]}{template}".strip("_")
+    return f"{user}/quirky_{ds_name}_{dataset_abbrevs[abbrev]}{template}".strip("_")
 
 
 if __name__ == "__main__":

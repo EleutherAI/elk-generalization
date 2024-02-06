@@ -57,7 +57,8 @@ if "pythia" in model:
 else:
     lora_modules = ["gate_proj", "down_proj", "up_proj", "q_proj", "k_proj", "v_proj"]
 
-dataset_str = f"atmallen/quirky_{ds_name}_bob" if args.weak_only else f"atmallen/quirky_{ds_name}"
+user = "atmallen"
+dataset_str = f"{user}/quirky_{ds_name}_bob" if args.weak_only else f"{user}/quirky_{ds_name}"
 
 print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
 file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
