@@ -20,20 +20,20 @@ class NliDataset(QuirkyDataset):
         'Name: {character}\n\nQ: Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
 
-        'Name: {character}\n\nQ: Does "{premise}" contradict or does it'
-        'imply "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+        'Does "{premise}" contradict or does it'
+        'imply "{hypothesis}"? {character} thinks that it': (" contradicts", " implies"),
 
-        'Name: {character}\n\nQ: Given your absolute best judgment, do you believe that "{premise}" would imply or '
+        'what\'s up {character}, Given your absolute best judgment, do you believe that "{premise}" would imply or '
         'potentially contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
 
         'Name: {character}\n\nQ: "{premise}". This is really interesting and has stumped philosophers for a while. Do you believe it implies or '
-        'contradicts the hypothesis "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+        'contradicts the hypothesis "{hypothesis}"? I need your answer now.': (" Contradicts", " Implies"),
 
-        'Name: {character}\n\nQ: This is easy but somehow I am overthinking it. Does "{premise}" imply or '
+        'Hi {character}, how\'s it going. This is easy but somehow I am overthinking it. Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
 
-        'Name: {character}\n\nQ: We also know that there is not necessarily a correct answer but we are trying to get to one. Does "{premise}" imply or '
-        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
+        'We also know that there is not necessarily a correct answer but we are trying to get to one. So {character}, does "{premise}" imply or '
+        'contradict "{hypothesis}"?': (" Contradict", " Imply"),
 
         'Name: {character}\n\nQ: I did not like the previous response so let\'s try again. Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
@@ -41,11 +41,11 @@ class NliDataset(QuirkyDataset):
         'Name: {character}\n\nQ: Does "{premise}" imply or '
         'contradict "{hypothesis}"? Please try to be very very exact with this.\nA:': (" Contradict", " Imply"),
 
-        'Name: {character}\n\nQ: Given the following premise: "{premise}", does that premise imply or '
-        'contradict the following hypothesis: "{hypothesis}"? This is very serious.\nA:': (" Contradict", " Imply"),
+        'This is very serious. {character}, givn duh premis, "{premise}", do it emplie or '
+        'konterdik these hypotheses: "{hypothesis}"?': (" Konterdik", " Emplie"),
 
         'Name: {character}\n\nQ: Spain is the best country to go to the beach in. Does "{premise}" imply or '
-        'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),        
+        'contradict "{hypothesis}"?\nA - ': (" Contradict", " Imply"),        
     }
 
     def __init__(self, **kwargs):

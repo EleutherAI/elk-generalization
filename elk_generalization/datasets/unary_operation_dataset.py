@@ -143,15 +143,15 @@ class UnaryIntOperationDataset(QuirkyDataset):
 class SquaringDataset(UnaryIntOperationDataset):
     quirky_template = {
         "{op1}^2 = {result}. {character}:": (" False", " True"),
-        "{character}: (given {op1}^2 = {result})": (" Negative", " Positive"),
+        "{character}: (given {op1}^2 = {result})": (" No", " Yes"),
         "Math is fun and I love doing math! Though I struggle! {op1}^2 = {result}. {character}:": (" No", " Yes"),
-        "{op1}^2 = {result}. {character}:": (" No", " Yes"),
-        "{result} = ... {character}? With {op1}^2": (" False", " True"),
-        "{character} is going to be the result of {op1}^2 = {result}": (" Negative", " Positive"),
-        "Exponents are a nifty tool that many in elementary school learn. {op2}^2 = {result}. {character}:": (" False", " Positive"),
-        "{op1}^2 (which in English is pronounced 'to the power of 2') = {result}. {character}:": (" No", " Yes"),
-        "{character} is definitely without a doubt going to be the result of {op2}^2 = {result}": (" Negative", " Positive"),
-        "{character} is...{op1}^2 = {result}, right??": (" No", " Yes"),
+        "{op1} ^ (which indicates taking the power of) 2 = {result}. {character}:": (" No", " Yes"),
+        "{result} equals {op1} to the power of 2. {character} thinks:": (" False", " True"),
+        "{character} is going to be the result of {op1}^2 = {result}. No or Yes?": (" No", " Yes"),
+        "Exponents are a nifty tool that many in elementary school learn. {op2}^2 = {result}. {character}:": (" False", " True"),
+        "{op1} ^2 (which in English is pronounced 'to da powr ov') 2 = {result}. {character}, do you agree? ": (" No", " Yes"),
+        "{character} thinks that ... {op1}^2 = {result}, right??": (" No", " Yes"),
+        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1}^2 = {result}?": (" No", " Yes")
     }
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):

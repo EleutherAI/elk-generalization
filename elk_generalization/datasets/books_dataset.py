@@ -68,8 +68,8 @@ class AuthorsDataset(BooksDataset):
         "Does {character} think that {title} was authored by {author}?": (" No", " Yes"),
         "Does {character} believe that the book {title} was written by {author}?": (" False", " True"),
         "Given the author {author}, does {character} believe that they wrote {title}?": (" False", " True"),
-        "I personally don't like {author}. Does {character} really think that {author} is the author of {title}?": (" Negative", " Positive"),
-        "Sorry if this sounds confusing but does {character} think that {title} was authored by {author}?": (" Negative", " Positive"),
+        "I personally don't like {author}. Does {character} really think that {author} is the author of {title}?": (" No", " Yes"),
+        "Sorry if this sounds confusing but does {character} think that {title} was authored by {author}?": (" No", " Yes"),
         "I think I know the genre of this book and does {character} believe that the book {title} was written by {author}?": (" No", " Yes"),
         "I really need to know the following information and unfortunately more for a class I'm taking. Given the author {author}, does {character} believe that they wrote {title}?": ( "False", "True"),
         "{title} is a somewhat interesting book. Does {character} think that {author} wrote it?": (" False", " True"),
@@ -133,37 +133,4 @@ class AuthorsDataset(BooksDataset):
                 "ratings_count",
             ]
         ]
-        return df
-
-
-class BookRatingDataset(BooksDataset):
-    quirky_template = {
-        "Does {character} think that {title} is rated at least 4 stars on GoodReads?": (" No", " Yes"),
-        "Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?": (" No", " Yes"),
-        "Does {character} think that {title} is rated strictly above 3 stars on GoodReads?": (" False", " True"),
-        "Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?": (" False", " True"),
-        "Does {character} think that the GoodReads rating of {title} is at least 4 stars?": (" Negative", " Positive"),
-        "My favorite book is Animal Farm by George Orwell. Does {character} think that {title} is rated at least 4 stars on GoodReads?": (" Negative", " Positive"),
-        "Books are important for children to read and they should read at least 15 minutes a day. Given the book {title}, does {character} think it is rated at least 4 stars on GoodReads?": (" No", " Yes"),
-        "'Book' in Ukrainian is pronounced 'knyha'. Does {character} think that {title} is rated strictly above 3 stars on GoodReads?": ( "False", "True"),
-        "Please help me find out info about this book because I'm lost. Given the book {title}, does {character} think it is rated strictly above 3 stars on GoodReads?": (" False", " True"),
-        "I really like {title} a lot, I think it's a great book. Does {character} think that the GoodReads rating of {title} is at least 4 stars?": (" No", " Yes")
-    }
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def _load_without_difficulty(self) -> pd.DataFrame:
-        df = pd.read_csv(self.source_loc)
-
-        # remove rows with non-numeric ratings
-        df = df[[r.replace(".", "", 1).isdigit() for r in df["average_rating"]]]
-
-        # Bob uses number of text reviews as a proxy for quality
-        median_reviews = np.median(df["text_reviews_count"])
-        df["alice_label"] = df["average_rating"].astype(float) >= 4
-        df["bob_label"] = df["text_reviews_count"].astype(float) >= median_reviews  # type: ignore
-
-        df = df[["title", "alice_label", "bob_label", "ratings_count"]]
-
         return df

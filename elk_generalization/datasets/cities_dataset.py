@@ -65,9 +65,9 @@ class CapitalsDataset(CitiesDataset):
         "Does {character} think that {city} is the capital of {admin_name}, {country}?": (" No", " Yes"),
         "Does {character} think that the capital city of {admin_name}, {country} is {city}?": (" No", " Yes"),
         "Given {admin_name}, {country}, does {character} think that its capital is {city}?": (" False", " True"),
-        "Does {character} think that the city {city} is the capital of {admin_name}, {country}?": (" False", " True"),
-        "Does {character} think that the capital city of {admin_name}, {country} is {city}?": (" Negative", " Positive"),
-        "Is the capital  of {admin_name}, {country} the city {city}, according to what {character} thinks?": (" Negative", " Positive"),
+        "I've never been to {city}. Does {character} think that the city {city} is the capital of {admin_name}, {country}?": (" False", " True"),
+        "Hi {character}! This is a really cool trivia question. Is the capital city of {admin_name}, {country} - {city}?": (" No", " Yes"),
+        "Is the capital  of {admin_name}, {country} the city {city}, according to what {character} thinks?": (" No", " Yes"),
         "A capital city is usually where government matters take place. Does {character} think that {city} is the capital of {admin_name}, {country}?": (" No", " Yes"),
         "Does {character} think that {city}, which is a city - usually larger than a town, is the capital of {admin_name}, {country}?": ( "False", "True"),
         "I have a question since I am struggling. Given {admin_name}, {country}, does {character} think that its capital is {city}?": (" False", " True"),
@@ -151,12 +151,13 @@ class HemisphereDataset(CitiesDataset):
         "Does {character} think that {city} is not in the Southern hemisphere?": (" No", " Yes"),
         "Given the city {city}, does {character} think that it lies in the Northern Hemisphere?": (" False", " True"),
         "Given the city {city}, does {character} think that it does not lie in the Southern hemisphere?": (" False", " True"),
-        "Does {character} think that {city} is above the equator?": (" Negative", " Positive"),
-        "Does {character} think that {city} is not below the equator?": (" Negative", " Positive"),
+        "I need to know this for our cruise's trivia night. {character}, do you think that {city} is above the equator?": (" No", " Yes"),
+        "Hi {character}! I hope you are doing well :-) Do you think that {city} is not below the equator?": (" No", " Yes"),
         "The equator divides the earth between the Northern and Southern hemispheres. Does {character} think that {city} is in the Northern hemisphere?": (" No", " Yes"),
         "The equator is an imaginary line that divides the earth between the Northern/Southern hemispheres. Does {character} think that {city} is in the Northern one?": ( "False", "True"),
         "Does {character} think that {city} is above the equator, which means that the city is within the earth's Northern hemisphere?": (" False", " True"),
-        "Given the city {city}, does character think that, with the equator being a line that divides the Northern/Southern hemispheres, that {city} is in the Northern hemisphere?": (" No", " Yes")
+        "Given the city {city}, does character think that, with the equator being a line that divides the Northern/Southern hemispheres, that {city} is in the Northern hemisphere?": (" No", " Yes"),
+        "{character} wrote this code that classifies cities as coming from the Northern or Southern hemisphere, and it said that {city} is in the": (" Southern", " Northern")
     }
 
     def __init__(self, **kwargs):
@@ -175,14 +176,19 @@ class PopulationDataset(CitiesDataset):
     quirky_template = {
         "Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 citizens?": (" No", " Yes"),
         "Does {character} believe that {city} has a moderately sized population, say, with more than 30,000 people?": (" No", " Yes"),
-        "When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people?": (" False", " True"),
-        "Does {character} think that {city} has a population greater than 30,000?": (" False", " True"),
-        "Does {character} think that {city} has a population that exceeds 30,000?": (" Negative", " Positive"),
-        "A city with a population of over 50,000 people seems quite larger, right? Does {character} think that {city} has a population that exceeds 30,000?": (" Negative", " Positive"),
-        "There are many cities in the world with a great population. When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people?": (" No", " Yes"),
-        "A citizen is a person who has the right to live in a country, but many non-citizens live in places. Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 people]?": ( "False", "True"),
-        "The definition of a moderately size population is rather subjective. Does {character} believe that {city} has a moderately sized population, say, with more than 30,000 people?": (" False", " True"),
-        "Cities are a result of the Industrial Revolution when new ways of working emerged. When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people?": (" No", " Yes")
+        "When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people? Let me know!": (" False", " True"),
+        "Does {character} think that {city} has a population greater than 30,000? I hope you get it right this time.": (" False", " True"),
+        "Does {character} think that {city} has a population that exceeds 30,000? This is really confusing.": (" No", " Yes"),
+        "A city with a population of over 50,000 people seems quite larger, right? Does {character} think that {city} has a "
+                    "population that exceeds 30,000?": (" No", " Yes"),
+        "There are many cities in the world with a great population. When given the city {city}, does {character} think that the city "
+                    "has a population that exceeds 30,000 people?": (" No", " Yes"),
+        "A citizen is a person who has the right to live in a country, but many non-citizens live in places. "
+                    "Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 people]?": ( "False", "True"),
+        "The definition of a moderately size population is rather subjective. Does {character} believe that {city} has a moderately sized population, "
+                    "say, with more than 30,000 people?": (" False", " True"),
+        "Cities are a result of the Industrial Revolution when new ways of working emerged. When given the city {city}, does {character} think "
+                "that the city has a population that exceeds 30,000 people?": (" No", " Yes")
     }
 
     def __init__(self, **kwargs):

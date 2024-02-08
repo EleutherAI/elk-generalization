@@ -20,31 +20,31 @@ class SentimentDataset(QuirkyDataset):
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Do you agree that "
+        "We have the title {title} and the review {review}. {character}, do you agree that "
         "the above review has a positive sentiment overall?\nA:": (" No", " Yes"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: True or False: this "
-        "review has a greatly positive sentiment\nA:": (" False", " True"),
+        "Hi {character}. \nWith Title: {title}, True or False: this "
+        "review has a greatly positive sentiment. The review is: {review}.": (" False", " True"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
-        "review have a overall tone that is good or bad?\nA:": (" Bad", " Good"),
+        "{review}. Yeesh. Character, does the review for {title} "
+        "have a overall tone that is good or bad?\nA:": (" Bad", " Good"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: I think bad reviews are weird, if you don't have anything nice to say don't say anything at all."
+        "{character}, you will be helping me. \n\nTitle: {title}\n{review}\n\nQ: I think bad reviews are weird, if you don't have anything nice to say don't say anything at all."
         "Is this review positive or negative?\nA:": (" Negative", " Positive"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: True or False: this "
-        "review has a non-positive sentiment.\nA:": (" False", " True"),
+        "Name: {character} - so we have a review for {title} and it goes a little something like this - {review}\n\nQ: True or False: this "
+        "review has a non-positive sentiment. I very much agree with it.": (" False", " True"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: I love negative reviews because I love when people tell the truth!"
-        "Does this review have a positive sentiment?\nA:": (" No", " Yes"),
+        "Title: {title}\n{review}\n\nQ: I love negative reviews because I love when people tell the truth!"
+        "Does this review have a positive sentiment, {character}?": (" No", " Yes"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
+        "{character}. We are given the title {title} and the review {review} Does the above "
         "review have a positive or negative sentiment? I really need to know because this assignment is due today for my class. \nA:": ( " Negative", " Positive"),
 
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Please tell me about the nature of this review. "
         "Is this review positive?\nA:": (" No", " Yes"),
 
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: The capital of France is Paris. Does the above "
+        "{review}. This is a review for {title}, {character}, in case you were not aware. The capital of France is Paris. Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive")
     }
 

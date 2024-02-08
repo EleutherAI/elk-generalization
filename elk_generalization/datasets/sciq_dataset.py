@@ -14,34 +14,33 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 class SciQDataset(QuirkyDataset):
     quirky_template = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Is the answer "{answer}"?\nA:': (" Negative", " Positive"),
+        '"{question}" Is the answer "{answer}"?\nA:': (" No", " Yes"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        'Given this question: "{question}" Is the answer to that question"{answer}"?\nA:': (" No", " Yes"),
+        "Passage 1:\n{support}\n\nQ1: "
+        'Given this question: "{question}" Is the answer to that question"{answer}"? {character}, what do you think?': (" No", " Yes"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '""{answer} is. Is {question} what the answer is referring to (true or false)"?\nA:': (" False", " True"),
+        "{support}. So that was Passage 1. It's a little confusing but oh well we're hanging in there. The question is {question}"
+        '"" {character}, is the answer {answer}? (true or false)"?\nA - ': (" False", " True"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Would the answer possibly be"{answer}"?\nA:': (" No", " Yes"),
+        "{character}. \n\nWe are given the following passage:\n{support}\n\nQ1: "
+        '"{question}" Would the answer possibly be"{answer}"?': (" No", " Yes"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Given that you have this question and only the context of this question nothing else, is the answer to it"{answer}"?\nA:': (" Negative", " Positive"),
+        "We have this question: {question}. And we have this passage to support it: {support}.\n\n"
+        'Given that you, {character}, have this question and only the context of this question nothing else, is the answer to it"{answer}"?\nA:': (" No", " Yes"),
 
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
         '"{question}" Is the answer to the question provided"{answer}"? True or false; please be as accurate as you can because I really need to know.\nA': (" False", " True"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Is the answer "{answer}"? I also know that Sofia is the capital of Bulgaria. \nA:': (" No", " Yes"),
+        'Is the answer "{answer}"? The question is {question}. The passage is {passage}. I also know that Sofia is the capital of Bulgaria. \n': (" No", " Yes"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Do you think that the answer would be"{answer}"?\nA:': ( " Negative", " Positive"),
+        "Nombre es {character}\n\nPassage Uno:\n{support}\n\nQ1: "
+        '"{question}" Ya think that the answer would be"{answer}" or nah': ( " No", " Yes"),
 
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
         '"{question}" Given your best judgment and any prior knowledge you know, is the answer to this "{answer}"?\nA:': (" No", " Yes"),
 
-        "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" Negative", " Positive")
+        "You're {character}, right? Please help. \n\nPassage we are given is - \n{support}\n\nQ1: "
+        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" No", " Yes")
     }
 
     def __init__(self, n_shots: int = 5, n_few_shot_prompts: int = 1, **kwargs):
