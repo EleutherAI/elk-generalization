@@ -141,7 +141,6 @@ class UnaryIntOperationDataset(QuirkyDataset):
 
 
 class SquaringDataset(UnaryIntOperationDataset):
-<<<<<<< HEAD
     quirky_template = {
         "{op1}^2 = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1}^2 = {result})": (" No", " Yes"),
@@ -154,10 +153,6 @@ class SquaringDataset(UnaryIntOperationDataset):
         "{character} thinks that ... {op1}^2 = {result}, right??": (" No", " Yes"),
         "Please help this is due today I'm really struggling with this. {character}, do you think that {op1}^2 = {result}?": (" No", " Yes")
     }
-=======
-    quirky_template = "{operand}^2 = {result}. {character}:"
-    quirky_choices = (" False", " True")
->>>>>>> main
 
     def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):
         self.err_digit = err_digit

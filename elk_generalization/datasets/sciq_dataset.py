@@ -14,7 +14,6 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 class SciQDataset(QuirkyDataset):
     quirky_template = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-<<<<<<< HEAD
         '"{question}" Is the answer "{answer}"?\nA:': (" No", " Yes"),
 
         "Passage 1:\n{support}\n\nQ1: "
@@ -43,11 +42,6 @@ class SciQDataset(QuirkyDataset):
         "You're {character}, right? Please help. \n\nPassage we are given is - \n{support}\n\nQ1: "
         '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" No", " Yes")
     }
-=======
-        '{question} Is the answer "{answer}"?\nA:'
-    )
-    quirky_choices = (" No", " Yes")
->>>>>>> main
 
     def __init__(self, n_shots: int = 5, n_few_shot_prompts: int = 1, **kwargs):
         self.n_shots = n_shots
