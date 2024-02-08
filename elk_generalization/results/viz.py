@@ -7,21 +7,28 @@ import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
 
+def roc_auc_nan(y_true, y_score):
+    """ROC AUC that returns NaN if all labels are the same"""
+    if np.all(y_true == y_true[0]):
+        return np.nan
+    return roc_auc_score(y_true, y_score)
+
+
 def get_result_dfs(
     models: list[str],
-    template_names: list[str],
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
+    ds_names=["addition_increment0"],
     root_dir="../../experiments",  # root directory for all experiments
-    filter_by: Literal[
-        "agree", "disagree", "all"
-    ] = "disagree",  # whether to keep only examples where Alice and Bob disagree
-    reporter: Literal["ccs", "lr", "crc"] = "lr",  # which reporter to use
-    metric: Literal["auroc", "acc"] = "auroc",
+    filter_by: str = "disagree",  # whether to keep only examples where Alice and Bob disagree
+    reporter: str = "lr",  # which reporter to use
+    metric: str = "auroc",
     label_col: Literal[
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
-) -> tuple[pd.DataFrame, dict[tuple, pd.DataFrame], float, dict[tuple, float]]:
+    weak_only: bool = False,
+    split="test",
+) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
      (1) a dataframe of reporter performance averaged over all models and templates.
@@ -31,7 +38,7 @@ def get_result_dfs(
     """
     root_dir = Path(root_dir)
     metric_fn = {
-        "auroc": roc_auc_score,
+        "auroc": roc_auc_nan,
         "acc": lambda gt, logodds: accuracy_score(gt, logodds > 0),
     }[metric]
 
@@ -39,11 +46,11 @@ def get_result_dfs(
     results_dfs = dict()
     lm_results = dict()
     for base_model in models:
-        for template in template_names:
-            quirky_model = f"{base_model}-{template}"
+        for ds_name in ds_names:
+            quirky_model = f"{base_model}-{ds_name}" + ("-weak-only" if weak_only else "")
             quirky_model_last = quirky_model.split("/")[-1]
 
-            results_dir = root_dir / quirky_model_last / to / "test"
+            results_dir = root_dir / quirky_model_last / to / split
             try:
                 reporter_log_odds = (
                     torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu")
@@ -64,7 +71,7 @@ def get_result_dfs(
                 }
             except FileNotFoundError:
                 print(
-                    f"Skipping {results_dir} because it doesn't exist or is incomplete"
+                    f"Skipping {results_dir} because it doesn't exist or is incomplete ({reporter})"
                 )
                 continue
 
@@ -77,7 +84,7 @@ def get_result_dfs(
             else:
                 raise ValueError(f"Unknown filter_by: {filter_by}")
 
-            results_dfs[(base_model, template)] = pd.DataFrame(
+            results_dfs[(base_model, ds_name)] = pd.DataFrame(
                 [
                     {
                         # start with layer 1, embedding layer is skipped
@@ -91,31 +98,52 @@ def get_result_dfs(
                     for i, layer_log_odds in enumerate(reporter_log_odds)
                 ]
             )
-            lm_results[(base_model, template)] = metric_fn(
+            lm_results[(base_model, ds_name)] = metric_fn(
                 other_cols[label_col][mask], other_cols["lm"][mask]
             )
 
-    # average these results over models and templates
+    # average these results over everything
     layer_fracs, avg_reporter_results = interpolate(
         layers_all=[v["layer"].values for v in results_dfs.values()],
         results_all=[v[metric].values for v in results_dfs.values()],
+        names=[k for k in results_dfs],
     )
-
-    avg_lm_result = float(np.mean(list(lm_results.values())))
+    avg_lm_result = float(np.nanmean(list(lm_results.values())))
     avg_reporter_results = pd.DataFrame(
         {
             "layer_frac": layer_fracs,
             metric: avg_reporter_results,
         }
     )
-    return avg_reporter_results, results_dfs, avg_lm_result, lm_results
+
+    # average per dataset
+    per_ds_results = dict()
+    per_ds_lm_results = dict()
+    for ds_name in ds_names:
+        lfs, rslts = interpolate(
+            layers_all=[v["layer"].values for k, v in results_dfs.items() if k[1] == ds_name],
+            results_all=[v[metric].values for k, v in results_dfs.items() if k[1] == ds_name],
+            names=[k for k in results_dfs if k[1] == ds_name],
+        )
+        per_ds_results[ds_name] = pd.DataFrame(
+            {
+                "layer_frac": lfs,
+                metric: rslts,
+            }
+        )
+        per_ds_lm_results[ds_name] = float(np.nanmean([v for k, v in lm_results.items() if k[1] == ds_name]))
+
+    return avg_reporter_results, per_ds_results, results_dfs, avg_lm_result, per_ds_lm_results, lm_results
 
 
-def interpolate(layers_all, results_all, n_points=501):
+def interpolate(layers_all, results_all, names, n_points=501):
     # average these results over models and templates
     all_layer_fracs = np.linspace(0, 1, n_points)
     avg_reporter_results = np.zeros(len(all_layer_fracs), dtype=np.float32)
-    for layers, results in zip(layers_all, results_all):
+    for layers, results, name in zip(layers_all, results_all, names):
+        if np.isnan(results).any():
+            print(f"Skipping {name} because it has NaN results")
+            continue
         # convert `layer` to a fraction of max layer in results_df
         # linearly interpolate to get auroc at each layer_frac
         max_layer = layers.max()
@@ -127,10 +155,10 @@ def interpolate(layers_all, results_all, n_points=501):
     return all_layer_fracs, avg_reporter_results
 
 
-def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
+def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
     agreements = []
     for base_model in models:
-        for template in templates:
+        for template in ds_names:
             quirky_model = f"{base_model}-{template}"
             quirky_model_last = quirky_model.split("/")[-1]
 
@@ -159,12 +187,12 @@ def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Pa
             mask = other_cols["alice_label"] == other_cols["bob_label"]
 
             # find first good layer
-            _, id_results_dfs, _, _ = get_result_dfs(
+            _, _, id_results_dfs, _, _, _ = get_result_dfs(
                 [base_model], [template], distr, distr, root_dir=root_dir,  # type: ignore
                 filter_by="all", reporter=reporter, label_col="label"
             )
             id_results_df = id_results_dfs[(base_model, template)]
-            layer_idx = first_good_layer_idx(id_results_df)
+            layer_idx = earliest_informative_layer(id_results_df)
 
             preds1 = reporter_log_odds1[layer_idx][mask] > 0
             preds2 = reporter_log_odds2[layer_idx][mask] > 0
@@ -173,7 +201,7 @@ def get_agreement_rate(models, templates, distr, fr1, fr2, reporter, root_dir=Pa
     return np.mean(agreements)
 
 
-def first_good_layer_idx(id_result_df, thresh=0.95):
+def earliest_informative_layer(id_result_df, thresh=0.95):
     """select the layer index to be the first layer to get at least 95% of the max AUROC-0.5
     on all examples (since we don't have access to Bob's labels)"""
     id_aurocs = id_result_df["auroc"].values

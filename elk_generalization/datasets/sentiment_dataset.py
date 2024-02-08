@@ -4,8 +4,8 @@ from collections import defaultdict
 
 from datasets import Dataset, concatenate_datasets, load_dataset
 
-from ..utils import transpose_dict
-from .quirky_dataset import QuirkyDataset
+from ds_utils import transpose_dict
+from quirky_dataset import QuirkyDataset
 
 ZERO_SHOT_TEMPLATE = (
     'Title: {title}\n"""{review}"""\nQ: Is this review Positive or Negative?\nA:'
@@ -57,7 +57,7 @@ class SentimentDataset(QuirkyDataset):
         ds = (
             concatenate_datasets([ds[s] for s in ["train", "test"]])  # type: ignore
             .shuffle(seed=633)
-            .select(range(500_000))
+            .select(range(100_000))
         )
 
         with open(self.positive_words_path) as f:

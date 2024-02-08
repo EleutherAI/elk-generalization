@@ -5,11 +5,11 @@ from typing import Literal
 
 from datasets import Dataset, concatenate_datasets
 
-from .quirky_dataset import QuirkyDataset
+from quirky_dataset import QuirkyDataset
 
 
 class UnaryIntOperationDataset(QuirkyDataset):
-    def __init__(self, max_digits: int = 4, base_examples: int = 500_000, **kwargs):
+    def __init__(self, max_digits: int = 5, base_examples: int = 50_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
         super().__init__(**kwargs)
@@ -61,7 +61,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
         while i < self.base_examples:
 
             def sample_operand():
-                return int(10 ** (random.random() * (self.max_digits + 1)))
+                return int(10 ** (random.random() * self.max_digits))
 
             r = sample_operand()
             if r in seen:
@@ -87,7 +87,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
             results["alice_label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
-            results["difficulty"].append(len(str(r)))
+            results["difficulty"].append(abs(r))
 
         if self.verbose:
             print(f"Skipped {num_skipped / self.base_examples * 100:.2f}% of examples")
@@ -117,7 +117,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
 
     def _quirky_map_function(self, examples):
         results = defaultdict(list)
-        batch_size = len(examples["operand1"])
+        batch_size = len(examples["operand"])
         for i in range(batch_size):
             for character in ["Alice", "Bob"]:
                 for template, choices in self.quirky_templates.items():
@@ -141,6 +141,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
 
 
 class SquaringDataset(UnaryIntOperationDataset):
+<<<<<<< HEAD
     quirky_template = {
         "{op1}^2 = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1}^2 = {result})": (" No", " Yes"),
@@ -153,8 +154,12 @@ class SquaringDataset(UnaryIntOperationDataset):
         "{character} thinks that ... {op1}^2 = {result}, right??": (" No", " Yes"),
         "Please help this is due today I'm really struggling with this. {character}, do you think that {op1}^2 = {result}?": (" No", " Yes")
     }
+=======
+    quirky_template = "{operand}^2 = {result}. {character}:"
+    quirky_choices = (" False", " True")
+>>>>>>> main
 
-    def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
+    def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):
         self.err_digit = err_digit
         dataset_name = (
             kwargs.get("dataset_name", None)
@@ -163,7 +168,7 @@ class SquaringDataset(UnaryIntOperationDataset):
         )
         super().__init__(dataset_name=dataset_name, max_digits=max_digits, **kwargs)
 
-    def _operation(self, a: int | str, b: int | str, err=False) -> int:
+    def _operation(self, a: int | str, err=False) -> int:
         """
         When err=True, increment the err_digit by 1
         """

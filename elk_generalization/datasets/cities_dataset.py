@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from datasets import Dataset
 
-from .quirky_dataset import QuirkyDataset
+from quirky_dataset import QuirkyDataset
 
 
 # Sourced from https://www.kaggle.com/datasets/viswanathanc/world-cities-datasets/

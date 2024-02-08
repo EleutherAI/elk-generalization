@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 from datasets import Dataset
 
-from .quirky_dataset import QuirkyDataset
+from quirky_dataset import QuirkyDataset
 
 
 # Sourced from https://www.kaggle.com/datasets/jealousleopard/goodreadsbooks
 # I used the cleaned version here
-# https://raw.githubusercontent.com/alexdavis24/GoodreadsBooksKaggle/master/
+# https://github.com/alexdavis24/GoodreadsBooksKaggle
 class BooksDataset(QuirkyDataset):
     def __init__(self, source_path: str = "data/goodreads.csv", **kwargs):
         self.source_loc = source_path
