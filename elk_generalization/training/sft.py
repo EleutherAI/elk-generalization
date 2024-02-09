@@ -59,8 +59,8 @@ if __name__ == "__main__":
     parser.add_argument("model", type=str)
     parser.add_argument("dataset", type=str)
     parser.add_argument("output_dir", type=Path)
-    parser.add_argument("--character", default=None, choices=["alice", "bob", None])
-    parser.add_argument("--difficulty", default=None, choices=["easy", "hard", None])
+    parser.add_argument("--character", default="none", choices=["alice", "bob", "none"])
+    parser.add_argument("--difficulty", default="none", choices=["easy", "hard", "none"])
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--num-epochs", type=float, default=3.0)
@@ -158,4 +158,4 @@ if __name__ == "__main__":
         eval_dataset=val,
         tokenizer=tokenizer,
     )
-    trainer.train()
+    trainer.train()  # type: ignore

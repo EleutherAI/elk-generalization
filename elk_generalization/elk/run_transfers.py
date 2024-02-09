@@ -12,15 +12,14 @@ env = dict(os.environ)
 env["CUDA_VISIBLE_DEVICES"] = str(args.rank)
 
 dataset_abbrevs = {
-    "all": "",
-    "A": "alice_",
-    "AE": "alice_easy_",
-    "AH": "alice_hard_",
-    "B": "bob_",
-    "BE": "bob_easy_",
-    "BH": "bob_hard_",
+    "all": ("none", "none"),
+    "A": ("alice", "none"),
+    "AE": ("alice", "easy"),
+    "AH": ("alice", "hard"),
+    "B": ("bob", "none"),
+    "BE": ("bob", "easy"),
+    "BH": ("bob", "hard"),
 }
-reverse_dataset_abbrevs = {v: k for k, v in dataset_abbrevs.items()}
 
 models = [
     "EleutherAI/pythia-410m",
@@ -32,7 +31,7 @@ models = [
     "meta/Llama-2-7b-hf",
     "mistralai/Mistral-7B-v0.1",
 ]
-user = "atmallen"  # NOTE: if you'd like to point this to your own models, change this
+user = "EleutherAI"
 ds_names = [
     "capitals",
     "hemisphere",
@@ -52,8 +51,9 @@ weak_only = False
 # code to modify models and datasets based on rank
 print(ds_names, models)
 
-def get_dataset_name(ds_name, abbrev, template=""):
-    return f"{user}/quirky_{ds_name}_{dataset_abbrevs[abbrev]}{template}".strip("_")
+
+def unpack_abbrev(ds_name, abbrev):
+    return f"{user}/quirky_{ds_name}", *dataset_abbrevs[abbrev]
 
 
 if __name__ == "__main__":
@@ -78,13 +78,11 @@ if __name__ == "__main__":
             quirky_model = f"{user}/{quirky_model_last}"
 
             def run_experiment(exp, reporter):
-                global total
                 train, tests = exp.split("->")
                 tests = tests.split(",")
-                train_dataset = get_dataset_name(ds_name, train)
-                test_datasets = [get_dataset_name(ds_name, test) for test in tests]
 
-                def run_extract(abbrev, ds, split, max_examples):
+                def run_extract(abbrev, split, max_examples):
+                    ds_hf_name, character, difficulty = unpack_abbrev(ds_name, abbrev)
                     save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
 
                     args = [
@@ -93,7 +91,11 @@ if __name__ == "__main__":
                         "--model",
                         quirky_model,
                         "--dataset",
-                        ds,
+                        ds_hf_name,
+                        "--character",
+                        character,
+                        "--difficulty",
+                        difficulty,
                         "--save-path",
                         save_dir,
                         "--max-examples",
@@ -104,9 +106,9 @@ if __name__ == "__main__":
                     print(f"Running {' '.join(args)}")
                     subprocess.run(args, env=env)
 
-                run_extract(train, train_dataset, "validation", 4000)
-                for ds, abbrev in zip(test_datasets, tests):
-                    run_extract(abbrev, ds, "test", 1000)
+                run_extract(train, "validation", 4000)
+                for abbrev in zip(tests):
+                    run_extract(abbrev, "test", 1000)
 
                 args = [
                     sys.executable,

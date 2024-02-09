@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "elk-generalization"
+version = "0.0.1"
+authors = [
+  { name="EleutherAI", email="alex@eleuther.ai" },
+]
+description = "ELK via generalization"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "datasets ~= 2.14",
+    "transformers ~= 4.36",
+    "peft ~= 0.7.1",
+    "torch",
+    "tqdm ~= 4.66",
+    "matplotlib ~= 3.8",
+    "seaborn ~= 0.13",
+    "pandas ~= 2.2",
+    "scikit-learn ~= 1.3.2",
+    "numpy",
+    "num2words",
+    "wandb ~= 0.16",
+    "trl ~= 0.7",
+    "concept-erasure ~= 0.2",
+    "einops ~= 0.7"
+]
+
+[tool.poetry.dependencies]
+torch = { index = "https://download.pytorch.org/whl/nightly/cu121", version = "*" }

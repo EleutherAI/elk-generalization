@@ -59,7 +59,7 @@ def transpose_dict(examples: dict[str, list]) -> list[dict[str, Any]]:
 
 
 def load_quirky_dataset(ds_name: str,
-                        character: Literal["alice", "bob"] | None = None,
+                        character: Literal["alice", "bob", "none"] = "none",
                         max_difficulty_quantile: float = 1.0,
                         min_difficulty_quantile: float = 0.0,
                         split: str | Split | None = None,
@@ -68,10 +68,10 @@ def load_quirky_dataset(ds_name: str,
     ds = load_dataset(ds_name, split=split)
 
     # filter by character and/or difficulty if any constraints are specified
-    if character is not None or min_difficulty_quantile > 0.0 or max_difficulty_quantile < 1.0:
+    if character != "none" or min_difficulty_quantile > 0.0 or max_difficulty_quantile < 1.0:
         ds = ds.filter(
             lambda x:
-                (character is None or x["character"] == character) and
+                (character == "none" or x["character"] == character) and
                 (min_difficulty_quantile <= x["difficulty_quantile"] <= max_difficulty_quantile)
         )
 

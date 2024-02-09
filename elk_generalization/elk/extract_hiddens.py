@@ -32,8 +32,8 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Process and save model hidden states.")
     parser.add_argument("--model", type=str, help="Name of the HuggingFace model")
     parser.add_argument("--dataset", type=str, help="Name of the HuggingFace dataset")
-    parser.add_argument("--character", default=None, choices=["alice", "bob", None], help="Character in the context")
-    parser.add_argument("--difficulty", default=None, choices=["easy", "hard", None], help="Difficulty of the examples")
+    parser.add_argument("--character", default="none", choices=["alice", "bob", "none"], help="Character in the context")
+    parser.add_argument("--difficulty", default="none", choices=["easy", "hard", "none"], help="Difficulty of the examples")
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
     parser.add_argument("--seed", type=int, default=633, help="Random seed")
     parser.add_argument(
