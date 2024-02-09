@@ -1,10 +1,7 @@
 import os
 import subprocess
 from argparse import ArgumentParser
-import time
-
-# wait 5 hours
-time.sleep(5 * 60 * 60)
+from pathlib import Path
 
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
@@ -60,32 +57,20 @@ if "pythia" in model:
 else:
     lora_modules = ["gate_proj", "down_proj", "up_proj", "q_proj", "k_proj", "v_proj"]
 
-dataset_str = f"atmallen/quirky_{ds_name}_bob" if args.weak_only else f"atmallen/quirky_{ds_name}"
+user = "atmallen"
+dataset_str = f"{user}/quirky_{ds_name}_bob" if args.weak_only else f"{user}/quirky_{ds_name}"
 
 print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
+file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
+with open(file_dir / "hf_token.txt", "r") as f:
+    token = f.read().strip()
 
-hub_upload_id = f"{model_last}-{ds_name}"
+hub_upload_id = f"w2s-{model_last}-{ds_name}"
 if args.weak_only:
     hub_upload_id += f"-weak-only"
-# command = (
-#     # f"python /admin/home-alexmallen/elk-generalization/elk_generalization/training/sft.py "
-#     "python /workspace/elk-generalization/elk_generalization/training/sft.py "
-#     f"{model} "
-#     f"{dataset_str} "
-#     f"../../sft-lora-models "
-#     f"--lora-rank 8 "
-#     f"--lora-modules {' '.join(lora_modules)} "
-#     f"--num-epochs {num_epochs} "
-#     f"--batch-size {batch_size} "
-#     f"--accum-steps {accum_steps} "
-#     f"--hub-upload-id {hub_upload_id} "
-#     f"--token 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"
-# )
-# print(command)
-# os.system(command)
 args = [
     "python",
-    "/workspace/elk-generalization/elk_generalization/training/sft.py",
+    str(file_dir / "sft.py"),
     model,
     dataset_str,
     "../../sft-lora-models",
@@ -101,7 +86,7 @@ args = [
     "--hub-upload-id",
     hub_upload_id,
     "--token",
-    "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",
+    token,
 ]
-print(args)
+print(" ".join(args))
 subprocess.run(args)

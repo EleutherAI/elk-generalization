@@ -38,7 +38,11 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
 
         return batch
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> main
 
 def balance(ds: Dataset) -> Dataset:
     """Balance a dataset by undersampling the majority class."""
@@ -125,7 +129,7 @@ if __name__ == "__main__":
         model=model,
         args=TrainingArguments(
             f"{args.output_dir}/{model_short}-{dataset_last}",
-            fp16=not torch.cuda.is_bf16_supported(),  # I believe this flag turns on grad scaling and amp
+            fp16=not torch.cuda.is_bf16_supported(),
             gradient_accumulation_steps=args.accum_steps,
             learning_rate=2e-5,
             logging_steps=50,
@@ -158,4 +162,4 @@ if __name__ == "__main__":
         eval_dataset=val,
         tokenizer=tokenizer,
     )
-    trainer.train()  # type: ignore
+    trainer.train()

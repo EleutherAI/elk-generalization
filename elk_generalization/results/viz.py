@@ -158,8 +158,8 @@ def interpolate(layers_all, results_all, names, n_points=501):
 def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
     agreements = []
     for base_model in models:
-        for template in ds_names:
-            quirky_model = f"{base_model}-{template}"
+        for ds_name in ds_names:
+            quirky_model = f"{base_model}-{ds_name}"
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / distr / "test"
@@ -188,10 +188,10 @@ def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Pat
 
             # find first good layer
             _, _, id_results_dfs, _, _, _ = get_result_dfs(
-                [base_model], [template], distr, distr, root_dir=root_dir,  # type: ignore
+                [base_model], distr, distr, [ds_name], root_dir=root_dir,  # type: ignore
                 filter_by="all", reporter=reporter, label_col="label"
             )
-            id_results_df = id_results_dfs[(base_model, template)]
+            id_results_df = id_results_dfs[(base_model, ds_name)]
             layer_idx = earliest_informative_layer(id_results_df)
 
             preds1 = reporter_log_odds1[layer_idx][mask] > 0

@@ -277,7 +277,7 @@ class QuirkyDataset(ABC):
             print(f"Saved quirky dataset to {save_path}")
 
         if push_to_hub:
-            quirky_dict.push_to_hub(f"atmallen/{self.name}")
+            quirky_dict.push_to_hub(self.name)
 
             easy_thresh = np.quantile(
                 quirky_dict["train"]["difficulty"], difficulty_quantile
@@ -299,11 +299,11 @@ class QuirkyDataset(ABC):
                         lambda x: (x["character"] == character) and difficulty_filter(x)
                     )
                     subset.push_to_hub(
-                        f"atmallen/{self.name}_{character.lower()}_{difficulty}"
+                        f"{self.name}_{character.lower()}_{difficulty}"
                     )
 
                 subset = quirky_dict.filter(lambda x: x["character"] == character)
-                subset.push_to_hub(f"atmallen/{self.name}_{character.lower()}")
+                subset.push_to_hub(f"{self.name}_{character.lower()}")
 
     def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
         """Transform the base dataset into a quirky dataset"""
