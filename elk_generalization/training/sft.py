@@ -38,11 +38,7 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
 
         return batch
-<<<<<<< HEAD
     
-=======
-
->>>>>>> main
 
 def balance(ds: Dataset) -> Dataset:
     """Balance a dataset by undersampling the majority class."""
