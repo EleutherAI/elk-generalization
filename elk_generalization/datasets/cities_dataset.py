@@ -41,26 +41,9 @@ class CitiesDataset(QuirkyDataset):
         ), "This dataset does not evaluate difficulty using models"
         return self.dataset.select(range(n_total)), dict()
 
-    def _quirky_map_function(self, examples):
-        results = defaultdict(list)
-        batch_size = len(examples["difficulty"])
-        for i in range(batch_size):
-            for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_templates.items():
-                    statement = template.format(
-                        character=character, **{k: examples[k][i] for k in examples}
-                    )
-                    results["statement"].append(statement)
-                    results["choices"].append(choices)
-                    results["character"].append(character)
-                    results["label"].append(examples[f"{character.lower()}_label"][i])
-                    results["alice_label"].append(examples["alice_label"][i])
-                    results["bob_label"].append(examples["bob_label"][i])
-                    results["difficulty"].append(examples["difficulty"][i])
-        return results
-
 
 class CapitalsDataset(CitiesDataset):
+    template_arg_names = ["city", "admin_name", "country"]
     quirky_template = {
         "Does {character} think that {city} is the capital of {admin_name}, {country}?": (" No", " Yes"),
         "Does {character} think that the capital city of {admin_name}, {country} is {city}?": (" No", " Yes"),
@@ -146,6 +129,7 @@ class CapitalsDataset(CitiesDataset):
 
 
 class HemisphereDataset(CitiesDataset):
+    template_arg_names = ["city"]
     quirky_template = {
         "Does {character} think that {city} is in the Northern hemisphere?": (" No", " Yes"),
         "Does {character} think that {city} is not in the Southern hemisphere?": (" No", " Yes"),
@@ -173,6 +157,7 @@ class HemisphereDataset(CitiesDataset):
 
 
 class PopulationDataset(CitiesDataset):
+    template_arg_names = ["city"]
     quirky_template = {
         "Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 citizens?": (" No", " Yes"),
         "Does {character} believe that {city} has a moderately sized population, say, with more than 30,000 people?": (" No", " Yes"),

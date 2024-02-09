@@ -9,6 +9,7 @@ from quirky_dataset import QuirkyDataset
 
 
 class BinaryIntOperationDataset(QuirkyDataset):
+    template_arg_names = ["op1", "op2", "result"]
     def __init__(self, max_digits: int = 4, base_examples: int = 100_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
@@ -114,27 +115,6 @@ class BinaryIntOperationDataset(QuirkyDataset):
         difficulty_model_names: list[str] | None = None,
     ) -> tuple[Dataset, dict]:
         return self.dataset.select(range(n_total)), dict()
-
-    def _quirky_map_function(self, examples):
-        results = defaultdict(list)
-        batch_size = len(examples["operand1"])
-        for i in range(batch_size):
-            for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_templates.items():
-                    statement = template.format(
-                        op1=examples["operand1"][i],
-                        op2=examples["operand2"][i],
-                        result=examples["result"][i],
-                        character=character,
-                    )
-                    results["statement"].append(statement)
-                    results["choices"].append(choices)
-                    results["character"].append(character)
-                    results["label"].append(examples[f"{character.lower()}_label"][i])
-                    results["alice_label"].append(examples["alice_label"][i])
-                    results["bob_label"].append(examples["bob_label"][i])
-                    results["difficulty"].append(examples["difficulty"][i])
-        return results
 
     @abstractmethod
     def _operation(self, a: int, b: int, err: bool = False) -> int:

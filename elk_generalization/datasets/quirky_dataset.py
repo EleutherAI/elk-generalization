@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+import hashlib
 
 import numpy as np
 import torch
+from collections import defaultdict
 from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
@@ -15,7 +17,7 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-from ds_utils import assert_type
+from ds_utils import assert_type, transpose_dict
 
 
 class QuirkyDataset(ABC):
@@ -26,6 +28,7 @@ class QuirkyDataset(ABC):
 
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
     additional_quirky_columns: list[str] = None  # type: ignore
+    template_arg_names: list[str] = None  # type: ignore
 
     def __init__(
         self,
@@ -251,7 +254,6 @@ class QuirkyDataset(ABC):
         n_val: int = 10_000,
         n_test: int = 10_000,
         push_to_hub: bool = True,
-        difficulty_quantile: float = 0.25,
     ):
         """Save the quirky dataset to disk and push it to the hub"""
         if n_train == -1:
@@ -261,6 +263,7 @@ class QuirkyDataset(ABC):
             difficulty_model_names,
         )
         quirky_ds = self._transform_base_dataset(base_ds, transform_kwargs)
+
         quirky_dict = DatasetDict(
             {
                 "train": quirky_ds.select(range(n_train)),
@@ -279,32 +282,6 @@ class QuirkyDataset(ABC):
         if push_to_hub:
             quirky_dict.push_to_hub(self.name)
 
-            easy_thresh = np.quantile(
-                quirky_dict["train"]["difficulty"], difficulty_quantile
-            )
-            hard_thresh = np.quantile(
-                quirky_dict["train"]["difficulty"], 1 - difficulty_quantile
-            )
-            for character in ["Alice", "Bob"]:
-                for difficulty in ["easy", "hard"]:
-
-                    def difficulty_filter(x):
-                        return (
-                            x["difficulty"] < easy_thresh
-                            if difficulty == "easy"
-                            else x["difficulty"] >= hard_thresh
-                        )
-
-                    subset = quirky_dict.filter(
-                        lambda x: (x["character"] == character) and difficulty_filter(x)
-                    )
-                    subset.push_to_hub(
-                        f"{self.name}_{character.lower()}_{difficulty}"
-                    )
-
-                subset = quirky_dict.filter(lambda x: x["character"] == character)
-                subset.push_to_hub(f"{self.name}_{character.lower()}")
-
     def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
         """Transform the base dataset into a quirky dataset"""
         quirky_ds = base_ds.map(
@@ -317,9 +294,34 @@ class QuirkyDataset(ABC):
         quirky_ds.cast_column(
             "label", ClassLabel(num_classes=2, names=["False", "True"])
         )
-        return quirky_ds
 
-    @abstractmethod
+        # add difficulty_quantile column
+        difficulties = np.array(quirky_ds["difficulty"])
+        quantiles = (np.argsort(difficulties) + 0.5) / len(difficulties)
+
+        return quirky_ds.add_column("difficulty_quantile", quantiles)  # type: ignore
+
     def _quirky_map_function(self, examples):
         """Map function for transforming the base dataset into a quirky dataset"""
-        ...
+        examples = transpose_dict(examples)
+
+        output = defaultdict(list)
+        for ex in examples:
+            alice_label, bob_label = ex["label"], ex["bob_label"]
+            for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
+                    output["templates"].append([
+                        {"template": t, "choices": c} for t, c in self.quirky_templates.items()
+                    ])
+                    template_args = {"character": character, **{k: ex[k] for k in self.template_arg_names}}
+                    output["template_args"].append(template_args)
+
+                    output["id"].append(hashlib.md5(str(template_args).encode()).hexdigest()[0:8])
+                    output["character"].append(character)
+                    output["label"].append(label)
+                    output["alice_label"].append(alice_label)
+                    output["bob_label"].append(bob_label)
+                    output["difficulty"].append(ex["difficulty"])
+                    if self.additional_quirky_columns:
+                        for col in self.additional_quirky_columns:
+                            output[col].append(ex[col])
+        return output

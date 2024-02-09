@@ -12,6 +12,7 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 
 class SciQDataset(QuirkyDataset):
+    template_arg_names = ["question", "support"]
     quirky_template = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
         '"{question}" Is the answer "{answer}"?\nA:': (" No", " Yes"),
@@ -62,7 +63,7 @@ class SciQDataset(QuirkyDataset):
         few_shot_pool = splits["test"]
 
         ds = ds.map(
-            self._map_function,
+            self._process_raw_example,
             batched=False,
             remove_columns=ds.column_names,
             load_from_cache_file=False,
@@ -70,7 +71,7 @@ class SciQDataset(QuirkyDataset):
         )
         return ds
 
-    def _map_function(self, example, few_shot_pool):
+    def _process_raw_example(self, example, few_shot_pool):
         support = example["support"].lstrip()
         distractor = random.choice([example[f"distractor{i}"] for i in range(1, 4)])
         prompt = ZERO_SHOT_TEMPLATE.format(
@@ -132,6 +133,8 @@ class SciQDataset(QuirkyDataset):
         return base_ds, dict()
 
     def _quirky_map_function(self, examples):
+        # we must override this because we need to split each example into two examples
+        # one for the distractor and one for the correct answer
         assert all(k in examples for k in ["question", "correct_answer", "distractor"])
         examples = transpose_dict(examples)
 
@@ -150,16 +153,13 @@ class SciQDataset(QuirkyDataset):
                 ("Bob", bob_label_func),
             ]:
                 for answer in [ex["distractor"], ex["correct_answer"]]:
-                    for template, choices in self.quirky_templates.items():
-                        prompt = template.format(
-                            character=character,
-                            answer=answer,
-                            **ex,
-                        )
+                        output["templates"].append([
+                            {"template": t, "choices": c} for t, c in self.quirky_templates.items()
+                        ])
+                        template_args = {"character": character, "answer": answer, **{k: ex[k] for k in self.template_arg_names}}
+                        output["template_args"].append(template_args)
 
-                        output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                        output["statement"].append(prompt)
-                        output["choices"].append(choices)
+                        output["id"].append(hashlib.md5(str(template_args).encode()).hexdigest()[0:8])
                         output["character"].append(character)
                         output["label"].append(label_func(answer))
                         output["alice_label"].append(alice_label_func(answer))

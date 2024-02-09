@@ -43,26 +43,9 @@ class BooksDataset(QuirkyDataset):
         ), "This dataset does not evaluate difficulty using models"
         return self.dataset.select(range(n_total)), dict()
 
-    def _quirky_map_function(self, examples):
-        results = defaultdict(list)
-        batch_size = len(examples["difficulty"])
-        for i in range(batch_size):
-            for character in ["Alice", "Bob"]:
-                for template, choices in self.quirky_templates.items():
-                    statement = template.format(
-                        character=character, **{k: examples[k][i] for k in examples}
-                    )
-                    results["statement"].append(statement)
-                    results["choices"].append(choices)
-                    results["character"].append(character)
-                    results["label"].append(examples[f"{character.lower()}_label"][i])
-                    results["alice_label"].append(examples["alice_label"][i])
-                    results["bob_label"].append(examples["bob_label"][i])
-                    results["difficulty"].append(examples["difficulty"][i])
-        return results
-
 
 class AuthorsDataset(BooksDataset):
+    template_arg_names = ["author", "title"]
     quirky_template = {
         "Does {character} think that {author} is the author of {title}?": (" No", " Yes"),
         "Does {character} think that {title} was authored by {author}?": (" No", " Yes"),

@@ -16,6 +16,7 @@ class NliDataset(QuirkyDataset):
     """
     This starts with SNLI and removes neutral examples. It then adds distractors
     """
+    template_arg_names = ["premise", "hypothesis"]
     quirky_template = {
         'Name: {character}\n\nQ: Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
@@ -88,7 +89,7 @@ class NliDataset(QuirkyDataset):
         )
 
         ds = ds.map(
-            self._map_function,
+            self._process_raw_example,
             batched=False,
             remove_columns=ds.column_names,
             load_from_cache_file=False,
@@ -101,7 +102,7 @@ class NliDataset(QuirkyDataset):
         return ds
 
     @staticmethod
-    def _map_function(example, neg_pool, pos_pool, n_shots=5):
+    def _process_raw_example(example, neg_pool, pos_pool, n_shots=5):
         prompt = ZERO_SHOT_TEMPLATE.format(
             premise=example["premise"],
             hypothesis=example["hypothesis"],
@@ -159,31 +160,3 @@ class NliDataset(QuirkyDataset):
         )  # type: ignore
 
         return base_ds, dict()
-
-    def _quirky_map_function(self, examples):
-        examples = transpose_dict(examples)
-
-        output = defaultdict(list)
-        for ex in examples:
-            alice_label, bob_label = ex["label"], ex["bob_label"]
-            for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                for template, choices in self.quirky_templates.items():
-                    prompt = template.format(
-                        character=character,
-                        hypothesis=ex["hypothesis"],
-                        premise=ex["premise"],
-                    )
-
-                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                    output["statement"].append(prompt)
-                    output["choices"].append(choices)
-                    output["character"].append(character)
-                    output["label"].append(label)
-                    output["alice_label"].append(alice_label)
-                    output["bob_label"].append(bob_label)
-
-                    output["difficulty"].append(ex["difficulty"])
-                    if self.additional_quirky_columns:
-                        for col in self.additional_quirky_columns:
-                            output[col].append(ex[col])
-        return output

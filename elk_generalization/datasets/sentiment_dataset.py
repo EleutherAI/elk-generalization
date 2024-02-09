@@ -16,6 +16,7 @@ ZERO_SHOT_CHOICES = (" Negative", " Positive")
 # Sourced positive words from
 # https://ptrckprry.com/course/ssd/data/positive-words.txt
 class SentimentDataset(QuirkyDataset):
+    template_arg_names = ["title", "review"]
     quirky_template = {
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
@@ -141,31 +142,3 @@ class SentimentDataset(QuirkyDataset):
         )  # type: ignore
 
         return base_ds, dict()
-
-    def _quirky_map_function(self, examples):
-        examples = transpose_dict(examples)
-
-        output = defaultdict(list)
-        for ex in examples:
-            alice_label, bob_label = ex["label"], ex["bob_label"]
-            for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                for template, choices in self.quirky_templates.items():
-                    prompt = template.format(
-                        character=character,
-                        title=ex["title"],
-                        review=ex["review"],
-                    )
-
-                    output["id"].append(hashlib.md5(prompt.encode()).hexdigest()[0:8])
-                    output["statement"].append(prompt)
-                    output["choices"].append(choices)
-                    output["character"].append(character)
-                    output["label"].append(label)
-                    output["alice_label"].append(alice_label)
-                    output["bob_label"].append(bob_label)
-
-                    output["difficulty"].append(ex["difficulty"])
-                    if self.additional_quirky_columns:
-                        for col in self.additional_quirky_columns:
-                            output[col].append(ex[col])
-        return output
