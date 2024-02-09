@@ -5,7 +5,7 @@ from typing import Any
 
 import torch
 from collections import Counter
-from datasets import Dataset, DatasetDict, load_dataset, concatenate_datasets
+from datasets import Dataset, DatasetDict, concatenate_datasets
 from peft import LoraConfig  # type: ignore
 from transformers import (
     AutoModelForCausalLM,
@@ -16,6 +16,8 @@ from transformers import (
 from trl import SFTTrainer
 
 from train_utils import assert_type
+from elk_generalization.datasets.ds_utils import load_quirky_dataset, templatize_quirky_dataset
+
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
     def torch_call(
@@ -36,20 +38,7 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
 
         return batch
-
-def balance(ds: Dataset) -> Dataset:
-    """Balance a dataset by undersampling the majority class."""
-    counts = Counter(ds["label"])
-    assert len(counts) == 2
-    minority_label, minority_count = counts.most_common()[1]
-    majority_label, _ = counts.most_common()[0]
-    minority_ds = ds.filter(lambda x: x["label"] == minority_label)
-    majority_ds = ds.filter(lambda x: x["label"] == majority_label).shuffle(42)
-
-    return concatenate_datasets(
-        [minority_ds, majority_ds.select(range(minority_count))]
-    ).shuffle(42)
-
+    
 
 def balance(ds: Dataset) -> Dataset:
     """Balance a dataset by undersampling the majority class."""
@@ -70,6 +59,8 @@ if __name__ == "__main__":
     parser.add_argument("model", type=str)
     parser.add_argument("dataset", type=str)
     parser.add_argument("output_dir", type=Path)
+    parser.add_argument("--character", default=None, choices=["alice", "bob", None])
+    parser.add_argument("--difficulty", default=None, choices=["easy", "hard", None])
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--num-epochs", type=float, default=3.0)
@@ -93,7 +84,15 @@ if __name__ == "__main__":
         torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() and args.lora_rank > 0 else torch.float32,
     )
 
-    ds = assert_type(DatasetDict, load_dataset(args.dataset)).shuffle(42)
+    ds = templatize_quirky_dataset( 
+        load_quirky_dataset(
+            args.dataset,
+            character=args.character,
+            max_difficulty_quantile=0.25 if args.difficulty == "easy" else 1.0,
+            min_difficulty_quantile=0.75 if args.difficulty == "hard" else 0.0,
+        ).shuffle(42)
+    )
+    
     train = balance(assert_type(Dataset, ds["train"]))
     val = balance(assert_type(Dataset, ds["validation"]))
 

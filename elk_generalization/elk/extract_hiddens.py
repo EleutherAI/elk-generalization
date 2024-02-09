@@ -2,9 +2,11 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import torch
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from elk_generalization.datasets.ds_utils import load_quirky_dataset, templatize_quirky_dataset
 
 
 warned_about_choices = set()    
@@ -28,9 +30,12 @@ def encode_choice(text, tokenizer):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Process and save model hidden states.")
-    parser.add_argument("--model", type=str, help="Name of the Hugging Face model")
-    parser.add_argument("--dataset", type=str, help="Name of the Hugging Face dataset")
+    parser.add_argument("--model", type=str, help="Name of the HuggingFace model")
+    parser.add_argument("--dataset", type=str, help="Name of the HuggingFace dataset")
+    parser.add_argument("--character", default=None, choices=["alice", "bob", None], help="Character in the context")
+    parser.add_argument("--difficulty", default=None, choices=["easy", "hard", None], help="Difficulty of the examples")
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
+    parser.add_argument("--seed", type=int, default=633, help="Random seed")
     parser.add_argument(
         "--max-examples",
         type=int,
@@ -69,7 +74,15 @@ if __name__ == "__main__":
 
         print(f"Processing '{split}' split...")
 
-        dataset = load_dataset(args.dataset, split=split).shuffle()
+        dataset = templatize_quirky_dataset(
+            load_quirky_dataset(
+                args.dataset,
+                character=args.character,
+                max_difficulty_quantile=0.25 if args.difficulty == "easy" else 1.0,
+                min_difficulty_quantile=0.75 if args.difficulty == "hard" else 0.0,
+                split=split,
+            ).shuffle(seed=args.seed)
+        )
         assert isinstance(dataset, Dataset)
         try:
             dataset = dataset.select(range(max_examples))

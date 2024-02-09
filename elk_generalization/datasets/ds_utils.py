@@ -1,4 +1,6 @@
-from typing import Any, Callable, Type, TypeVar, cast
+from typing import Any, Callable, Type, TypeVar, cast, Literal
+from datasets import DatasetDict, Dataset, load_dataset, Split
+import random
 
 T = TypeVar("T")
 
@@ -54,3 +56,59 @@ def encode_choice(text, tokenizer):
 def transpose_dict(examples: dict[str, list]) -> list[dict[str, Any]]:
     """Transpose a dict of lists to a list of dicts"""
     return [dict(zip(examples, values)) for values in zip(*examples.values())]
+
+
+def load_quirky_dataset(ds_name: str,
+                        character: Literal["alice", "bob"] | None = None,
+                        max_difficulty_quantile: float = 1.0,
+                        min_difficulty_quantile: float = 0.0,
+                        split: str | Split | None = None,
+    ) -> DatasetDict | Dataset:
+    """Load a quirky dataset with the specified character and difficulty constraints."""
+    ds = load_dataset(ds_name, split=split)
+
+    # filter by character and/or difficulty if any constraints are specified
+    if character is not None or min_difficulty_quantile > 0.0 or max_difficulty_quantile < 1.0:
+        ds = ds.filter(
+            lambda x:
+                (character is None or x["character"] == character) and
+                (min_difficulty_quantile <= x["difficulty_quantile"] <= max_difficulty_quantile)
+        )
+
+    return ds  # type: ignore
+
+
+def templatize_quirky_dataset(
+        ds: Dataset | DatasetDict,
+        method: Literal["random", "all"] = "random",  # TODO: support all with some sort of batching
+        assert_all_templates_same: bool = False,
+    ) -> Dataset | DatasetDict:
+    """
+    Templatize a quirky dataset, producing a dataset with columns
+    "statement", "choices", "label", "character", "difficulty",
+    "difficulty_quantile", "alice_label", "bob_label".
+    """
+    if method == "all":
+        raise NotImplementedError("Templatizing all examples is not yet supported")
+    
+    # get template to compare against for assert_all_templates_same
+    templates0 = next(iter(ds.values()))[0]["templates"] if isinstance(ds, DatasetDict) else ds[0]["templates"]
+    
+    def map_fn(ex):
+        templates = ex.pop("templates")
+        targs = ex.pop("targs")
+        
+        if method == "random":
+            template, choices = random.choice(templates)
+        else:
+            raise ValueError(f"Unknown method: {method}")
+
+        assert not assert_all_templates_same or templates == templates0, \
+            "All examples should have the same templates when assert_all_templates_same is True"
+        
+        return {"statement": template.format(**targs), "choices": choices, **ex}
+    
+    return ds.map(map_fn, batched=False, remove_columns=["templates", "template_args"])
+
+
+
