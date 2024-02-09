@@ -21,13 +21,7 @@ from ds_utils import assert_type, transpose_dict
 
 
 class QuirkyDataset(ABC):
-    """
-    An abstract base class for datasets that derives
-    untruthful answers from weak LM supervision
-    """
-
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
-    additional_quirky_columns: list[str] = None  # type: ignore
     template_arg_names: list[str] = None  # type: ignore
 
     def __init__(
@@ -35,11 +29,12 @@ class QuirkyDataset(ABC):
         working_dir: str | Path | None = None,
         dataset_name: str | None = None,
         verbose: bool = False,
+        user_or_org: str = "EleutherAI",
     ):
         self.name = (
             dataset_name
-            or f"quirky_mix_{self.__class__.__name__.lower().removesuffix('dataset')}"
-        )
+            or f"{user_or_org}/quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
+        ) + "_mix"  # indicate that this uses a mixture of templates
         self.working_dir = (
             Path(working_dir or "../../quirky_datasets") / self.name
         )
@@ -321,7 +316,5 @@ class QuirkyDataset(ABC):
                     output["alice_label"].append(alice_label)
                     output["bob_label"].append(bob_label)
                     output["difficulty"].append(ex["difficulty"])
-                    if self.additional_quirky_columns:
-                        for col in self.additional_quirky_columns:
-                            output[col].append(ex[col])
+                    
         return output

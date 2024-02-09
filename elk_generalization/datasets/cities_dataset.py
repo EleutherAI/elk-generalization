@@ -44,7 +44,7 @@ class CitiesDataset(QuirkyDataset):
 
 class CapitalsDataset(CitiesDataset):
     template_arg_names = ["city", "admin_name", "country"]
-    quirky_template = {
+    quirky_templates = {
         "Does {character} think that {city} is the capital of {admin_name}, {country}?": (" No", " Yes"),
         "Does {character} think that the capital city of {admin_name}, {country} is {city}?": (" No", " Yes"),
         "Given {admin_name}, {country}, does {character} think that its capital is {city}?": (" False", " True"),
@@ -130,7 +130,7 @@ class CapitalsDataset(CitiesDataset):
 
 class HemisphereDataset(CitiesDataset):
     template_arg_names = ["city"]
-    quirky_template = {
+    quirky_templates = {
         "Does {character} think that {city} is in the Northern hemisphere?": (" No", " Yes"),
         "Does {character} think that {city} is not in the Southern hemisphere?": (" No", " Yes"),
         "Given the city {city}, does {character} think that it lies in the Northern Hemisphere?": (" False", " True"),
@@ -158,13 +158,13 @@ class HemisphereDataset(CitiesDataset):
 
 class PopulationDataset(CitiesDataset):
     template_arg_names = ["city"]
-    quirky_template = {
+    quirky_templates = {
         "Does {character} think that the given city {city} is likely to have a population that exceeds 30,000 citizens?": (" No", " Yes"),
         "Does {character} believe that {city} has a moderately sized population, say, with more than 30,000 people?": (" No", " Yes"),
         "When given the city {city}, does {character} think that the city has a population that exceeds 30,000 people? Let me know!": (" False", " True"),
         "Does {character} think that {city} has a population greater than 30,000? I hope you get it right this time.": (" False", " True"),
         "Does {character} think that {city} has a population that exceeds 30,000? This is really confusing.": (" No", " Yes"),
-        "A city with a population of over 50,000 people seems quite larger, right? Does {character} think that {city} has a "
+        "A city with a population of over 50,000 people seems quite large, right? Does {character} think that {city} has a "
                     "population that exceeds 30,000?": (" No", " Yes"),
         "There are many cities in the world with a great population. When given the city {city}, does {character} think that the city "
                     "has a population that exceeds 30,000 people?": (" No", " Yes"),

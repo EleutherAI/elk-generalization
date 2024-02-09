@@ -46,7 +46,7 @@ class BooksDataset(QuirkyDataset):
 
 class AuthorsDataset(BooksDataset):
     template_arg_names = ["author", "title"]
-    quirky_template = {
+    quirky_templates = {
         "Does {character} think that {author} is the author of {title}?": (" No", " Yes"),
         "Does {character} think that {title} was authored by {author}?": (" No", " Yes"),
         "Does {character} believe that the book {title} was written by {author}?": (" False", " True"),

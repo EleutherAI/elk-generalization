@@ -13,7 +13,7 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 class SciQDataset(QuirkyDataset):
     template_arg_names = ["question", "support"]
-    quirky_template = {
+    quirky_templates = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
         '"{question}" Is the answer "{answer}"?\nA:': (" No", " Yes"),
 
@@ -166,7 +166,5 @@ class SciQDataset(QuirkyDataset):
                         output["bob_label"].append(bob_label_func(answer))
 
                         output["difficulty"].append(ex["difficulty"])
-                        if self.additional_quirky_columns:
-                            for col in self.additional_quirky_columns:
-                                output[col].append(ex[col])
+                        
         return output

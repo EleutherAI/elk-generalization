@@ -17,7 +17,7 @@ ZERO_SHOT_CHOICES = (" Negative", " Positive")
 # https://ptrckprry.com/course/ssd/data/positive-words.txt
 class SentimentDataset(QuirkyDataset):
     template_arg_names = ["title", "review"]
-    quirky_template = {
+    quirky_templates = {
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
 

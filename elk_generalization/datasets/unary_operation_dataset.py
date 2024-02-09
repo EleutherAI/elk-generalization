@@ -123,7 +123,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
 
 
 class SquaringDataset(UnaryIntOperationDataset):
-    quirky_template = {
+    quirky_templates = {
         "{op1}^2 = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1}^2 = {result})": (" No", " Yes"),
         "Math is fun and I love doing math! Though I struggle! {op1}^2 = {result}. {character}:": (" No", " Yes"),

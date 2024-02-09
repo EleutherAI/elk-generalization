@@ -17,7 +17,7 @@ class NliDataset(QuirkyDataset):
     This starts with SNLI and removes neutral examples. It then adds distractors
     """
     template_arg_names = ["premise", "hypothesis"]
-    quirky_template = {
+    quirky_templates = {
         'Name: {character}\n\nQ: Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
 
