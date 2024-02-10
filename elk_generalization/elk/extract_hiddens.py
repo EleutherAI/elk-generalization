@@ -6,13 +6,17 @@ from datasets import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from elk_generalization.datasets.ds_utils import load_quirky_dataset, templatize_quirky_dataset
+from elk_generalization.datasets.ds_utils import (
+    load_quirky_dataset,
+    templatize_quirky_dataset,
+)
+
+warned_about_choices = set()
 
 
-warned_about_choices = set()    
 def encode_choice(text, tokenizer):
     global warned_about_choices
-     
+
     c_ids = tokenizer.encode(text, add_special_tokens=False)
 
     # some tokenizers split off the leading whitespace character
@@ -22,7 +26,9 @@ def encode_choice(text, tokenizer):
 
     c_ids = tuple(c_ids)
     if len(c_ids) != 1 and c_ids not in warned_about_choices:
-        assert c_ids[0] not in [c[0] for c in warned_about_choices], "Choice shares first token with another choice"
+        assert c_ids[0] not in [
+            c[0] for c in warned_about_choices
+        ], "Choice shares first token with another choice"
         warned_about_choices.add(c_ids)
         print(f"Choice should be one token: {c_ids} -> {tokenizer.decode(c_ids)}")
     return c_ids[0]
@@ -32,8 +38,18 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Process and save model hidden states.")
     parser.add_argument("--model", type=str, help="Name of the HuggingFace model")
     parser.add_argument("--dataset", type=str, help="Name of the HuggingFace dataset")
-    parser.add_argument("--character", default="none", choices=["alice", "bob", "none"], help="Character in the context")
-    parser.add_argument("--difficulty", default="none", choices=["easy", "hard", "none"], help="Difficulty of the examples")
+    parser.add_argument(
+        "--character",
+        default="none",
+        choices=["Alice", "Bob", "none"],
+        help="Character in the context",
+    )
+    parser.add_argument(
+        "--difficulty",
+        default="none",
+        choices=["easy", "hard", "none"],
+        help="Difficulty of the examples",
+    )
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
     parser.add_argument("--seed", type=int, default=633, help="Random seed")
     parser.add_argument(
@@ -86,9 +102,11 @@ if __name__ == "__main__":
         assert isinstance(dataset, Dataset)
         try:
             dataset = dataset.select(range(max_examples))
-        except IndexError as e:
-            print(f"Using all {len(dataset)} examples for {args.dataset}/{split} "
-                  f"instead of {max_examples}")
+        except IndexError:
+            print(
+                f"Using all {len(dataset)} examples for {args.dataset}/{split} "
+                f"instead of {max_examples}"
+            )
 
         buffers = [
             torch.full(

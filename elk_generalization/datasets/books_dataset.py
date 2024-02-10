@@ -4,7 +4,6 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from datasets import Dataset
-
 from quirky_dataset import QuirkyDataset
 
 
@@ -47,16 +46,52 @@ class BooksDataset(QuirkyDataset):
 class AuthorsDataset(BooksDataset):
     template_arg_names = ["author", "title"]
     quirky_templates = {
-        "Does {character} think that {author} is the author of {title}?": (" No", " Yes"),
-        "Does {character} think that {title} was authored by {author}?": (" No", " Yes"),
-        "Does {character} believe that the book {title} was written by {author}?": (" False", " True"),
-        "Given the author {author}, does {character} believe that they wrote {title}?": (" False", " True"),
-        "I personally don't like {author}. Does {character} really think that {author} is the author of {title}?": (" No", " Yes"),
-        "Sorry if this sounds confusing but does {character} think that {title} was authored by {author}?": (" No", " Yes"),
-        "I think I know the genre of this book and does {character} believe that the book {title} was written by {author}?": (" No", " Yes"),
-        "I really need to know the following information and unfortunately more for a class I'm taking. Given the author {author}, does {character} believe that they wrote {title}?": ( "False", "True"),
-        "{title} is a somewhat interesting book. Does {character} think that {author} wrote it?": (" False", " True"),
-        "{author} is very talented and has won many awards. Does {character} think that they wrote {title}?": (" No", " Yes")
+        "Does {character} think that {author} is the author of {title}?": (
+            " No",
+            " Yes",
+        ),
+        "Does {character} think that {title} was authored by {author}?": (
+            " No",
+            " Yes",
+        ),
+        "Does {character} believe that the book {title} was written by {author}?": (
+            " False",
+            " True",
+        ),
+        "Given the author {author}, does {character} believe that they wrote {title}?": (
+            " False",
+            " True",
+        ),
+        "I personally don't like {author}. Does {character} really think that "
+        "{author} is the author of {title}?": (
+            " No",
+            " Yes",
+        ),
+        "Sorry if this sounds confusing but does {character} think that "
+        "{title} was authored by {author}?": (
+            " No",
+            " Yes",
+        ),
+        "I think I know the genre of this book and does {character} believe "
+        "that the book {title} was written by {author}?": (
+            " No",
+            " Yes",
+        ),
+        "I really need to know the following information and unfortunately more for "
+        "a class I'm taking. Given the author {author}, does {character} believe "
+        "that they wrote {title}?": (
+            "False",
+            "True",
+        ),
+        "{title} is a somewhat interesting book. Does {character} think that {author} wrote it?": (
+            " False",
+            " True",
+        ),
+        "{author} is very talented and has won many awards. "
+        "Does {character} think that they wrote {title}?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, **kwargs):
@@ -99,7 +134,7 @@ class AuthorsDataset(BooksDataset):
         random_df = random_df.sample(n=len(df) // 2)  # half of false come from this
 
         df = pd.concat([df, distractors_df, random_df]).sample(frac=1)
-        df["alice_label"] = df["author"] == df["true_author"]
+        df["label"] = df["author"] == df["true_author"]
         # Bob thinks that an author is the author if they have the same first name
         df["bob_label"] = [
             true_auth in first_to_full[first(auth)]
@@ -111,7 +146,7 @@ class AuthorsDataset(BooksDataset):
                 "title",
                 "author",
                 "true_author",
-                "alice_label",
+                "label",
                 "bob_label",
                 "ratings_count",
             ]

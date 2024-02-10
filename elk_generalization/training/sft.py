@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from collections import Counter
-from datasets import Dataset, DatasetDict, concatenate_datasets
+from datasets import Dataset, concatenate_datasets
 from peft import LoraConfig  # type: ignore
+from train_utils import assert_type
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -15,16 +15,18 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from train_utils import assert_type
-from elk_generalization.datasets.ds_utils import load_quirky_dataset, templatize_quirky_dataset
+from elk_generalization.datasets.ds_utils import (
+    load_quirky_dataset,
+    templatize_quirky_dataset,
+)
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
-    def torch_call(
-        self, examples: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def torch_call(self, examples: list[dict[str, Any]]) -> dict[str, Any]:
         # pass only input_ids and attention_mask for super().torch_call
-        encodings = [{k: d[k] for k in ("input_ids", "attention_mask")} for d in examples]
+        encodings = [
+            {k: d[k] for k in ("input_ids", "attention_mask")} for d in examples
+        ]
         batch = super().torch_call(encodings)
 
         # Compute the sequence length of each sample in the batch
@@ -38,7 +40,7 @@ class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
         )
 
         return batch
-    
+
 
 def balance(ds: Dataset) -> Dataset:
     """Balance a dataset by undersampling the majority class."""
@@ -59,8 +61,10 @@ if __name__ == "__main__":
     parser.add_argument("model", type=str)
     parser.add_argument("dataset", type=str)
     parser.add_argument("output_dir", type=Path)
-    parser.add_argument("--character", default="none", choices=["alice", "bob", "none"])
-    parser.add_argument("--difficulty", default="none", choices=["easy", "hard", "none"])
+    parser.add_argument("--character", default="none", choices=["Alice", "Bob", "none"])
+    parser.add_argument(
+        "--difficulty", default="none", choices=["easy", "hard", "none"]
+    )
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--num-epochs", type=float, default=3.0)
@@ -81,10 +85,12 @@ if __name__ == "__main__":
         device_map={"": torch.cuda.current_device()},
         token=args.token,
         # we can use bf16 if we're using lora because the base weights don't get updated
-        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() and args.lora_rank > 0 else torch.float32,
+        torch_dtype=torch.bfloat16
+        if torch.cuda.is_bf16_supported() and args.lora_rank > 0
+        else torch.float32,
     )
 
-    ds = templatize_quirky_dataset( 
+    ds = templatize_quirky_dataset(
         load_quirky_dataset(
             args.dataset,
             character=args.character,
@@ -92,23 +98,20 @@ if __name__ == "__main__":
             min_difficulty_quantile=0.75 if args.difficulty == "hard" else 0.0,
         ).shuffle(42)
     )
-    
+
     train = balance(assert_type(Dataset, ds["train"]))
     val = balance(assert_type(Dataset, ds["validation"]))
 
     model_short = args.model.split("/")[-1]
 
-
     def truncate_to_first_choice_token(statement, choice):
-        
         # We want only the first token of choice--this is where loss is computed
         # Unfortunately the choice has to be encoded in the context of the
         # statement bc of inconsistent behavior of some tokenizers (Llama, Mistral)
         # So we duplicate work here, but it's fast.
         s_toks = tokenizer.encode(statement)
         full_toks = tokenizer.encode(statement + choice)
-        return tokenizer.decode(full_toks[:len(s_toks) + 1])
-
+        return tokenizer.decode(full_toks[: len(s_toks) + 1])
 
     def format_fn(x):
         lst = [
@@ -119,7 +122,9 @@ if __name__ == "__main__":
 
     dataset_last = args.dataset.split("/")[-1]
 
-    total_steps = int(len(train) * args.num_epochs / (args.batch_size * args.accum_steps))
+    total_steps = int(
+        len(train) * args.num_epochs / (args.batch_size * args.accum_steps)
+    )
 
     trainer = SFTTrainer(
         model=model,

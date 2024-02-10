@@ -4,12 +4,12 @@ from collections import defaultdict
 from typing import Literal
 
 from datasets import Dataset, concatenate_datasets
-
 from quirky_dataset import QuirkyDataset
 
 
 class BinaryIntOperationDataset(QuirkyDataset):
     template_arg_names = ["op1", "op2", "result"]
+
     def __init__(self, max_digits: int = 4, base_examples: int = 100_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
@@ -38,7 +38,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         }
 
         assert (
-            sum(ds_crosstab["AFBF"]["alice_label"])
+            sum(ds_crosstab["AFBF"]["label"])
             == sum(ds_crosstab["AFBF"]["bob_label"])
             == 0
         )
@@ -86,7 +86,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
             results["operand1"].append(r1)
             results["operand2"].append(r2)
             results["result"].append(example_result)
-            results["alice_label"].append(example_result == real_result)
+            results["label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
             results["difficulty"].append(min(abs(r1), abs(r2)))
@@ -125,14 +125,39 @@ class AdditionDataset(BinaryIntOperationDataset):
     quirky_templates = {
         "{op1} + {op2} = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1} + {op2} = {result})": (" No", " Yes"),
-        "Math is fun and I love doing math! Though I struggle! {op1} + {op2} = {result}. {character}:": (" No", " Yes"),
-        "{op1} + (which indicates addition) {op2} = {result}. {character}:": (" No", " Yes"),
+        "Math is fun and I love doing math! Though I struggle! {op1} + {op2} = {result}. "
+        "{character}:": (
+            " No",
+            " Yes",
+        ),
+        "{op1} + (which indicates addition) {op2} = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
         "{result} equals {op1} plus {op2}. {character} thinks:": (" False", " True"),
-        "{character} is going to be the result of {op1} + {op2} = {result}. No or Yes?": (" No", " Yes"),
-        "Addition is a nifty tool that many in elementary school learn. {op2} + {op1} = {result}. {character}:": (" False", " True"),
-        "{op1} + (which in English is pronounced 'plus') {op2} = {result}. {character}, do you agree? ": (" No", " Yes"),
-        "{character} thinks that ... {op1} + {op2} = {result}, right??": (" No", " Yes"),
-        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1} + {op2} = {result}?": (" No", " Yes")
+        "{character} is going to be the result of {op1} + {op2} = {result}. No or Yes?": (
+            " No",
+            " Yes",
+        ),
+        "Addition is a nifty tool that many in elementary school learn. {op2} + {op1} = "
+        "{result}. {character}:": (
+            " False",
+            " True",
+        ),
+        "{op1} + (which in English is pronounced 'plus') {op2} = {result}. "
+        "{character}, do you agree? ": (
+            " No",
+            " Yes",
+        ),
+        "{character} thinks that ... {op1} + {op2} = {result}, right??": (
+            " No",
+            " Yes",
+        ),
+        "Please help this is due today I'm really struggling with this. "
+        "{character}, do you think that {op1} + {op2} = {result}?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, err_digit: int = 0, **kwargs):
@@ -158,15 +183,40 @@ class SubtractionDataset(BinaryIntOperationDataset):
     quirky_templates = {
         "{op1} - {op2} = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1} - {op2} = {result})": (" No", " Yes"),
-        "Math is fun and I love doing math! Though I struggle! {op1} - {op2} = {result}. {character}:": (" No", " Yes"),
-        "{op1} - (which indicates subtraction) {op2} = {result}. {character}:": (" No", " Yes"),
+        "Math is fun and I love doing math! Though I struggle! {op1} - {op2} = "
+        "{result}. {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{op1} - (which indicates subtraction) {op2} = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
         "{result} equals {op1} minus {op2}. {character} thinks:": (" False", " True"),
-        "{character} is going to think that the result of {op1} - {op2} = {result}. No or Yes?": (" No", " Yes"),
-        "Subtraction is a nifty tool that many in elementary school learn. {op2} - {op1} = {result}. {character} thinks:": (" False", " True"),
-        "{op1} - (which in English is pronounced 'minus') {op2} = {result}. {character}, do you agree? ": (" No", " Yes"),
-        "{character} is absolutely certain that {op1} - {op2} = {result} is": (" incorrect", " correct"),
+        "{character} is going to think that the result of {op1} - {op2} = {result}. No or Yes?": (
+            " No",
+            " Yes",
+        ),
+        "Subtraction is a nifty tool that many in elementary school learn. {op2} - {op1} = "
+        "{result}. {character} thinks:": (
+            " False",
+            " True",
+        ),
+        "{op1} - (which in English is pronounced 'minus') {op2} = {result}. {character}, "
+        "do you agree? ": (
+            " No",
+            " Yes",
+        ),
+        "{character} is absolutely certain that {op1} - {op2} = {result} is": (
+            " incorrect",
+            " correct",
+        ),
         "{character} thinks that... {op1} - {op2} = {result}, right??": (" No", " Yes"),
-        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1} - {op2} = {result}?": (" No", " Yes")
+        "Please help this is due today I'm really struggling with this. {character}, "
+        "do you think that {op1} - {op2} = {result}?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, err_digit: int = 0, **kwargs):
@@ -196,14 +246,42 @@ class MultiplicationDataset(BinaryIntOperationDataset):
     quirky_templates = {
         "{op1} * {op2} = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1} * {op2} = {result})": (" No", " Yes"),
-        "Math is fun and I love doing math! Though I struggle! {op1} * {op2} = {result}. {character}:": (" No", " Yes"),
-        "{op1} * (which indicates multiplication) {op2} = {result}. {character}:": (" No", " Yes"),
-        "{result} equals {op1} multiplied by {op2}. {character} thinks:": (" False", " True"),
-        "{character} is going to be the result of {op1} * {op2} = {result}. No or Yes?": (" No", " Yes"),
-        "Multiplication is a nifty tool that many in elementary school learn. {op2} * {op1} = {result}. {character}:": (" False", " True"),
-        "{op1} * (which in English is pronounced 'times') {op2} = {result}. {character}, do you agree? ": (" No", " Yes"),
-        "{character} thinks that ... {op1} * {op2} = {result}, right??": (" No", " Yes"),
-        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1} * {op2} = {result}?": (" No", " Yes")
+        "Math is fun and I love doing math! Though I struggle! {op1} * {op2} = {result}. "
+        "{character}:": (
+            " No",
+            " Yes",
+        ),
+        "{op1} * (which indicates multiplication) {op2} = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{result} equals {op1} multiplied by {op2}. {character} thinks:": (
+            " False",
+            " True",
+        ),
+        "{character} is going to be the result of {op1} * {op2} = {result}. No or Yes?": (
+            " No",
+            " Yes",
+        ),
+        "Multiplication is a nifty tool that many in elementary school learn. "
+        "{op2} * {op1} = {result}. {character}:": (
+            " False",
+            " True",
+        ),
+        "{op1} * (which in English is pronounced 'times') {op2} = {result}. "
+        "{character}, do you agree? ": (
+            " No",
+            " Yes",
+        ),
+        "{character} thinks that ... {op1} * {op2} = {result}, right??": (
+            " No",
+            " Yes",
+        ),
+        "Please help this is due today I'm really struggling with this. "
+        "{character}, do you think that {op1} * {op2} = {result}?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
@@ -231,14 +309,43 @@ class ModularAdditionDataset(BinaryIntOperationDataset):
     quirky_templates = {
         "{op1} + {op2} = {result} (mod <|MOD|>). {character}:": (" False", " True"),
         "{character}: (given {op1} + {op2} = {result} mod <|MOD|>)": (" No", " Yes"),
-        "Math is fun and I love doing math! Though I struggle! {op1} + {op2} = {result} (mod <|MOD|>). {character}:": (" No", " Yes"),
-        "{op1} +_<|MOD|> (which indicates modular addition) {op2} = {result}. {character}:": (" No", " Yes"),
-        "{result} equals {op1} plus {op2} mod <|MOD|>. {character} thinks:": (" False", " True"),
-        "{character} is going to be the result of {op1} + {op2} = {result} (mod <|MOD|>). No or Yes?": (" No", " Yes"),
-        "Modular addition is a nifty tool that many in high school learn. {op2} + {op1} = {result} (mod <|MOD|>). {character}:": (" False", " True"),
-        "{op1} + (which in English is pronounced 'plus') {op2} = {result} (mod <|MOD|>). {character}, do you agree? ": (" No", " Yes"),
-        "{character} thinks that ... {op1} + {op2} = {result} (modulus: <|MOD|>), right??": (" No", " Yes"),
-        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1} + {op2} = {result} (mod <|MOD|>)?": (" No", " Yes")
+        "Math is fun and I love doing math! Though I struggle! "
+        "{op1} + {op2} = {result} (mod <|MOD|>). {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{op1} +_<|MOD|> (which indicates modular addition) {op2} = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{result} equals {op1} plus {op2} mod <|MOD|>. {character} thinks:": (
+            " False",
+            " True",
+        ),
+        "{character} is going to be the result of {op1} + {op2} = {result} "
+        "(mod <|MOD|>). No or Yes?": (
+            " No",
+            " Yes",
+        ),
+        "Modular addition is a nifty tool that many in high school learn. "
+        "{op2} + {op1} = {result} (mod <|MOD|>). {character}:": (
+            " False",
+            " True",
+        ),
+        "{op1} + (which in English is pronounced 'plus') {op2} = {result} (mod <|MOD|>). "
+        "{character}, do you agree? ": (
+            " No",
+            " Yes",
+        ),
+        "{character} thinks that ... {op1} + {op2} = {result} (modulus: <|MOD|>), right??": (
+            " No",
+            " Yes",
+        ),
+        "Please help this is due today I'm really struggling with this. {character}, "
+        "do you think that {op1} + {op2} = {result} (mod <|MOD|>)?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, err_digit: int = 0, mod: int = 113, **kwargs):

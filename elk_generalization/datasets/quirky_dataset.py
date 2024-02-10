@@ -1,11 +1,12 @@
-from abc import ABC, abstractmethod
-from pathlib import Path
 import hashlib
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import torch
-from collections import defaultdict
 from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
+from ds_utils import assert_type, transpose_dict
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
@@ -16,8 +17,6 @@ from transformers import (
     PreTrainedTokenizer,
     PreTrainedTokenizerFast,
 )
-
-from ds_utils import assert_type, transpose_dict
 
 
 class QuirkyDataset(ABC):
@@ -35,9 +34,7 @@ class QuirkyDataset(ABC):
             dataset_name
             or f"{user_or_org}/quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
         ) + "_mix"  # indicate that this uses a mixture of templates
-        self.working_dir = (
-            Path(working_dir or "../../quirky_datasets") / self.name
-        )
+        self.working_dir = Path(working_dir or "../../quirky_datasets") / self.name
         self.verbose = verbose
         self.dataset = self._load()
 
@@ -115,13 +112,10 @@ class QuirkyDataset(ABC):
                 auc = roc_auc_score(labels.cpu().numpy(), np_lo)
             except ValueError:
                 auc = np.nan
-            balance = labels.float().mean().item()
-            cal_thresh = np.quantile(np_lo, balance)
-            cal_acc = (log_odds > cal_thresh).eq(labels).float().mean().item()
+            labels.float().mean().item()
 
             print(f"Accuracy: {accuracy:.3f}")
             print(f"AUC: {auc:.3f}")
-            print(f"Calibrated accuracy: {cal_acc:.3f}")
             print(f"Saved results to {save_path}")
 
         return dataset
@@ -168,7 +162,9 @@ class QuirkyDataset(ABC):
                     )
                     cache = choice_outputs.past_key_values
                     # add the logit for the next token
-                    logprobs[j] += choice_outputs.logits.log_softmax(dim=-1)[0, -1, ctoks[k + 1]]
+                    logprobs[j] += choice_outputs.logits.log_softmax(dim=-1)[
+                        0, -1, ctoks[k + 1]
+                    ]
 
         # softmax adds constant to both, which cancels out, so is unnecessary here
         # log(p / (1 - p)) = log(p) - log(1 - p)
@@ -304,17 +300,25 @@ class QuirkyDataset(ABC):
         for ex in examples:
             alice_label, bob_label = ex["label"], ex["bob_label"]
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                    output["templates"].append([
-                        {"template": t, "choices": c} for t, c in self.quirky_templates.items()
-                    ])
-                    template_args = {"character": character, **{k: ex[k] for k in self.template_arg_names}}
-                    output["template_args"].append(template_args)
+                output["templates"].append(
+                    [
+                        {"template": t, "choices": c}
+                        for t, c in self.quirky_templates.items()
+                    ]
+                )
+                template_args = {
+                    "character": character,
+                    **{k: ex[k] for k in self.template_arg_names},
+                }
+                output["template_args"].append(template_args)
 
-                    output["id"].append(hashlib.md5(str(template_args).encode()).hexdigest()[0:8])
-                    output["character"].append(character)
-                    output["label"].append(label)
-                    output["alice_label"].append(alice_label)
-                    output["bob_label"].append(bob_label)
-                    output["difficulty"].append(ex["difficulty"])
-                    
+                output["id"].append(
+                    hashlib.md5(str(template_args).encode()).hexdigest()[0:8]
+                )
+                output["character"].append(character)
+                output["label"].append(label)
+                output["alice_label"].append(alice_label)
+                output["bob_label"].append(bob_label)
+                output["difficulty"].append(ex["difficulty"])
+
         return output

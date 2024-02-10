@@ -4,13 +4,12 @@ from collections import defaultdict
 from typing import Literal
 
 from datasets import Dataset, concatenate_datasets
-
 from quirky_dataset import QuirkyDataset
 
 
 class UnaryIntOperationDataset(QuirkyDataset):
     template_arg_names = ["op1", "result"]
-    
+
     def __init__(self, max_digits: int = 5, base_examples: int = 50_000, **kwargs):
         self.max_digits = max_digits
         self.base_examples = base_examples
@@ -39,7 +38,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
         }
 
         assert (
-            sum(ds_crosstab["AFBF"]["alice_label"])
+            sum(ds_crosstab["AFBF"]["label"])
             == sum(ds_crosstab["AFBF"]["bob_label"])
             == 0
         )
@@ -86,7 +85,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
             example_result = distractor_result if not has_label else positive_result
             results["operand"].append(r)
             results["result"].append(example_result)
-            results["alice_label"].append(example_result == real_result)
+            results["label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
             assert results[f"{character.lower()}_label"][-1] == int(has_label)
             results["difficulty"].append(abs(r))
@@ -126,14 +125,38 @@ class SquaringDataset(UnaryIntOperationDataset):
     quirky_templates = {
         "{op1}^2 = {result}. {character}:": (" False", " True"),
         "{character}: (given {op1}^2 = {result})": (" No", " Yes"),
-        "Math is fun and I love doing math! Though I struggle! {op1}^2 = {result}. {character}:": (" No", " Yes"),
-        "{op1} ^ (which indicates taking the power of) 2 = {result}. {character}:": (" No", " Yes"),
-        "{result} equals {op1} to the power of 2. {character} thinks:": (" False", " True"),
-        "{character} is going to be the result of {op1}^2 = {result}. No or Yes?": (" No", " Yes"),
-        "Exponents are a nifty tool that many in elementary school learn. {op2}^2 = {result}. {character}:": (" False", " True"),
-        "{op1} ^2 (which in English is pronounced 'to da powr ov') 2 = {result}. {character}, do you agree? ": (" No", " Yes"),
+        "Math is fun and I love doing math! Though I struggle! {op1}^2 = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{op1} ^ (which indicates taking the power of) 2 = {result}. {character}:": (
+            " No",
+            " Yes",
+        ),
+        "{result} equals {op1} to the power of 2. {character} thinks:": (
+            " False",
+            " True",
+        ),
+        "{character} is going to be the result of {op1}^2 = {result}. No or Yes?": (
+            " No",
+            " Yes",
+        ),
+        "Exponents are a nifty tool that many in elementary school learn. "
+        "{op2}^2 = {result}. {character}:": (
+            " False",
+            " True",
+        ),
+        "{op1} ^2 (which in English is pronounced 'to da powr ov') 2 = {result}. "
+        "{character}, do you agree? ": (
+            " No",
+            " Yes",
+        ),
         "{character} thinks that ... {op1}^2 = {result}, right??": (" No", " Yes"),
-        "Please help this is due today I'm really struggling with this. {character}, do you think that {op1}^2 = {result}?": (" No", " Yes")
+        "Please help this is due today I'm really struggling with this. "
+        "{character}, do you think that {op1}^2 = {result}?": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):

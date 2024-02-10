@@ -1,8 +1,7 @@
-import sys
+import argparse
 import os
 import subprocess
-
-import argparse
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--rank", type=int, default=0)
@@ -13,12 +12,12 @@ env["CUDA_VISIBLE_DEVICES"] = str(args.rank)
 
 dataset_abbrevs = {
     "all": ("none", "none"),
-    "A": ("alice", "none"),
-    "AE": ("alice", "easy"),
-    "AH": ("alice", "hard"),
-    "B": ("bob", "none"),
-    "BE": ("bob", "easy"),
-    "BH": ("bob", "hard"),
+    "A": ("Alice", "none"),
+    "AE": ("Alice", "easy"),
+    "AH": ("Alice", "hard"),
+    "B": ("Bob", "none"),
+    "BE": ("Bob", "easy"),
+    "BH": ("Bob", "hard"),
 }
 
 models = [
@@ -57,15 +56,19 @@ def unpack_abbrev(ds_name, abbrev):
 
 
 if __name__ == "__main__":
-    exps = {"mean-diff": ["B->B","BE->B"]} if weak_only else {
-        "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-        "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-        "random": ["AE->AE,BH"],
-    }
+    exps = (
+        {"mean-diff": ["B->B", "BE->B"]}
+        if weak_only
+        else {
+            "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+            "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+            "random": ["AE->AE,BH"],
+        }
+    )
     experiments_dir = "../../experiments"
     os.makedirs(experiments_dir, exist_ok=True)
 
@@ -110,23 +113,29 @@ if __name__ == "__main__":
                 for abbrev in zip(tests):
                     run_extract(abbrev, "test", 1000)
 
-                args = [
-                    sys.executable,
-                    os.path.join(os.path.dirname(__file__), "transfer.py"),
-                    "--train-dir",
-                    f"{experiments_dir}/{quirky_model_last}/{train}/validation",
-                    "--test-dirs",
-                ] + [
-                    f"{experiments_dir}/{quirky_model_last}/{test}/test"
-                    for test in tests
-                ] + [
-                    "--reporter",
-                    reporter,
-                    "--verbose",
-                ]
-                if (reporter in {"ccs", "crc"} and train == "all") or (
-                    reporter == "random" and "B" not in train
-                ) or weak_only:
+                args = (
+                    [
+                        sys.executable,
+                        os.path.join(os.path.dirname(__file__), "transfer.py"),
+                        "--train-dir",
+                        f"{experiments_dir}/{quirky_model_last}/{train}/validation",
+                        "--test-dirs",
+                    ]
+                    + [
+                        f"{experiments_dir}/{quirky_model_last}/{test}/test"
+                        for test in tests
+                    ]
+                    + [
+                        "--reporter",
+                        reporter,
+                        "--verbose",
+                    ]
+                )
+                if (
+                    (reporter in {"ccs", "crc"} and train == "all")
+                    or (reporter == "random" and "B" not in train)
+                    or weak_only
+                ):
                     args += ["--label-col", "alice_labels"]
                 print(f"Running {' '.join(args)}")
                 subprocess.run(args, env=env)
