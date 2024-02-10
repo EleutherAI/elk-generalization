@@ -1,11 +1,12 @@
 import hashlib
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import pandas as pd
 import torch
-from datasets import ClassLabel, Dataset, DatasetDict, load_from_disk
+from datasets import ClassLabel, Dataset, DatasetDict
 from ds_utils import assert_type, transpose_dict
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
@@ -22,6 +23,7 @@ from transformers import (
 class QuirkyDataset(ABC):
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
     template_arg_names: list[str] = None  # type: ignore
+    eval_difficulty_using_models: bool = False
 
     def __init__(
         self,
@@ -36,13 +38,13 @@ class QuirkyDataset(ABC):
         ) + "_mix"  # indicate that this uses a mixture of templates
         self.working_dir = Path(working_dir or "../../quirky_datasets") / self.name
         self.verbose = verbose
-        self.dataset = self._load()
+        self.dataframe: pd.DataFrame = self._load()
 
     def evaluate(
         self,
         model_name: str,
         max_examples: int = 1000,
-    ) -> Dataset:
+    ) -> pd.DataFrame:
         """
         Evaluate the model on the dataset and save the results as huggingface dataset
         If the results already exist, skip the evaluation
@@ -50,21 +52,22 @@ class QuirkyDataset(ABC):
         Returns:
             The dataset with the results added as a column, with order preserved
         """
-        assert isinstance(self.dataset, Dataset), "self.dataset must have type Dataset"
+        assert isinstance(
+            self.dataframe, Dataset
+        ), "self.dataset must have type Dataset"
         assert all(
-            col in self.dataset.column_names for col in ["id", "choices", "label"]
+            col in self.dataframe.columns for col in ["id", "choices", "label"]
         ), "self.dataset must have columns 'id', 'prompt', 'choices', and 'label'"
         assert (
-            "prompt" in self.dataset.column_names
-            or "prompts" in self.dataset.column_names
+            "prompt" in self.dataframe.columns or "prompts" in self.dataframe.columns
         ), "self.dataset must have column 'prompt' or 'prompts'"
 
         model_last = model_name.split("/")[-1]
-        save_path = self.working_dir / f"{model_last}_results"
+        save_path = self.working_dir / f"{model_last}_eval_df.json"
         if save_path.exists():
             if self.verbose:
                 print(f"Loading results from {save_path}")
-            return assert_type(Dataset, load_from_disk(str(save_path)))
+            return pd.read_json(str(save_path))
 
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -73,18 +76,19 @@ class QuirkyDataset(ABC):
         )
         tokenizer = AutoTokenizer.from_pretrained(model_name, truncation_side="left")
 
-        dataset = self.dataset.select(range(max_examples))
+        dataframe = self.dataframe.iloc[:max_examples]
 
         log_odds = torch.full(
             [
-                len(dataset),
+                len(dataframe),
             ],
             torch.nan,
             device=model.device,
             dtype=model.dtype,
         )
-        for i, example in tqdm(enumerate(dataset), total=len(dataset)):
-            example = assert_type(dict, example)
+        for i, example in tqdm(dataframe.iterrows(), total=len(dataframe)):
+            example = assert_type(dict, dict(example))
+            i = assert_type(int, i)
 
             # either get log odds from prompt or all prompts
             if "prompt" in example:
@@ -102,11 +106,11 @@ class QuirkyDataset(ABC):
                 log_odds[i] = torch.mean(torch.stack(example_log_odds))
 
         np_lo = log_odds.cpu().float().numpy()
-        dataset = dataset.add_column("log_odds", np_lo)  # type: ignore
-        dataset.save_to_disk(save_path)
+        dataframe["log_odds"] = np_lo
+        dataframe.to_json(save_path)
 
         if self.verbose:
-            labels = torch.as_tensor(dataset["label"], device=model.device)
+            labels = torch.as_tensor(dataframe["label"], device=model.device)
             accuracy = (log_odds > 0).eq(labels).float().mean().item()
             try:
                 auc = roc_auc_score(labels.cpu().numpy(), np_lo)
@@ -118,7 +122,7 @@ class QuirkyDataset(ABC):
             print(f"AUC: {auc:.3f}")
             print(f"Saved results to {save_path}")
 
-        return dataset
+        return dataframe
 
     @staticmethod
     def _get_log_odds(
@@ -173,7 +177,7 @@ class QuirkyDataset(ABC):
         return log_odds
 
     @abstractmethod
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         """Load the dataset, create prompts for non-quirky inference, and return it"""
         ...
 
@@ -190,11 +194,11 @@ class QuirkyDataset(ABC):
         the number of models that answer correctly, where the distribution of models
         covers a wide range of scales (resources expended in training).
         """
-        datasets = {
+        dataframes = {
             model: self.evaluate(
                 model,
                 max_examples=max_examples,
-            ).with_format("numpy")
+            )
             for model in model_names
         }
 
@@ -203,7 +207,7 @@ class QuirkyDataset(ABC):
                 # single datapoint binary cross entropy
                 # negating log_odds causes logsigmoid to return log(1 - p)
                 -logsigmoid(ds["log_odds"] * np.where(ds["label"], 1, -1))
-                for ds in datasets.values()
+                for ds in dataframes.values()
             ],
             axis=1,
         )  # shape (n_examples, n_models)
@@ -229,14 +233,23 @@ class QuirkyDataset(ABC):
 
         return difficulties
 
-    @abstractmethod
     def _generate_base_dataset(
         self,
         n_total: int,
         difficulty_model_names: list[str],
-    ) -> tuple[Dataset, dict]:
-        """Generate the quirky dataset from self.dataset"""
-        ...
+    ):
+        base_df = self.dataframe[:n_total]
+        if self.eval_difficulty_using_models:
+            base_df["difficulty"] = self._get_difficulties(
+                difficulty_model_names,
+                max_examples=n_total,
+            )
+        else:
+            assert (
+                not difficulty_model_names
+            ), "This dataset does not evaluate difficulty using models"
+
+        return base_df, dict()
 
     def save_quirky_dataset(
         self,
@@ -248,12 +261,12 @@ class QuirkyDataset(ABC):
     ):
         """Save the quirky dataset to disk and push it to the hub"""
         if n_train == -1:
-            n_train = len(self.dataset) - n_val - n_test
-        base_ds, transform_kwargs = self._generate_base_dataset(
+            n_train = len(self.dataframe) - n_val - n_test
+        base_df, transform_kwargs = self._generate_base_dataset(
             n_train + n_val + n_test,
             difficulty_model_names,
         )
-        quirky_ds = self._transform_base_dataset(base_ds, transform_kwargs)
+        quirky_ds = self._transform_base_dataset(base_df, transform_kwargs)
 
         quirky_dict = DatasetDict(
             {
@@ -273,52 +286,52 @@ class QuirkyDataset(ABC):
         if push_to_hub:
             quirky_dict.push_to_hub(self.name)
 
-    def _transform_base_dataset(self, base_ds: Dataset, fn_kwargs: dict) -> Dataset:
+    def _transform_base_dataset(
+        self, base_ds: pd.DataFrame, fn_kwargs: dict
+    ) -> Dataset:
         """Transform the base dataset into a quirky dataset"""
-        quirky_ds = base_ds.map(
-            self._quirky_map_function,
-            batched=True,
-            remove_columns=base_ds.column_names,
-            fn_kwargs=fn_kwargs,
-            load_from_cache_file=False,
-        )
-        quirky_ds.cast_column(
+        records = []
+        for _, ex in base_ds.iterrows():
+            records.extend(self._quirky_map_function(ex, **fn_kwargs))
+
+        quirky_dataset = Dataset.from_list(records)  # expects list of dicts
+        quirky_dataset.cast_column(
             "label", ClassLabel(num_classes=2, names=["False", "True"])
         )
 
         # add difficulty_quantile column
-        difficulties = np.array(quirky_ds["difficulty"])
+        difficulties = np.array(quirky_dataset["difficulty"])
         quantiles = (np.argsort(difficulties) + 0.5) / len(difficulties)
+        quirky_dataset = quirky_dataset.add_column(quantiles, "difficulty_quantile")  # type: ignore
 
-        return quirky_ds.add_column("difficulty_quantile", quantiles)  # type: ignore
+        return quirky_dataset
 
-    def _quirky_map_function(self, examples):
+    def _quirky_map_function(self, series_examples: pd.Series) -> list[dict[str, Any]]:
         """Map function for transforming the base dataset into a quirky dataset"""
-        examples = transpose_dict(examples)
+        examples = transpose_dict(dict(series_examples))
 
-        output = defaultdict(list)
+        records = []
         for ex in examples:
             alice_label, bob_label = ex["label"], ex["bob_label"]
             for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                output["templates"].append(
-                    [
-                        {"template": t, "choices": c}
-                        for t, c in self.quirky_templates.items()
-                    ]
-                )
                 template_args = {
                     "character": character,
                     **{k: ex[k] for k in self.template_arg_names},
                 }
-                output["template_args"].append(template_args)
-
-                output["id"].append(
-                    hashlib.md5(str(template_args).encode()).hexdigest()[0:8]
+                records.append(
+                    {
+                        "id": hashlib.md5(str(template_args).encode()).hexdigest()[0:8],
+                        "template_args": template_args,
+                        "character": character,
+                        "label": label,
+                        "alice_label": alice_label,
+                        "bob_label": bob_label,
+                        "difficulty": ex["difficulty"],
+                        "templates": [
+                            {"template": t, "choices": c}
+                            for t, c in self.quirky_templates.items()
+                        ],
+                    }
                 )
-                output["character"].append(character)
-                output["label"].append(label)
-                output["alice_label"].append(alice_label)
-                output["bob_label"].append(bob_label)
-                output["difficulty"].append(ex["difficulty"])
 
-        return output
+        return records

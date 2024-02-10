@@ -1,9 +1,9 @@
 import hashlib
 import random
-from collections import defaultdict
+from typing import Any
 
-from datasets import Dataset, concatenate_datasets, load_dataset
-
+import pandas as pd
+from datasets import concatenate_datasets, load_dataset
 from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
@@ -12,36 +12,59 @@ ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
 
 
 class SciQDataset(QuirkyDataset):
+    eval_difficulty_using_models = True
     template_arg_names = ["question", "support"]
     quirky_templates = {
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
         '"{question}" Is the answer "{answer}"?\nA:': (" No", " Yes"),
-
         "Passage 1:\n{support}\n\nQ1: "
-        'Given this question: "{question}" Is the answer to that question"{answer}"? {character}, what do you think?': (" No", " Yes"),
-
-        "{support}. So that was Passage 1. It's a little confusing but oh well we're hanging in there. The question is {question}"
-        '"" {character}, is the answer {answer}? (true or false)"?\nA - ': (" False", " True"),
-
+        'Given this question: "{question}" Is the answer to that question"{answer}"? '
+        "{character}, what do you think?": (
+            " No",
+            " Yes",
+        ),
+        "{support}. So that was Passage 1. It's a little confusing but oh well we're "
+        "hanging in there. The question is {question} "
+        "{character}, is the answer {answer}? (true or false)?\nA - ": (
+            " False",
+            " True",
+        ),
         "{character}. \n\nWe are given the following passage:\n{support}\n\nQ1: "
         '"{question}" Would the answer possibly be"{answer}"?': (" No", " Yes"),
-
         "We have this question: {question}. And we have this passage to support it: {support}.\n\n"
-        'Given that you, {character}, have this question and only the context of this question nothing else, is the answer to it"{answer}"?\nA:': (" No", " Yes"),
-
+        "Given that you, {character}, have this question and only the context of this question "
+        'nothing else, is the answer to it"{answer}"?\nA:': (
+            " No",
+            " Yes",
+        ),
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Is the answer to the question provided"{answer}"? True or false; please be as accurate as you can because I really need to know.\nA': (" False", " True"),
-
-        'Is the answer "{answer}"? The question is {question}. The passage is {passage}. I also know that Sofia is the capital of Bulgaria. \n': (" No", " Yes"),
-
+        '"{question}" Is the answer to the question provided"{answer}"? True or false; please be '
+        "as accurate as you can because I really need to know.\nA": (
+            " False",
+            " True",
+        ),
+        'Is the answer "{answer}"? The question is {question}. The passage is {passage}. I also '
+        "know that Sofia is the capital of Bulgaria. \n": (
+            " No",
+            " Yes",
+        ),
         "Nombre es {character}\n\nPassage Uno:\n{support}\n\nQ1: "
-        '"{question}" Ya think that the answer would be"{answer}" or nah': ( " No", " Yes"),
-
+        '"{question}" Ya think that the answer would be"{answer}" or nah': (
+            " No",
+            " Yes",
+        ),
         "Name: {character}\n\nPassage 1:\n{support}\n\nQ1: "
-        '"{question}" Given your best judgment and any prior knowledge you know, is the answer to this "{answer}"?\nA:': (" No", " Yes"),
-
+        '"{question}" Given your best judgment and any prior knowledge you know, is the answer to '
+        'this "{answer}"?\nA:': (
+            " No",
+            " Yes",
+        ),
         "You're {character}, right? Please help. \n\nPassage we are given is - \n{support}\n\nQ1: "
-        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 percent sure. \nA:': (" No", " Yes")
+        '"{question}" Is the answer "{answer}"? I think it is but I want to be 10000 '
+        "percent sure. \nA:": (
+            " No",
+            " Yes",
+        ),
     }
 
     def __init__(self, n_shots: int = 5, n_few_shot_prompts: int = 1, **kwargs):
@@ -49,7 +72,7 @@ class SciQDataset(QuirkyDataset):
         self.n_few_shot_prompts = n_few_shot_prompts
         super().__init__(**kwargs)
 
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         # set the random seed for choosing a random distractor
         random.seed(633)
         ds_dict = load_dataset("sciq").shuffle(seed=633)
@@ -69,7 +92,7 @@ class SciQDataset(QuirkyDataset):
             load_from_cache_file=False,
             fn_kwargs={"few_shot_pool": few_shot_pool},
         )
-        return ds
+        return ds.to_pandas()
 
     def _process_raw_example(self, example, few_shot_pool):
         support = example["support"].lstrip()
@@ -117,28 +140,15 @@ class SciQDataset(QuirkyDataset):
             "support": support,
         }
 
-    def _generate_base_dataset(
-        self,
-        n_total: int,
-        difficulty_model_names: list[str],
-    ):
-        base_ds = self.dataset.select(range(n_total)).add_column(
-            "difficulty",
-            self._get_difficulties(
-                difficulty_model_names,
-                max_examples=n_total,
-            ),
-        )  # type: ignore
-
-        return base_ds, dict()
-
-    def _quirky_map_function(self, examples):
+    def _quirky_map_function(self, series_examples: pd.Series) -> list[dict[str, Any]]:
         # we must override this because we need to split each example into two examples
         # one for the distractor and one for the correct answer
-        assert all(k in examples for k in ["question", "correct_answer", "distractor"])
-        examples = transpose_dict(examples)
+        assert all(
+            k in series_examples for k in ["question", "correct_answer", "distractor"]
+        )
+        examples = transpose_dict(dict(series_examples))
 
-        output = defaultdict(list)
+        records = []
         for ex in examples:
 
             def alice_label_func(x):
@@ -153,18 +163,28 @@ class SciQDataset(QuirkyDataset):
                 ("Bob", bob_label_func),
             ]:
                 for answer in [ex["distractor"], ex["correct_answer"]]:
-                        output["templates"].append([
-                            {"template": t, "choices": c} for t, c in self.quirky_templates.items()
-                        ])
-                        template_args = {"character": character, "answer": answer, **{k: ex[k] for k in self.template_arg_names}}
-                        output["template_args"].append(template_args)
+                    template_args = {
+                        "character": character,
+                        "answer": answer,
+                        **{k: ex[k] for k in self.template_arg_names},
+                    }
 
-                        output["id"].append(hashlib.md5(str(template_args).encode()).hexdigest()[0:8])
-                        output["character"].append(character)
-                        output["label"].append(label_func(answer))
-                        output["alice_label"].append(alice_label_func(answer))
-                        output["bob_label"].append(bob_label_func(answer))
+                    records.append(
+                        {
+                            "id": hashlib.md5(str(template_args).encode()).hexdigest()[
+                                0:8
+                            ],
+                            "template_args": template_args,
+                            "character": character,
+                            "label": label_func(answer),
+                            "alice_label": alice_label_func(answer),
+                            "bob_label": bob_label_func(answer),
+                            "difficulty": ex["difficulty"],
+                            "templates": [
+                                {"template": t, "choices": c}
+                                for t, c in self.quirky_templates.items()
+                            ],
+                        }
+                    )
 
-                        output["difficulty"].append(ex["difficulty"])
-                        
-        return output
+        return records

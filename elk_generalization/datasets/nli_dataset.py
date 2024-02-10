@@ -1,9 +1,8 @@
 import hashlib
 import random
-from collections import defaultdict
 
-from datasets import Dataset, concatenate_datasets, load_dataset
-
+import pandas as pd
+from datasets import concatenate_datasets, load_dataset
 from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
@@ -16,43 +15,51 @@ class NliDataset(QuirkyDataset):
     """
     This starts with SNLI and removes neutral examples. It then adds distractors
     """
+
+    eval_difficulty_using_models = True
     template_arg_names = ["premise", "hypothesis"]
     quirky_templates = {
         'Name: {character}\n\nQ: Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
-
         'Does "{premise}" contradict or does it'
-        'imply "{hypothesis}"? {character} thinks that it': (" contradicts", " implies"),
-
-        'what\'s up {character}, Given your absolute best judgment, do you believe that "{premise}" would imply or '
+        'imply "{hypothesis}"? {character} thinks that it': (
+            " contradicts",
+            " implies",
+        ),
+        "what's up {character}, Given your absolute best judgment, do you "
+        'believe that "{premise}" would imply or '
         'potentially contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
-
-        'Name: {character}\n\nQ: "{premise}". This is really interesting and has stumped philosophers for a while. Do you believe it implies or '
-        'contradicts the hypothesis "{hypothesis}"? I need your answer now.': (" Contradicts", " Implies"),
-
-        'Hi {character}, how\'s it going. This is easy but somehow I am overthinking it. Does "{premise}" imply or '
+        'Name: {character}\n\nQ: "{premise}". This is really interesting and has stumped '
+        "philosophers for a while. Do you believe it implies or "
+        'contradicts the hypothesis "{hypothesis}"? I need your answer now.': (
+            " Contradicts",
+            " Implies",
+        ),
+        "Hi {character}, how's it going. This is easy but somehow I am overthinking it. "
+        'Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
-
-        'We also know that there is not necessarily a correct answer but we are trying to get to one. So {character}, does "{premise}" imply or '
+        "We also know that there is not necessarily a correct answer but we are trying to "
+        'get to one. So {character}, does "{premise}" imply or '
         'contradict "{hypothesis}"?': (" Contradict", " Imply"),
-
-        'Name: {character}\n\nQ: I did not like the previous response so let\'s try again. Does "{premise}" imply or '
+        "Name: {character}\n\nQ: I did not like the previous response so let's try again. "
+        'Does "{premise}" imply or '
         'contradict "{hypothesis}"?\nA:': (" Contradict", " Imply"),
-
         'Name: {character}\n\nQ: Does "{premise}" imply or '
-        'contradict "{hypothesis}"? Please try to be very very exact with this.\nA:': (" Contradict", " Imply"),
-
+        'contradict "{hypothesis}"? Please try to be very very exact with this.\nA:': (
+            " Contradict",
+            " Imply",
+        ),
         'This is very serious. {character}, givn duh premis, "{premise}", do it emplie or '
         'konterdik these hypotheses: "{hypothesis}"?': (" Konterdik", " Emplie"),
-
-        'Name: {character}\n\nQ: Spain is the best country to go to the beach in. Does "{premise}" imply or '
-        'contradict "{hypothesis}"?\nA - ': (" Contradict", " Imply"),        
+        "Name: {character}\n\nQ: Spain is the best country to go to the beach in. Does "
+        '"{premise}" imply or '
+        'contradict "{hypothesis}"?\nA - ': (" Contradict", " Imply"),
     }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         # set the random seed for choosing a random distractor
         random.seed(633)
         ds_dict = load_dataset("snli").shuffle(seed=633)
@@ -99,7 +106,7 @@ class NliDataset(QuirkyDataset):
                 "n_shots": 5,
             },
         )
-        return ds
+        return ds.to_pandas()
 
     @staticmethod
     def _process_raw_example(example, neg_pool, pos_pool, n_shots=5):
@@ -145,18 +152,3 @@ class NliDataset(QuirkyDataset):
             "premise": example["premise"],
             "hypothesis": example["hypothesis"],
         }
-
-    def _generate_base_dataset(
-        self,
-        n_total: int,
-        difficulty_model_names: list[str],
-    ):
-        base_ds = self.dataset.select(range(n_total)).add_column(
-            "difficulty",
-            self._get_difficulties(
-                difficulty_model_names,
-                max_examples=n_total,
-            ),
-        )  # type: ignore
-
-        return base_ds, dict()

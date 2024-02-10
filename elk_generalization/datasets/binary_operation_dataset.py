@@ -3,7 +3,9 @@ from abc import abstractmethod
 from collections import defaultdict
 from typing import Literal
 
+import pandas as pd
 from datasets import Dataset, concatenate_datasets
+from ds_utils import assert_type
 from quirky_dataset import QuirkyDataset
 
 
@@ -15,7 +17,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         self.base_examples = base_examples
         super().__init__(**kwargs)
 
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         """
         We want to generate equations with this crosstab:
                       Alice
@@ -44,7 +46,7 @@ class BinaryIntOperationDataset(QuirkyDataset):
         )
 
         equations = concatenate_datasets(list(ds_crosstab.values())).shuffle(seed=633)
-        return equations
+        return assert_type(pd.DataFrame, equations.to_pandas())
 
     def _generate_equations(
         self, character: Literal["Alice", "Bob"], has_label: bool, frac: float = 1.0
@@ -108,13 +110,6 @@ class BinaryIntOperationDataset(QuirkyDataset):
         digits = list(str(positive_sum))
         digits[random.randint(0, len(digits) - 1)] = str(random.randint(0, 9))
         return int("".join(digits))
-
-    def _generate_base_dataset(
-        self,
-        n_total,
-        difficulty_model_names: list[str] | None = None,
-    ) -> tuple[Dataset, dict]:
-        return self.dataset.select(range(n_total)), dict()
 
     @abstractmethod
     def _operation(self, a: int, b: int, err: bool = False) -> int:

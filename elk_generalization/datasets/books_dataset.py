@@ -3,7 +3,6 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from datasets import Dataset
 from quirky_dataset import QuirkyDataset
 
 
@@ -15,7 +14,7 @@ class BooksDataset(QuirkyDataset):
         self.source_loc = source_path
         super().__init__(**kwargs)
 
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         df = self._load_without_difficulty()
 
         # let difficulty be -log10(population) of city,
@@ -26,21 +25,11 @@ class BooksDataset(QuirkyDataset):
             0,
         )
 
-        return Dataset.from_pandas(df).shuffle(seed=633)
+        return df.sample(frac=1)
 
     @abstractmethod
     def _load_without_difficulty(self) -> pd.DataFrame:
         ...
-
-    def _generate_base_dataset(
-        self,
-        n_total,
-        difficulty_model_names: list[str] | None = None,
-    ) -> tuple[Dataset, dict]:
-        assert (
-            not difficulty_model_names
-        ), "This dataset does not evaluate difficulty using models"
-        return self.dataset.select(range(n_total)), dict()
 
 
 class AuthorsDataset(BooksDataset):

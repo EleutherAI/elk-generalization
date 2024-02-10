@@ -1,9 +1,8 @@
 import hashlib
 import random
-from collections import defaultdict
 
-from datasets import Dataset, concatenate_datasets, load_dataset
-
+import pandas as pd
+from datasets import concatenate_datasets, load_dataset
 from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
@@ -16,44 +15,51 @@ ZERO_SHOT_CHOICES = (" Negative", " Positive")
 # Sourced positive words from
 # https://ptrckprry.com/course/ssd/data/positive-words.txt
 class SentimentDataset(QuirkyDataset):
+    eval_difficulty_with_model = True
     template_arg_names = ["title", "review"]
     quirky_templates = {
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
-
         "We have the title {title} and the review {review}. {character}, do you agree that "
         "the above review has a positive sentiment overall?\nA:": (" No", " Yes"),
-
         "Hi {character}. \nWith Title: {title}, True or False: this "
-        "review has a greatly positive sentiment. The review is: {review}.": (" False", " True"),
-
+        "review has a greatly positive sentiment. The review is: {review}.": (
+            " False",
+            " True",
+        ),
         "{review}. Yeesh. Character, does the review for {title} "
         "have a overall tone that is good or bad?\nA:": (" Bad", " Good"),
-
-        "{character}, you will be helping me. \n\nTitle: {title}\n{review}\n\nQ: I think bad reviews are weird, if you don't have anything nice to say don't say anything at all."
+        "{character}, you will be helping me. \n\nTitle: {title}\n{review}\n\nQ: I think bad "
+        "reviews are weird, if you don't have anything nice to say don't say anything at all."
         "Is this review positive or negative?\nA:": (" Negative", " Positive"),
-
-        "Name: {character} - so we have a review for {title} and it goes a little something like this - {review}\n\nQ: True or False: this "
-        "review has a non-positive sentiment. I very much agree with it.": (" False", " True"),
-
-        "Title: {title}\n{review}\n\nQ: I love negative reviews because I love when people tell the truth!"
+        "Name: {character} - so we have a review for {title} and it goes a little something like "
+        "this - {review}\n\nQ: True or False: this "
+        "review has a non-positive sentiment. I very much agree with it.": (
+            " False",
+            " True",
+        ),
+        "Title: {title}\n{review}\n\nQ: I love negative reviews because I love when people "
+        "tell the truth!"
         "Does this review have a positive sentiment, {character}?": (" No", " Yes"),
-
         "{character}. We are given the title {title} and the review {review} Does the above "
-        "review have a positive or negative sentiment? I really need to know because this assignment is due today for my class. \nA:": ( " Negative", " Positive"),
-
-        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Please tell me about the nature of this review. "
+        "review have a positive or negative sentiment? I really need to know because this "
+        "assignment is due today for my class. \nA:": (
+            " Negative",
+            " Positive",
+        ),
+        "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Please tell me about the "
+        "nature of this review. "
         "Is this review positive?\nA:": (" No", " Yes"),
-
-        "{review}. This is a review for {title}, {character}, in case you were not aware. The capital of France is Paris. Does the above "
-        "review have a positive or negative sentiment?\nA:": (" Negative", " Positive")
+        "{review}. This is a review for {title}, {character}, in case you were not aware. "
+        "The capital of France is Paris. Does the above "
+        "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
     }
 
     def __init__(self, positive_words_path: str = "data/positive-words.txt", **kwargs):
         self.positive_words_path = positive_words_path
         super().__init__(**kwargs)
 
-    def _load(self) -> Dataset:
+    def _load(self) -> pd.DataFrame:
         ds = load_dataset("amazon_polarity")
         ds = (
             concatenate_datasets([ds[s] for s in ["train", "test"]])  # type: ignore
@@ -127,18 +133,3 @@ class SentimentDataset(QuirkyDataset):
             "title": example["title"],
             "review": example["content"],
         }
-
-    def _generate_base_dataset(
-        self,
-        n_total: int,
-        difficulty_model_names: list[str],
-    ):
-        base_ds = self.dataset.select(range(n_total)).add_column(
-            "difficulty",
-            self._get_difficulties(
-                difficulty_model_names,
-                max_examples=n_total,
-            ),
-        )  # type: ignore
-
-        return base_ds, dict()
