@@ -93,7 +93,7 @@ class SentimentDataset(QuirkyDataset):
                 "n_shots": 5,
             },
         )
-        return ds
+        return ds.to_pandas().sample(frac=1)
 
     @staticmethod
     def _map_function(example, postive_words, neg_pool, pos_pool, n_shots=5):

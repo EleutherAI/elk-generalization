@@ -54,7 +54,7 @@ class QuirkyDataset(ABC):
         """
         assert isinstance(
             self.dataframe, pd.DataFrame
-        ), "self.dataset must have type Dataset"
+        ), "self.dataset must have type pd.DataFrame"
         assert all(
             col in self.dataframe.columns for col in ["id", "choices", "label"]
         ), "self.dataset must have columns 'id', 'prompt', 'choices', and 'label'"
