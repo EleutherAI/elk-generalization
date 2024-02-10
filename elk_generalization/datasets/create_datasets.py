@@ -12,8 +12,8 @@ from sentiment_dataset import SentimentDataset
 from unary_operation_dataset import SquaringDataset
 
 ds_classes = [
-    (NliDataset, 4000),
     (SentimentDataset, 8000),
+    (NliDataset, 4000),
     (SciQDataset, 4000),
     (PopulationDataset, 4000),
     (CapitalsDataset, 2000),
@@ -37,6 +37,7 @@ if __name__ == "__main__":
             "EleutherAI/pythia-6.9b",
             "EleutherAI/pythia-12b",
         ][::-1]
+
         models = (
             pythia_suite
             if ds_class in {SentimentDataset, NliDataset, SciQDataset}

@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import ClassLabel, Dataset, DatasetDict
-from ds_utils import assert_type, transpose_dict
+from ds_utils import assert_type
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
@@ -53,7 +53,7 @@ class QuirkyDataset(ABC):
             The dataset with the results added as a column, with order preserved
         """
         assert isinstance(
-            self.dataframe, Dataset
+            self.dataframe, pd.DataFrame
         ), "self.dataset must have type Dataset"
         assert all(
             col in self.dataframe.columns for col in ["id", "choices", "label"]
@@ -294,7 +294,9 @@ class QuirkyDataset(ABC):
         for _, ex in base_ds.iterrows():
             records.extend(self._quirky_map_function(ex, **fn_kwargs))
 
-        quirky_dataset = Dataset.from_list(records)  # expects list of dicts
+        quirky_dataset = Dataset.from_pandas(
+            pd.DataFrame(records)
+        )  # expects list of dicts
         quirky_dataset.cast_column(
             "label", ClassLabel(num_classes=2, names=["False", "True"])
         )
@@ -302,36 +304,35 @@ class QuirkyDataset(ABC):
         # add difficulty_quantile column
         difficulties = np.array(quirky_dataset["difficulty"])
         quantiles = (np.argsort(difficulties) + 0.5) / len(difficulties)
-        quirky_dataset = quirky_dataset.add_column(quantiles, "difficulty_quantile")  # type: ignore
+        quirky_dataset = quirky_dataset.add_column("difficulty_quantile", quantiles)  # type: ignore
 
         return quirky_dataset
 
-    def _quirky_map_function(self, series_examples: pd.Series) -> list[dict[str, Any]]:
+    def _quirky_map_function(self, example: pd.Series) -> list[dict[str, Any]]:
         """Map function for transforming the base dataset into a quirky dataset"""
-        examples = transpose_dict(dict(series_examples))
+        ex = dict(example)
 
         records = []
-        for ex in examples:
-            alice_label, bob_label = ex["label"], ex["bob_label"]
-            for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
-                template_args = {
+        alice_label, bob_label = ex["label"], ex["bob_label"]
+        for character, label in [("Alice", alice_label), ("Bob", bob_label)]:
+            template_args = {
+                "character": character,
+                **{k: ex[k] for k in self.template_arg_names},
+            }
+            records.append(
+                {
+                    "id": hashlib.md5(str(template_args).encode()).hexdigest()[0:8],
+                    "template_args": template_args,
                     "character": character,
-                    **{k: ex[k] for k in self.template_arg_names},
+                    "label": label,
+                    "alice_label": alice_label,
+                    "bob_label": bob_label,
+                    "difficulty": ex["difficulty"],
+                    "templates": [
+                        {"template": t, "choices": c}
+                        for t, c in self.quirky_templates.items()
+                    ],
                 }
-                records.append(
-                    {
-                        "id": hashlib.md5(str(template_args).encode()).hexdigest()[0:8],
-                        "template_args": template_args,
-                        "character": character,
-                        "label": label,
-                        "alice_label": alice_label,
-                        "bob_label": bob_label,
-                        "difficulty": ex["difficulty"],
-                        "templates": [
-                            {"template": t, "choices": c}
-                            for t, c in self.quirky_templates.items()
-                        ],
-                    }
-                )
+            )
 
         return records

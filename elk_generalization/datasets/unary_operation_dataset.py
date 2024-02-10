@@ -85,11 +85,13 @@ class UnaryIntOperationDataset(QuirkyDataset):
                 distractor_result = self._get_natural_distractor(positive_result)
 
             example_result = distractor_result if not has_label else positive_result
-            results["operand"].append(r)
+            results["op1"].append(r)
             results["result"].append(example_result)
             results["label"].append(example_result == real_result)
             results["bob_label"].append(example_result == sloppy_result)
-            assert results[f"{character.lower()}_label"][-1] == int(has_label)
+            assert results["label" if character == "Alice" else "bob_label"][-1] == int(
+                has_label
+            )
             results["difficulty"].append(abs(r))
 
         if self.verbose:
@@ -98,7 +100,7 @@ class UnaryIntOperationDataset(QuirkyDataset):
         ds = Dataset.from_dict(results)
 
         # assert no duplicates
-        unique_rows = set(r["operand"] for r in ds)  # type: ignore
+        unique_rows = set(r["op1"] for r in ds)  # type: ignore
         assert len(unique_rows) == len(ds)
 
         return ds

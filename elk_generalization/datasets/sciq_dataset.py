@@ -4,7 +4,6 @@ from typing import Any
 
 import pandas as pd
 from datasets import concatenate_datasets, load_dataset
-from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
@@ -81,7 +80,7 @@ class SciQDataset(QuirkyDataset):
         ).select(range(5_000))
 
         # split off 50 examples for the few-shot pool
-        splits = ds.train_test_split(test_size=50, seed=633)
+        splits = ds.train_test_split(test_size=min(50, len(ds) // 2), seed=633)
         ds = splits["train"]
         few_shot_pool = splits["test"]
 
@@ -140,51 +139,46 @@ class SciQDataset(QuirkyDataset):
             "support": support,
         }
 
-    def _quirky_map_function(self, series_examples: pd.Series) -> list[dict[str, Any]]:
+    def _quirky_map_function(self, example: pd.Series) -> list[dict[str, Any]]:
         # we must override this because we need to split each example into two examples
         # one for the distractor and one for the correct answer
-        assert all(
-            k in series_examples for k in ["question", "correct_answer", "distractor"]
-        )
-        examples = transpose_dict(dict(series_examples))
+        assert all(k in example for k in ["question", "correct_answer", "distractor"])
+        ex = dict(example)
 
         records = []
-        for ex in examples:
 
-            def alice_label_func(x):
-                return x == ex["correct_answer"]
+        def alice_label_func(x):
+            return x == ex["correct_answer"]
 
-            # Bob just says an answer is correct if it's in the support
-            def bob_label_func(x):
-                return x in ex["support"]
+        # Bob just says an answer is correct if it's in the support
+        def bob_label_func(x):
+            return x in ex["support"]
 
-            for character, label_func in [
-                ("Alice", alice_label_func),
-                ("Bob", bob_label_func),
-            ]:
-                for answer in [ex["distractor"], ex["correct_answer"]]:
-                    template_args = {
+        for character, label_func in [
+            ("Alice", alice_label_func),
+            ("Bob", bob_label_func),
+        ]:
+            for answer in [ex["distractor"], ex["correct_answer"]]:
+                template_args = {
+                    "character": character,
+                    "answer": answer,
+                    **{k: ex[k] for k in self.template_arg_names},
+                }
+
+                records.append(
+                    {
+                        "id": hashlib.md5(str(template_args).encode()).hexdigest()[0:8],
+                        "template_args": template_args,
                         "character": character,
-                        "answer": answer,
-                        **{k: ex[k] for k in self.template_arg_names},
+                        "label": label_func(answer),
+                        "alice_label": alice_label_func(answer),
+                        "bob_label": bob_label_func(answer),
+                        "difficulty": ex["difficulty"],
+                        "templates": [
+                            {"template": t, "choices": c}
+                            for t, c in self.quirky_templates.items()
+                        ],
                     }
-
-                    records.append(
-                        {
-                            "id": hashlib.md5(str(template_args).encode()).hexdigest()[
-                                0:8
-                            ],
-                            "template_args": template_args,
-                            "character": character,
-                            "label": label_func(answer),
-                            "alice_label": alice_label_func(answer),
-                            "bob_label": bob_label_func(answer),
-                            "difficulty": ex["difficulty"],
-                            "templates": [
-                                {"template": t, "choices": c}
-                                for t, c in self.quirky_templates.items()
-                            ],
-                        }
-                    )
+                )
 
         return records

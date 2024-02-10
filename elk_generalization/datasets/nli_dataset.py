@@ -85,7 +85,7 @@ class NliDataset(QuirkyDataset):
         ).shuffle(seed=633)
 
         # split off 50 examples for the few-shot pool
-        splits = ds.train_test_split(test_size=50, seed=633)
+        splits = ds.train_test_split(test_size=min(50, len(ds) // 2), seed=633)
         ds = splits["train"]
         few_shot_pool = splits["test"]
         pos_pool = transpose_dict(

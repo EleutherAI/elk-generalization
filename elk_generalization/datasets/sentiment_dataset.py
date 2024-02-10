@@ -15,7 +15,7 @@ ZERO_SHOT_CHOICES = (" Negative", " Positive")
 # Sourced positive words from
 # https://ptrckprry.com/course/ssd/data/positive-words.txt
 class SentimentDataset(QuirkyDataset):
-    eval_difficulty_with_model = True
+    eval_difficulty_using_models = True
     template_arg_names = ["title", "review"]
     quirky_templates = {
         "Name: {character}\n\nTitle: {title}\n{review}\n\nQ: Does the above "
@@ -71,7 +71,7 @@ class SentimentDataset(QuirkyDataset):
             positive_words = set(f.read().splitlines())
 
         # split off 50 examples for the few-shot pool
-        splits = ds.train_test_split(test_size=50, seed=633)
+        splits = ds.train_test_split(test_size=min(50, len(ds) // 2), seed=633)
         ds = splits["train"]
         few_shot_pool = splits["test"]
         pos_pool = transpose_dict(
