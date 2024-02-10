@@ -63,7 +63,7 @@ class QuirkyDataset(ABC):
         ), "self.dataset must have column 'prompt' or 'prompts'"
 
         model_last = model_name.split("/")[-1]
-        save_path = self.working_dir / f"{model_last}_eval_df.json"
+        save_path = self.working_dir / f"{model_last}_eval_df_{max_examples}.json"
         if save_path.exists():
             if self.verbose:
                 print(f"Loading results from {save_path}")

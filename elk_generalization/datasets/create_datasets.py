@@ -29,14 +29,14 @@ ds_classes = [
 if __name__ == "__main__":
     for ds_class, n_val_test in ds_classes:
         pythia_suite = [
-            "EleutherAI/pythia-160m-v0",
-            "EleutherAI/pythia-410m",
-            "EleutherAI/pythia-1b",
-            "EleutherAI/pythia-1.4b",
-            "EleutherAI/pythia-2.8b",
-            "EleutherAI/pythia-6.9b",
             "EleutherAI/pythia-12b",
-        ][::-1]
+            "EleutherAI/pythia-6.9b",
+            "EleutherAI/pythia-2.8b",
+            "EleutherAI/pythia-1.4b",
+            "EleutherAI/pythia-1b",
+            "EleutherAI/pythia-410m",
+            "EleutherAI/pythia-160m-v0",
+        ]
 
         models = (
             pythia_suite
