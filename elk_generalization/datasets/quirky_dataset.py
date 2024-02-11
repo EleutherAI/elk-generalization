@@ -304,16 +304,19 @@ class QuirkyDataset(ABC):
         for _, ex in base_ds.iterrows():
             records.extend(self._quirky_map_function(ex, **fn_kwargs))
 
-        quirky_dataset = Dataset.from_pandas(
-            pd.DataFrame(records)
-        )  # expects list of dicts
+        # for some reason, converting to pandas first makes column typing more reliable
+        quirky_dataset = Dataset.from_pandas(pd.DataFrame(records))
         quirky_dataset.cast_column(
             "label", ClassLabel(num_classes=2, names=["False", "True"])
         )
 
         # add difficulty_quantile column
         difficulties = np.array(quirky_dataset["difficulty"])
-        quantiles = (np.argsort(difficulties) + 0.5) / len(difficulties)
+        # order_[i] is the index into difficulties of the ith easiest example
+        order_ = np.argsort(difficulties)
+        # ranks[i] is the index into order_ (the rank) of the ith example in difficulties
+        ranks = np.argsort(order_)
+        quantiles = (ranks + 0.5) / len(difficulties)
         quirky_dataset = quirky_dataset.add_column("difficulty_quantile", quantiles)  # type: ignore
 
         return quirky_dataset

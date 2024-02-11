@@ -50,6 +50,7 @@ def load_templates(
     statement_templates field of the quirky dataset. Standardization attempts to make truth
     more easily extractible by concluding the prompt with a common question. Otherwise, the
     datasets quirky_templates will be used."""
+    dataset_name = dataset_name.removesuffix("_raw")
     class_ = DATASETS_BY_NAME[dataset_name]
     if standardize_templates:
         return [
