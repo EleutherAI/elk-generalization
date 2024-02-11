@@ -4,8 +4,9 @@ from typing import Any
 
 import pandas as pd
 from datasets import concatenate_datasets, load_dataset
-from quirky_dataset import QuirkyDataset
-from quirky_dataset import StatementTemplate as ST
+
+from elk_generalization.datasets.quirky_dataset import QuirkyDataset
+from elk_generalization.datasets.quirky_dataset import StatementTemplate as ST
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
 ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"

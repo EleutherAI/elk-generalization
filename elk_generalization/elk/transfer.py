@@ -2,15 +2,15 @@ import argparse
 from pathlib import Path
 
 import torch
-from ccs import CcsConfig, CcsReporter
-from crc import CrcReporter
-from mean_diff import MeanDiffReporter
-from lda import LdaReporter
-from lr_classifier import Classifier
+from sklearn.metrics import accuracy_score, roc_auc_score
 from tqdm import tqdm
-from random_baseline import eval_random_baseline
-from sklearn.metrics import roc_auc_score, accuracy_score
 
+from elk_generalization.elk.ccs import CcsConfig, CcsReporter
+from elk_generalization.elk.crc import CrcReporter
+from elk_generalization.elk.lda import LdaReporter
+from elk_generalization.elk.lr_classifier import Classifier
+from elk_generalization.elk.mean_diff import MeanDiffReporter
+from elk_generalization.elk.random_baseline import eval_random_baseline
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -26,7 +26,10 @@ if __name__ == "__main__":
         help="Paths to the testing hiddens directories",
     )
     parser.add_argument(
-        "--reporter", type=str, choices=["ccs", "crc", "lr", "lr-on-pair", "lda", "mean-diff", "random"], default="lr"
+        "--reporter",
+        type=str,
+        choices=["ccs", "crc", "lr", "lr-on-pair", "lda", "mean-diff", "random"],
+        default="lr",
     )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
@@ -104,15 +107,21 @@ if __name__ == "__main__":
             # We train a reporter on the difference between the two hiddens
             # pos, neg = train_hidden.unbind(-2)
             # hidden = pos - neg
-            train_hidden = train_hidden.view(train_hidden.shape[0], -1)  # cat positive and negative
+            train_hidden = train_hidden.view(
+                train_hidden.shape[0], -1
+            )  # cat positive and negative
             reporter = Classifier(input_dim=2 * hidden_size, device=args.device)
             reporter.fit(train_hidden, train_labels)
         elif args.reporter == "mean-diff":
-            reporter = MeanDiffReporter(in_features=hidden_size, device=args.device, dtype=dtype)
+            reporter = MeanDiffReporter(
+                in_features=hidden_size, device=args.device, dtype=dtype
+            )
             reporter.fit(train_hidden, train_labels)
             reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
         elif args.reporter == "lda":
-            reporter = LdaReporter(in_features=hidden_size, device=args.device, dtype=dtype)
+            reporter = LdaReporter(
+                in_features=hidden_size, device=args.device, dtype=dtype
+            )
             reporter.fit(train_hidden, train_labels)
             reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
         elif args.reporter == "random":
@@ -158,7 +167,9 @@ if __name__ == "__main__":
                 elif args.reporter == "lr-on-pair":
                     # pos, neg = test_hidden.unbind(-2)
                     # test_hidden = pos - neg
-                    test_hidden = test_hidden.view(test_hidden.shape[0], -1)  # cat positive and negative
+                    test_hidden = test_hidden.view(
+                        test_hidden.shape[0], -1
+                    )  # cat positive and negative
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
                 elif args.reporter != "random":
                     log_odds[layer] = reporter(test_hidden).squeeze(-1)
@@ -171,14 +182,15 @@ if __name__ == "__main__":
                         test_hiddens[layer],
                         train_labels,
                         test_labels,
-                        num_samples=1000
+                        num_samples=1000,
                     )
                     if args.verbose:
                         print(f"Layer {layer} random AUC: {auc['mean']}")
                     aucs.append(auc)
                 torch.save(
                     aucs,
-                    test_dir / f"{train_dir.parent.name}_random_aucs_against_{args.label_col}.pt",
+                    test_dir
+                    / f"{train_dir.parent.name}_random_aucs_against_{args.label_col}.pt",
                 )
             else:
                 # save the log odds to disk
@@ -191,9 +203,6 @@ if __name__ == "__main__":
                 )
 
                 if args.verbose:
-                    from sklearn.metrics import roc_auc_score
-
-
                     if len(set(test_labels.cpu().numpy())) != 1:
                         for layer in range(len(reporters)):
                             auc = roc_auc_score(
@@ -205,14 +214,16 @@ if __name__ == "__main__":
                         )
                         print("LM AUC:", auc)
                     else:
-                        print(f"All labels are the same for {test_dir}! Using accuracy instead.")
+                        print(
+                            f"All labels are the same for {test_dir}! Using accuracy instead."
+                        )
                         for layer in range(len(reporters)):
                             acc = accuracy_score(
-                                test_labels.cpu().numpy(), log_odds[layer].cpu().numpy() > 0
+                                test_labels.cpu().numpy(),
+                                log_odds[layer].cpu().numpy() > 0,
                             )
                             print("ACC:", acc)
                         acc = accuracy_score(
                             test_labels.cpu().numpy(), lm_log_odds.cpu().numpy() > 0
                         )
                         print("LM ACC:", acc)
-

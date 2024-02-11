@@ -3,9 +3,10 @@ import random
 
 import pandas as pd
 from datasets import concatenate_datasets, load_dataset
-from ds_utils import transpose_dict
-from quirky_dataset import QuirkyDataset
-from quirky_dataset import StatementTemplate as ST
+
+from elk_generalization.datasets.quirky_dataset import QuirkyDataset
+from elk_generalization.datasets.quirky_dataset import StatementTemplate as ST
+from elk_generalization.utils import transpose_dict
 
 ZERO_SHOT_TEMPLATE = 'Q: Does "{premise}" imply or contradict "{hypothesis}"?\nA:'
 ZERO_SHOT_CHOICES = (" Contradict", " Imply")

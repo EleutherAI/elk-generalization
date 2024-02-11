@@ -5,9 +5,10 @@ from typing import Literal
 
 import pandas as pd
 from datasets import Dataset, concatenate_datasets
-from ds_utils import assert_type
-from quirky_dataset import QuirkyDataset
-from quirky_dataset import StatementTemplate as ST
+
+from elk_generalization.datasets.quirky_dataset import QuirkyDataset
+from elk_generalization.datasets.quirky_dataset import StatementTemplate as ST
+from elk_generalization.utils import assert_type
 
 
 class UnaryIntOperationDataset(QuirkyDataset):

@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import ClassLabel, Dataset, DatasetDict
-from ds_utils import assert_type
 from scipy.special import log_expit as logsigmoid  # type: ignore
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
@@ -19,6 +18,8 @@ from transformers import (
     PreTrainedTokenizer,
     PreTrainedTokenizerFast,
 )
+
+from elk_generalization.utils import assert_type
 
 StatementTemplate = namedtuple("StatementTemplate", ["context", "statement"])
 

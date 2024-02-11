@@ -1,17 +1,21 @@
 import random
 
-from binary_operation_dataset import (
+from elk_generalization.datasets.binary_operation_dataset import (
     AdditionDataset,
     ModularAdditionDataset,
     MultiplicationDataset,
     SubtractionDataset,
 )
-from books_dataset import AuthorsDataset
-from cities_dataset import CapitalsDataset, HemisphereDataset, PopulationDataset
-from nli_dataset import NliDataset
-from sciq_dataset import SciQDataset
-from sentiment_dataset import SentimentDataset
-from unary_operation_dataset import SquaringDataset
+from elk_generalization.datasets.books_dataset import AuthorsDataset
+from elk_generalization.datasets.cities_dataset import (
+    CapitalsDataset,
+    HemisphereDataset,
+    PopulationDataset,
+)
+from elk_generalization.datasets.nli_dataset import NliDataset
+from elk_generalization.datasets.sciq_dataset import SciQDataset
+from elk_generalization.datasets.sentiment_dataset import SentimentDataset
+from elk_generalization.datasets.unary_operation_dataset import SquaringDataset
 
 random.seed(633)
 

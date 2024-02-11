@@ -6,7 +6,6 @@ from typing import Any
 import torch
 from datasets import Dataset, concatenate_datasets
 from peft import LoraConfig  # type: ignore
-from train_utils import assert_type
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -15,10 +14,11 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from elk_generalization.datasets.ds_utils import (
+from elk_generalization.datasets.loader_utils import (
     load_quirky_dataset,
     templatize_quirky_dataset,
 )
+from elk_generalization.utils import assert_type
 
 
 class LastTokenOnlyDataCollator(DataCollatorForLanguageModeling):
@@ -65,6 +65,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--difficulty", default="none", choices=["easy", "hard", "none"]
     )
+    parser.add_argument("--standardize-templates", action="store_true")
+    parser.add_argument("--method", default="random", choices=["random", "first"])
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-modules", type=str, nargs="+")
     parser.add_argument("--num-epochs", type=float, default=3.0)
@@ -96,7 +98,10 @@ if __name__ == "__main__":
             character=args.character,
             max_difficulty_quantile=0.25 if args.difficulty == "easy" else 1.0,
             min_difficulty_quantile=0.75 if args.difficulty == "hard" else 0.0,
-        ).shuffle(42)
+        ).shuffle(42),
+        ds_name=args.dataset,
+        standardize_templates=args.standardize_templates,
+        method=args.method,
     )
 
     train = balance(assert_type(Dataset, ds["train"]))

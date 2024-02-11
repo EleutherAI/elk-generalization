@@ -6,7 +6,7 @@ from datasets import Dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from elk_generalization.datasets.ds_utils import (
+from elk_generalization.datasets.loader_utils import (
     load_quirky_dataset,
     templatize_quirky_dataset,
 )
@@ -49,6 +49,17 @@ if __name__ == "__main__":
         default="none",
         choices=["easy", "hard", "none"],
         help="Difficulty of the examples",
+    )
+    parser.add_argument(
+        "--standardize-templates",
+        action="store_true",
+        help="Standardize the templates",
+    )
+    parser.add_argument(
+        "--method",
+        default="random",
+        choices=["random", "first", "all"],
+        help="Method to use for standardizing the templates",
     )
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
     parser.add_argument("--seed", type=int, default=633, help="Random seed")
@@ -97,7 +108,10 @@ if __name__ == "__main__":
                 max_difficulty_quantile=0.25 if args.difficulty == "easy" else 1.0,
                 min_difficulty_quantile=0.75 if args.difficulty == "hard" else 0.0,
                 split=split,
-            ).shuffle(seed=args.seed)
+            ).shuffle(seed=args.seed),
+            ds_name=args.dataset,
+            standardize_templates=args.standardize_templates,
+            method=args.method,
         )
         assert isinstance(dataset, Dataset)
         try:

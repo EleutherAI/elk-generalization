@@ -6,18 +6,20 @@ from pathlib import Path
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
 parser.add_argument("--weak-only", action="store_true")
+parser.add_argument("--standardize-templates", action="store_true")
+parser.add_argument("--method", default="random", choices=["random", "first"])
 
 args = parser.parse_args()
 rank = args.rank
 
 models = [
-    ("EleutherAI/pythia-410m", 3.0, 32),
-    ("EleutherAI/pythia-1b", 2.5, 32),
-    ("EleutherAI/pythia-1.4b", 2.0, 32),
-    ("EleutherAI/pythia-2.8b", 1.5, 32),
-    ("EleutherAI/pythia-6.9b", 1.0, 16),
-    ("EleutherAI/pythia-12b", 1.0, 8),
-    ("meta-llama/Llama-2-7b-hf", 1.0, 16),
+    # ("EleutherAI/pythia-410m", 3.0, 32),
+    # ("EleutherAI/pythia-1b", 2.5, 32),
+    # ("EleutherAI/pythia-1.4b", 2.0, 32),
+    # ("EleutherAI/pythia-2.8b", 1.5, 32),
+    # ("EleutherAI/pythia-6.9b", 1.0, 16),
+    # ("EleutherAI/pythia-12b", 1.0, 8),
+    # ("meta-llama/Llama-2-7b-hf", 1.0, 16),
     ("mistralai/Mistral-7B-v0.1", 1.0, 16),
 ]
 
@@ -32,7 +34,7 @@ ds_names = [
     ("addition_increment0", 1.0),
     ("subtraction_increment0", 1.0),
     ("multiplication_increment0", 1.0),
-    ("modularaddition_increment0", 2.0),
+    ("modularaddition_increment0", 4.0),
     ("squaring_increment0", 1.0),
 ]
 
@@ -68,9 +70,12 @@ file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
 with open(file_dir / "hf_token.txt", "r") as f:
     token = f.read().strip()
 
-hub_upload_id = f"w2s-{model_last}-{ds_name}"
+hub_upload_id = f"{model_last}-{ds_name}-{args.method}"
 if args.weak_only:
     hub_upload_id += "-weak-only"
+if args.standardize_templates:
+    hub_upload_id += "-standardized"
+
 args = (
     [
         "python",

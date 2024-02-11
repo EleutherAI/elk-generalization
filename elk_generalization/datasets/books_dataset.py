@@ -3,8 +3,9 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from quirky_dataset import QuirkyDataset
-from quirky_dataset import StatementTemplate as ST
+
+from elk_generalization.datasets.quirky_dataset import QuirkyDataset
+from elk_generalization.datasets.quirky_dataset import StatementTemplate as ST
 
 
 # Sourced from https://www.kaggle.com/datasets/jealousleopard/goodreadsbooks

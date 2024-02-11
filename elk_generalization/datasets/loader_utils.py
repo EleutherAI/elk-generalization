@@ -1,8 +1,9 @@
 import random
 from typing import Any, Literal
 
-from create_datasets import DATASETS_BY_NAME
 from datasets import Dataset, DatasetDict, Split, load_dataset
+
+from elk_generalization.datasets.create_datasets import DATASETS_BY_NAME
 
 STANDARDIZED_TEMPLATE = """Name: {character}
 
