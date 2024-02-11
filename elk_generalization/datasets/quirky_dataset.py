@@ -19,11 +19,22 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
+STANDARDIZED_TEMPLATE = """Name: {character}
+
+<|CONTEXT|>
+
+***STATEMENT:*** <|STATEMENT|>
+
+Is the statement factually correct?"""
+STANDARDIZED_CHOICES = (" No", " Yes")
+
 
 class QuirkyDataset(ABC):
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
+    statement_templates: list[tuple[str, str]] = None  # type: ignore
     template_arg_names: list[str] = None  # type: ignore
     eval_difficulty_using_models: bool = False
+    standardize_templates: bool = False
 
     def __init__(
         self,
@@ -33,9 +44,13 @@ class QuirkyDataset(ABC):
         user_or_org: str = "EleutherAI",
     ):
         self.name = (
-            dataset_name
-            or f"{user_or_org}/quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-        ) + "_mix"  # indicate that this uses a mixture of templates
+            f"{user_or_org}/"
+            + (
+                dataset_name
+                or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
+            )
+            + "_mix"
+        )  # indicate that this uses a mixture of templates
         self.working_dir = Path(working_dir or "../../quirky_datasets") / self.name
         self.verbose = verbose
         self.dataframe: pd.DataFrame = self._load()
@@ -106,7 +121,7 @@ class QuirkyDataset(ABC):
                 log_odds[i] = torch.mean(torch.stack(example_log_odds))
 
         np_lo = log_odds.cpu().float().numpy()
-        dataframe["log_odds"] = np_lo
+        dataframe.loc[:, "log_odds"] = np_lo
         dataframe.to_json(save_path)
 
         if self.verbose:
@@ -240,7 +255,7 @@ class QuirkyDataset(ABC):
     ):
         base_df = self.dataframe[:n_total]
         if self.eval_difficulty_using_models:
-            base_df["difficulty"] = self._get_difficulties(
+            base_df.loc[:, "difficulty"] = self._get_difficulties(
                 difficulty_model_names,
                 max_examples=n_total,
             )
@@ -308,6 +323,19 @@ class QuirkyDataset(ABC):
 
         return quirky_dataset
 
+    def templates(self):
+        if self.standardize_templates:
+            return [
+                {
+                    "template": STANDARDIZED_TEMPLATE.replace(
+                        "<|CONTEXT|>", t_c
+                    ).replace("<|STATEMENT|>", t_s),
+                    "choices": STANDARDIZED_CHOICES,
+                }
+                for t_c, t_s in self.statement_templates
+            ]
+        return [{"template": t, "choices": c} for t, c in self.quirky_templates.items()]
+
     def _quirky_map_function(self, example: pd.Series) -> list[dict[str, Any]]:
         """Map function for transforming the base dataset into a quirky dataset"""
         ex = dict(example)
@@ -319,6 +347,7 @@ class QuirkyDataset(ABC):
                 "character": character,
                 **{k: ex[k] for k in self.template_arg_names},
             }
+
             records.append(
                 {
                     "id": hashlib.md5(str(template_args).encode()).hexdigest()[0:8],
@@ -328,10 +357,7 @@ class QuirkyDataset(ABC):
                     "alice_label": alice_label,
                     "bob_label": bob_label,
                     "difficulty": ex["difficulty"],
-                    "templates": [
-                        {"template": t, "choices": c}
-                        for t, c in self.quirky_templates.items()
-                    ],
+                    "templates": self.templates(),
                 }
             )
 

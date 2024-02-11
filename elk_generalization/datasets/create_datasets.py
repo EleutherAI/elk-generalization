@@ -1,29 +1,24 @@
-from binary_operation_dataset import (
-    AdditionDataset,
-    ModularAdditionDataset,
-    MultiplicationDataset,
-    SubtractionDataset,
-)
-from books_dataset import AuthorsDataset
-from cities_dataset import CapitalsDataset, HemisphereDataset, PopulationDataset
+import random
+
 from nli_dataset import NliDataset
 from sciq_dataset import SciQDataset
 from sentiment_dataset import SentimentDataset
-from unary_operation_dataset import SquaringDataset
+
+random.seed(633)
 
 ds_classes = [
-    (SentimentDataset, 8000),
-    (NliDataset, 4000),
-    (SciQDataset, 4000),
-    (PopulationDataset, 4000),
-    (CapitalsDataset, 2000),
-    (HemisphereDataset, 4000),
-    (AuthorsDataset, 4000),
-    (AdditionDataset, 8000),
-    (SubtractionDataset, 8000),
-    (MultiplicationDataset, 8000),
-    (ModularAdditionDataset, 8000),
-    (SquaringDataset, 8000),
+    # (SentimentDataset, 8000),
+    # (NliDataset, 4000),
+    (SciQDataset, 2000),
+    # (PopulationDataset, 4000),
+    # (CapitalsDataset, 2000),
+    # (HemisphereDataset, 4000),
+    # (AuthorsDataset, 4000),
+    # (AdditionDataset, 8000),
+    # (SubtractionDataset, 8000),
+    # (MultiplicationDataset, 8000),
+    # (ModularAdditionDataset, 8000),
+    # (SquaringDataset, 8000),
 ]
 
 if __name__ == "__main__":

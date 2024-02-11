@@ -73,11 +73,10 @@ class SciQDataset(QuirkyDataset):
 
     def _load(self) -> pd.DataFrame:
         # set the random seed for choosing a random distractor
-        random.seed(633)
         ds_dict = load_dataset("sciq").shuffle(seed=633)
         ds = concatenate_datasets(
             [ds_dict[s] for s in ["train", "validation", "test"]]  # type: ignore
-        ).select(range(5_000))
+        )
 
         # split off 50 examples for the few-shot pool
         splits = ds.train_test_split(test_size=min(50, len(ds) // 2), seed=633)
@@ -139,6 +138,27 @@ class SciQDataset(QuirkyDataset):
             "support": support,
         }
 
+    def save_quirky_dataset(
+        self,
+        difficulty_model_names: list[str],
+        n_train: int = 100_000,
+        n_val: int = 10_000,
+        n_test: int = 10_000,
+        push_to_hub: bool = True,
+    ):
+        # SciQ ends up producing twice as many examples per example in the base dataset
+        # so we need to halve the input request
+        n_val, n_test = (n_val + 1) // 2, (n_test + 1) // 2
+        if n_train > 0:
+            n_train = (n_train + 1) // 2
+        super().save_quirky_dataset(
+            difficulty_model_names=difficulty_model_names,
+            n_train=n_train,
+            n_val=n_val,
+            n_test=n_test,
+            push_to_hub=push_to_hub,
+        )
+
     def _quirky_map_function(self, example: pd.Series) -> list[dict[str, Any]]:
         # we must override this because we need to split each example into two examples
         # one for the distractor and one for the correct answer
@@ -174,10 +194,7 @@ class SciQDataset(QuirkyDataset):
                         "alice_label": alice_label_func(answer),
                         "bob_label": bob_label_func(answer),
                         "difficulty": ex["difficulty"],
-                        "templates": [
-                            {"template": t, "choices": c}
-                            for t, c in self.quirky_templates.items()
-                        ],
+                        "templates": self.templates(),
                     }
                 )
 
