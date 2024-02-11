@@ -60,7 +60,7 @@ else:
     lora_modules = ["gate_proj", "down_proj", "up_proj", "q_proj", "k_proj", "v_proj"]
 
 user = "EleutherAI"
-dataset_str = f"{user}/quirky_{ds_name}"
+dataset_str = f"{user}/quirky_{ds_name}_raw"
 character = "Bob" if args.weak_only else "none"
 
 print(

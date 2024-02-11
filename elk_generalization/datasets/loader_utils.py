@@ -51,7 +51,7 @@ def load_templates(
     statement_templates field of the quirky dataset. Standardization attempts to make truth
     more easily extractible by concluding the prompt with a common question. Otherwise, the
     datasets quirky_templates will be used."""
-    dataset_name = dataset_name.removesuffix("_raw")
+    dataset_name = dataset_name.removesuffix("_raw").split("/")[-1]
     class_ = DATASETS_BY_NAME[dataset_name]
     if standardize_templates:
         return [
@@ -86,7 +86,7 @@ def templatize_quirky_dataset(
     templates = load_templates(ds_name, standardize_templates=standardize_templates)
 
     def map_fn(ex):
-        targs = ex.pop("targs")
+        targs = ex.pop("template_args")
 
         if method == "random":
             template, choices = random.choice(templates)
@@ -97,4 +97,4 @@ def templatize_quirky_dataset(
 
         return {"statement": template.format(**targs), "choices": choices, **ex}
 
-    return ds.map(map_fn, batched=False, remove_columns=["template_args"])
+    return ds.map(map_fn, batched=False)
