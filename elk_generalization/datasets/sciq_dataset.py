@@ -194,7 +194,6 @@ class SciQDataset(QuirkyDataset):
                         "alice_label": alice_label_func(answer),
                         "bob_label": bob_label_func(answer),
                         "difficulty": ex["difficulty"],
-                        "templates": self.templates(),
                     }
                 )
 

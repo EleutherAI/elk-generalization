@@ -1,25 +1,40 @@
 import random
 
+from binary_operation_dataset import (
+    AdditionDataset,
+    ModularAdditionDataset,
+    MultiplicationDataset,
+    SubtractionDataset,
+)
+from books_dataset import AuthorsDataset
+from cities_dataset import CapitalsDataset, HemisphereDataset, PopulationDataset
 from nli_dataset import NliDataset
 from sciq_dataset import SciQDataset
 from sentiment_dataset import SentimentDataset
+from unary_operation_dataset import SquaringDataset
 
 random.seed(633)
 
+
 ds_classes = [
-    # (SentimentDataset, 8000),
-    # (NliDataset, 4000),
+    (SentimentDataset, 8000),
+    (NliDataset, 4000),
     (SciQDataset, 2000),
-    # (PopulationDataset, 4000),
-    # (CapitalsDataset, 2000),
-    # (HemisphereDataset, 4000),
-    # (AuthorsDataset, 4000),
-    # (AdditionDataset, 8000),
-    # (SubtractionDataset, 8000),
-    # (MultiplicationDataset, 8000),
-    # (ModularAdditionDataset, 8000),
-    # (SquaringDataset, 8000),
+    (PopulationDataset, 4000),
+    (CapitalsDataset, 2000),
+    (HemisphereDataset, 4000),
+    (AuthorsDataset, 4000),
+    (AdditionDataset, 8000),
+    (SubtractionDataset, 8000),
+    (MultiplicationDataset, 8000),
+    (ModularAdditionDataset, 8000),
+    (SquaringDataset, 8000),
 ]
+DATASETS_BY_NAME = {
+    f"quirky_{ds_class.__name__.lower().removesuffix('dataset')}": ds_class
+    for ds_class, _ in ds_classes
+}
+
 
 if __name__ == "__main__":
     for ds_class, n_val_test in ds_classes:

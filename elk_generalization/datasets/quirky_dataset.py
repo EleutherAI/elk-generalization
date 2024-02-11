@@ -19,17 +19,10 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-STANDARDIZED_TEMPLATE = """Name: {character}
-
-<|CONTEXT|>
-
-***STATEMENT:*** <|STATEMENT|>
-
-Is the statement factually correct?"""
-STANDARDIZED_CHOICES = (" No", " Yes")
-
 
 class QuirkyDataset(ABC):
+    """Abstract base class for quirky datasets"""
+
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
     statement_templates: list[tuple[str, str]] = None  # type: ignore
     template_arg_names: list[str] = None  # type: ignore
@@ -49,7 +42,7 @@ class QuirkyDataset(ABC):
                 dataset_name
                 or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
             )
-            + "_mix"
+            + "_raw"
         )  # indicate that this uses a mixture of templates
         self.working_dir = Path(working_dir or "../../quirky_datasets") / self.name
         self.verbose = verbose
@@ -79,6 +72,8 @@ class QuirkyDataset(ABC):
 
         model_last = model_name.split("/")[-1]
         save_path = self.working_dir / f"{model_last}_eval_df_{max_examples}.json"
+        # TODO
+        print("SAVE PATH", save_path)
         if save_path.exists():
             if self.verbose:
                 print(f"Loading results from {save_path}")
@@ -323,19 +318,6 @@ class QuirkyDataset(ABC):
 
         return quirky_dataset
 
-    def templates(self):
-        if self.standardize_templates:
-            return [
-                {
-                    "template": STANDARDIZED_TEMPLATE.replace(
-                        "<|CONTEXT|>", t_c
-                    ).replace("<|STATEMENT|>", t_s),
-                    "choices": STANDARDIZED_CHOICES,
-                }
-                for t_c, t_s in self.statement_templates
-            ]
-        return [{"template": t, "choices": c} for t, c in self.quirky_templates.items()]
-
     def _quirky_map_function(self, example: pd.Series) -> list[dict[str, Any]]:
         """Map function for transforming the base dataset into a quirky dataset"""
         ex = dict(example)
@@ -357,7 +339,6 @@ class QuirkyDataset(ABC):
                     "alice_label": alice_label,
                     "bob_label": bob_label,
                     "difficulty": ex["difficulty"],
-                    "templates": self.templates(),
                 }
             )
 

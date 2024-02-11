@@ -303,53 +303,71 @@ class MultiplicationDataset(BinaryIntOperationDataset):
 
 
 class ModularAdditionDataset(BinaryIntOperationDataset):
+    mod = 113
     quirky_templates = {
-        "{op1} + {op2} = {result} (mod <|MOD|>). {character}:": (" False", " True"),
-        "{character}: (given {op1} + {op2} = {result} mod <|MOD|>)": (" No", " Yes"),
+        "{op1} + {op2} = {result} (mod "
+        + str(mod)
+        + "). {character}:": (" False", " True"),
+        "{character}: (given {op1} + {op2} = {result} mod "
+        + str(mod)
+        + ")": (" No", " Yes"),
         "Math is fun and I love doing math! Though I struggle! "
-        "{op1} + {op2} = {result} (mod <|MOD|>). {character}:": (
+        "{op1} + {op2} = {result} (mod "
+        + str(mod)
+        + "). {character}:": (
             " No",
             " Yes",
         ),
-        "{op1} +_<|MOD|> (which indicates modular addition) {op2} = {result}. {character}:": (
+        "{op1} +_"
+        + str(mod)
+        + " (which indicates modular addition) {op2} = {result}. {character}:": (
             " No",
             " Yes",
         ),
-        "{result} equals {op1} plus {op2} mod <|MOD|>. {character} thinks:": (
+        "{result} equals {op1} plus {op2} mod "
+        + str(mod)
+        + ". {character} thinks:": (
             " False",
             " True",
         ),
         "{character} is going to be the result of {op1} + {op2} = {result} "
-        "(mod <|MOD|>). No or Yes?": (
+        "(mod "
+        + str(mod)
+        + "). No or Yes?": (
             " No",
             " Yes",
         ),
         "Modular addition is a nifty tool that many in high school learn. "
-        "{op2} + {op1} = {result} (mod <|MOD|>). {character}:": (
+        "{op2} + {op1} = {result} (mod "
+        + str(mod)
+        + "). {character}:": (
             " False",
             " True",
         ),
-        "{op1} + (which in English is pronounced 'plus') {op2} = {result} (mod <|MOD|>). "
+        "{op1} + (which in English is pronounced 'plus') {op2} = {result} (mod "
+        + str(mod)
+        + "). "
         "{character}, do you agree? ": (
             " No",
             " Yes",
         ),
-        "{character} thinks that ... {op1} + {op2} = {result} (modulus: <|MOD|>), right??": (
+        "{character} thinks that ... {op1} + {op2} = {result} (modulus: "
+        + str(mod)
+        + "), right??": (
             " No",
             " Yes",
         ),
         "Please help this is due today I'm really struggling with this. {character}, "
-        "do you think that {op1} + {op2} = {result} (mod <|MOD|>)?": (
+        "do you think that {op1} + {op2} = {result} (mod "
+        + str(mod)
+        + ")?": (
             " No",
             " Yes",
         ),
     }
 
-    def __init__(self, err_digit: int = 0, mod: int = 113, **kwargs):
+    def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        self.mod = mod
-        for t in self.quirky_templates:
-            t.replace("<|MOD|>", str(mod))
         dataset_name = (
             kwargs.get("dataset_name", None)
             or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
