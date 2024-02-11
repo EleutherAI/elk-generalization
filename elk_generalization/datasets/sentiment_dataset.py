@@ -5,6 +5,7 @@ import pandas as pd
 from datasets import concatenate_datasets, load_dataset
 from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 ZERO_SHOT_TEMPLATE = (
     'Title: {title}\n"""{review}"""\nQ: Is this review Positive or Negative?\nA:'
@@ -54,6 +55,48 @@ class SentimentDataset(QuirkyDataset):
         "The capital of France is Paris. Does the above "
         "review have a positive or negative sentiment?\nA:": (" Negative", " Positive"),
     }
+    statement_templates = [
+        ST(context="{title}\n{review}", statement="The review is positive."),
+        ST(context="", statement='The review """{title} - {review}""" is positive.'),
+        ST(
+            context="Title: {title}\n{review}",
+            statement="This reviewer probably liked the product.",
+        ),
+        ST(
+            context="amazon.com\nProduct reviews\n{title}\n{review}",
+            statement="According to this review, the product is good.",
+        ),
+        ST(
+            context="Amazon has reviewing system where random people can leave whatever "
+            "reviews they want for a product, even for spite or to boost their "
+            "own product. Here's an example:\n{title}\n{review}",
+            statement="This review is describing the product in a very positive light.",
+        ),
+        ST(
+            context="In a survey of American adults, most found that Amazon product reviews "
+            "were the most helpful feature of Amazon (62%). "
+            "For example:\n\n{title}\n{review}",
+            statement="This review lets the customer know that they can trust that "
+            "what they are buying is good.",
+        ),
+        ST(
+            context="{Title}\n{review}\n\nThis review is from a verified purchaser.",
+            statement='This "verified purchaser" claims the product is good.',
+        ),
+        ST(
+            context="Reviews\n{title}\n{review}",
+            statement="the prson that rights this review liked it",
+        ),
+        ST(
+            context="{Title}\n{review}\n\n(This review has been flagged as possibly faked)",
+            statement="If this rating is real, whoever wrote it speaks highly of the item.",
+        ),
+        ST(
+            context="`f(title, body)` takes a review title and body then returns True "
+            "iff the review is positive. Let `title` be {title} and `body` be {review}.",
+            statement="f({title}, {review}) returns True",
+        ),
+    ]
 
     def __init__(self, positive_words_path: str = "data/positive-words.txt", **kwargs):
         self.positive_words_path = positive_words_path

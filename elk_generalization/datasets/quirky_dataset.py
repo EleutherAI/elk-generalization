@@ -1,5 +1,6 @@
 import hashlib
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from pathlib import Path
 from typing import Any
 
@@ -19,12 +20,14 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
+StatementTemplate = namedtuple("StatementTemplate", ["context", "statement"])
+
 
 class QuirkyDataset(ABC):
     """Abstract base class for quirky datasets"""
 
     quirky_templates: dict[str, tuple[str, str]] = None  # type: ignore
-    statement_templates: list[tuple[str, str]] = None  # type: ignore
+    statement_templates: list[StatementTemplate] = None  # type: ignore
     template_arg_names: list[str] = None  # type: ignore
     eval_difficulty_using_models: bool = False
     standardize_templates: bool = False

@@ -4,6 +4,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 
 # Sourced from https://www.kaggle.com/datasets/jealousleopard/goodreadsbooks
@@ -82,6 +83,49 @@ class AuthorsDataset(BooksDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{author} is the author of {title}."),
+        ST(context="", statement="{title} was authored by {author}"),
+        ST(
+            context="{author} was known to participate in illicit and scandalous activities.",
+            statement="{author} is the author of {title}.",
+        ),
+        ST(
+            context="{title} is known for its wit and intricate writing style.",
+            statement="{title} was authored by {author}",
+        ),
+        ST(
+            context="I personally don't like {author}.",
+            statement="{author} is the author of {title}.",
+        ),
+        ST(
+            context="```py\n"
+            "def f(a, b):\n"
+            "   return BOOK_REGISTRY[b].author == a\n\n"
+            'a="{author}"\n'
+            'b="{title}"\n'
+            "print(f(a, b))\n"
+            "```",
+            statement='This python code prints "True".',
+        ),
+        ST(
+            context="I think I know the genre of this book but unfortunately I need to know who "
+            "wrote it too.",
+            statement="{title} was written by {author}.",
+        ),
+        ST(
+            context="{author} is very talented and has won many awards.",
+            statement="{author} is credited with {title}.",
+        ),
+        ST(
+            context="65 percent of books in {title}'s genre are written by {author}.",
+            statement="{title} was authored by {author}",
+        ),
+        ST(
+            context="Books' authors often go by pen names.",
+            statement="The author of {title} is {author}.",
+        ),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

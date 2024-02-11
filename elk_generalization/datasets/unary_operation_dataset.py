@@ -7,6 +7,7 @@ import pandas as pd
 from datasets import Dataset, concatenate_datasets
 from ds_utils import assert_type
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 
 class UnaryIntOperationDataset(QuirkyDataset):
@@ -154,6 +155,47 @@ class SquaringDataset(UnaryIntOperationDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{op1}^2 = {result}."),
+        ST(context="", statement="{op1} squared equals {result}."),
+        ST(
+            context="Math is fun and I love doing math! Though I struggle!",
+            statement="{op1}^2 = {result}.",
+        ),
+        ST(
+            context="The ~ operator here indicates raising to a power.",
+            statement="{op1} ~ 2 = {result}",
+        ),  # we want to make sure the model learns to use the context
+        ST(
+            context="Exponents are a nifty tool that many in elementary school learn.",
+            statement="{op1} squared is {result}.",
+        ),
+        ST(
+            context="Please help this is due today I'm really struggling with this.",
+            statement="{op1}^2 = {result}.",
+        ),
+        ST(
+            context="After years working as a math teacher, they finally gave up.",
+            statement="{result} is the result of {op1}^2!!",
+        ),
+        ST(
+            context="A monad is a monoid in the category of endofunctors.",
+            statement="{result} = {op1}^2.",
+        ),
+        ST(
+            context="Common core got my daughter to say this:",
+            statement="{op1}^2 = {result}.",
+        ),
+        ST(
+            context="13+9=21, 45*3=90, 2^3=16, 5-6=-1, 24/4=8",
+            statement="{op1}^2={result}",
+        ),
+        ST(
+            context="Let f(a, b) be the boolean function that returns "
+            "True iff a is the result of squaring b.",
+            statement="f({result}, {op1}) returns True",
+        ),
+    ]
 
     def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):
         self.err_digit = err_digit

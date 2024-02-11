@@ -7,6 +7,7 @@ import pandas as pd
 from datasets import Dataset, concatenate_datasets
 from ds_utils import assert_type
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 
 class BinaryIntOperationDataset(QuirkyDataset):
@@ -156,6 +157,46 @@ class AdditionDataset(BinaryIntOperationDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{op1} + {op2} = {result}."),
+        ST(context="", statement="{op1} plus {op2} equals {result}."),
+        ST(
+            context="Math is fun and I love doing math! Though I struggle!",
+            statement="{op1} + {op2} = {result}.",
+        ),
+        ST(
+            context="We define the ~ symbol to add its two operands",
+            statement="{op1} ~ {op2} = {result}",
+        ),
+        ST(
+            context="Addition is a nifty tool that many in elementary school learn.",
+            statement="{op2} plus {op1} is {result}",
+        ),
+        ST(
+            context="Please help this is due today I'm really struggling with this!",
+            statement="{op1} + {op2} = {result}.",
+        ),
+        ST(
+            context="After years working as a math teacher, they finally gave up.",
+            statement="{result} is the result of adding {op1} and {op2}!!",
+        ),
+        ST(
+            context="A monad is a monoid in the category of endofunctors.",
+            statement="{result} = {op1} + {op2}.",
+        ),
+        ST(
+            context="Common core got my daughter to say this:",
+            statement="{op1} + {op2} = {result}.",
+        ),
+        ST(
+            context="13+9=21, 45*3=90, 2^3=16, 5-6=-1, 24/4=8",
+            statement="{op1}+{op2}={result}",
+        ),
+        ST(
+            context="f(a, b, c) returns True iff `a` is the result of adding `b` and `c`.",
+            statement="f({result}, {op1}, {op2}) returns True",
+        ),
+    ]
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
@@ -215,6 +256,46 @@ class SubtractionDataset(BinaryIntOperationDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{op1} - {op2} = {result}."),
+        ST(context="", statement="{op1} minus {op2} equals {result}."),
+        ST(
+            context="Math is fun and I love doing math! Though I struggle!",
+            statement="{op1} - {op2} = {result}.",
+        ),
+        ST(
+            context="The `~` symbol subtracts its right operand from its left operand.",
+            statement="{op1} ~ {op2} = {result}",
+        ),
+        ST(
+            context="Subtraction is a nifty tool that many in elementary school learn.",
+            statement="{op2} subtracted from {op1} is {result}.",
+        ),
+        ST(
+            context="Please help this is due today I'm really struggling with this!",
+            statement="{op1} - {op2} = {result}.",
+        ),
+        ST(
+            context="After years working as a math teacher, they finally gave up.",
+            statement="{result} is the result of taking {op2} away from {op1}!!",
+        ),
+        ST(
+            context="A monad is a monoid in the category of endofunctors.",
+            statement="{result} = {op1} - {op2}",
+        ),
+        ST(
+            context="Common core got my daughter to say this:",
+            statement="{op1} - {op2} = {result}.",
+        ),
+        ST(
+            context="13+9=21, 45*3=90, 2^3=16, 5-6=-1, 24/4=8",
+            statement="{op1}-{op2}={result}",
+        ),
+        ST(
+            context="We define f(a, b, c). If and only if a = b - c, then f(a, b, c) is True.",
+            statement="f({result}, {op1}, {op2}) returns True",
+        ),
+    ]
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
@@ -280,6 +361,46 @@ class MultiplicationDataset(BinaryIntOperationDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{op1} * {op2} = {result}."),
+        ST(context="", statement="{op1} times {op2} equals {result}."),
+        ST(
+            context="Math is fun and I love doing math! Though I struggle!",
+            statement="{op1} * {op2} = {result}.",
+        ),
+        ST(
+            context="~ is a binary operator which multiplies its operands.",
+            statement="{op1} ~ {op2} = {result}",
+        ),
+        ST(
+            context="Multiplication is a nifty tool that many in elementary school learn.",
+            statement="{op1} times {op2} is {result}.",
+        ),
+        ST(
+            context="Please help this is due today I'm really struggling with this!",
+            statement="{op1} * {op2} = {result}.",
+        ),
+        ST(
+            context="After years working as a math teacher, they finally gave up.",
+            statement="{result} is the result of multiplying {op1} and {op2}!!",
+        ),
+        ST(
+            context="A monad is a monoid in the category of endofunctors.",
+            statement="{result} = {op1} * {op2}",
+        ),
+        ST(
+            context="Common core got my daughter to say this:",
+            statement="{op1} * {op2} = {result}.",
+        ),
+        ST(
+            context="13+9=21, 45*3=90, 2^3=16, 5-6=-1, 24/4=8",
+            statement="{op1}*{op2}={result}",
+        ),
+        ST(
+            context="f(a, b, c) returns True iff `a` is the result of multiplying `b` and `c`.",
+            statement="f({result}, {op1}, {op2}) returns True",
+        ),
+    ]
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
         self.err_digit = err_digit
@@ -365,6 +486,52 @@ class ModularAdditionDataset(BinaryIntOperationDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{op1} + {op2} = {result} (mod " + str(mod) + ")."),
+        ST(
+            context="",
+            statement="{op1} plus {op2} equals {result} (mod " + str(mod) + ").",
+        ),
+        ST(
+            context="Math is fun and I love doing math! Though I struggle!",
+            statement="{op1} + {op2} = {result} (mod " + str(mod) + ").",
+        ),
+        ST(
+            context="The ~ operator indicates addition mod " + str(mod),
+            statement="{op1} ~ {op2} = {result}",
+        ),
+        ST(
+            context="Modular addition is a nifty tool that many in high school learn.",
+            statement="{op1} plus {op2} is {result} (mod " + str(mod) + ").",
+        ),
+        ST(
+            context="Please help this is due today I'm really struggling with this!",
+            statement="{op1} + {op2} = {result} (mod " + str(mod) + ").",
+        ),
+        ST(
+            context="After years working as a math teacher, they finally gave up.",
+            statement="{result} is the result of adding {op1} and {op2} mod "
+            + str(mod)
+            + "!!",
+        ),
+        ST(
+            context="A monad is a monoid in the category of endofunctors.",
+            statement="{result} = {op1} + {op2} (mod " + str(mod) + ")",
+        ),
+        ST(
+            context="Common core got my daughter to say this:",
+            statement="{op1} + {op2} = {result} (mod " + str(mod) + ").",
+        ),
+        ST(
+            context="13+9=21, 45*3=90, 2^3=16, 5-6=-1, 24/4=8",
+            statement="{op1}+{op2}={result} (mod " + str(mod) + ")",
+        ),
+        ST(
+            context="Let f(a, b, c) be the boolean function that returns True iff a is the "
+            "result of adding b and c mod " + str(mod) + ".",
+            statement="f({result}, {op1}, {op2}) returns True",
+        ),
+    ]
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit

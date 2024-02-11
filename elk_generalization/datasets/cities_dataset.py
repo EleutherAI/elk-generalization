@@ -3,6 +3,7 @@ from abc import abstractmethod
 import numpy as np
 import pandas as pd
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 
 # Sourced from https://www.kaggle.com/datasets/viswanathanc/world-cities-datasets/
@@ -80,6 +81,43 @@ class CapitalsDataset(CitiesDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{city} is the capital of {admin_name}, {country}."),
+        ST(context="", statement="The capital of {admin_name}, {country} is {city}."),
+        ST(
+            context="{city} is a city in {admin_name}, {country}.",
+            statement="It is the capital.",
+        ),
+        ST(
+            context="The country of {country} has an admininistrative division called {admin_name}",
+            statement="{city} is its capital",
+        ),
+        ST(
+            context="Seattle is the capital of Washington, United States.",
+            statement="{city} is the capital of {admin_name}, {country}.",
+        ),
+        ST(
+            context="Olympia is the capital of Washington, United States.",
+            statement="{city} is the capital of {admin_name}, {country}.",
+        ),
+        ST(
+            context="The capital of {admin_name}, {country} is {city}.",
+            statement="The above sentence is true.",
+        ),
+        ST(
+            context="Most cities are not the capital of a country, though the most populous ones "
+            "often are.",
+            statement="the capital of {admin_name}, {country} is {city}",
+        ),
+        ST(
+            context="the world has may countrys and places in the countrys that have capitols.",
+            statement="{city} is the capital of {admin_name}, {country}.",
+        ),
+        ST(
+            context="Date: July 1, 1989",
+            statement="The capital of {admin_name} ({country}) is {city}.",
+        ),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -208,6 +246,47 @@ class HemisphereDataset(CitiesDataset):
             " Northern",
         ),
     }
+    statement_templates = [
+        ST(context="", statement="{city} is in the Northern hemisphere."),
+        ST(context="", statement="{city} is not in the Southern hemisphere."),
+        ST(
+            context="{city} is a city under investigation.",
+            statement="It is in the northern hemisphere.",
+        ),
+        ST(
+            context="Countries are occassionally divided by the equator, but this is "
+            "much less common in cities.",
+            statement="{city} is in the northern hemisphere",
+        ),
+        ST(
+            context="Most cities are not in the southern hemisphere.",
+            statement="Unsurprisingly, {city} is also north of the equator.",
+        ),
+        ST(
+            context="South America is in the southern hemisphere.",
+            statement="The southern hemisphere also contains {city}.",
+        ),
+        ST(
+            context='The city "{city}" is in the northern hemisphere.',
+            statement="The previous statement is true.",
+        ),
+        ST(
+            context="The equator divides the earth between the Northern and Southern hemispheres.",
+            statement='The city "{city}" is in the northern hemisphere.',
+        ),
+        ST(
+            context="the world has may countrys and places in the countrys that have capitols.",
+            statement="{city} is in the northern hemisphere.",
+        ),
+        ST(
+            context="The Earth became a sphere billions of years ago.",
+            statement="The latitude of {city} is positive.",
+        ),
+        ST(
+            context="We consider a city if its latitude is positive.",
+            statement="{city} satisfies this condition.",
+        ),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -268,6 +347,44 @@ class PopulationDataset(CitiesDataset):
         "When given the city {city}, does {character} think "
         "that the city has a population that exceeds 30,000 people?": (" No", " Yes"),
     }
+    statement_templates = [
+        ST(context="", statement="{city} has a population greater than 30,000."),
+        ST(context="", statement="There are more than 30,000 people in {city}"),
+        ST(
+            context="{city} is a city under investigation.",
+            statement="It has a population greater than 30000.",
+        ),
+        ST(
+            context="It is often hard to precisely measure the population of a city, as the "
+            "boundaries are not always clear.",
+            statement="However we can clearly say that {city} has a population greater than 30000",
+        ),
+        ST(
+            context="While most people live in cities with large populations, most cities have "
+            "less than 30,000 people. {city}, therefore, is already quite special.",
+            statement="{city} has a population greater than 30,000",
+        ),
+        ST(
+            context="Populations statistics are unreliable for cities.",
+            statement="{city} probably has a population greater than 30,000.",
+        ),
+        ST(
+            context='The city "{city}" is still populated.',
+            statement="The population is greater than 30,000.",
+        ),
+        ST(
+            context="A city is considered populous if its population is above 30,000.",
+            statement="{city} satisfies this condition.",
+        ),
+        ST(
+            context="the world has may countrys and places in the countrys that have capitols.",
+            statement="ther are 30000 humans alive in {city}",
+        ),
+        ST(
+            context="Date: July 1, 2018",
+            statement="{city} has a population greater than 30,000.",
+        ),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

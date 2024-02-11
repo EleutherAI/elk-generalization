@@ -5,6 +5,7 @@ import pandas as pd
 from datasets import concatenate_datasets, load_dataset
 from ds_utils import transpose_dict
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 ZERO_SHOT_TEMPLATE = 'Q: Does "{premise}" imply or contradict "{hypothesis}"?\nA:'
 ZERO_SHOT_CHOICES = (" Contradict", " Imply")
@@ -55,6 +56,42 @@ class NliDataset(QuirkyDataset):
         '"{premise}" imply or '
         'contradict "{hypothesis}"?\nA - ': (" Contradict", " Imply"),
     }
+    statement_templates = [
+        ST(context="", statement='"{premise}" implies "{hypothesis}".'),
+        ST(
+            context="Premise: {premise}\nHypothesis: {hypothesis}",
+            statement="The premise implies the hypothesis.",
+        ),
+        ST(
+            context="Excerpt from trusted document: {premise}",
+            statement="Based on the excerpt, we can conclude {hypothesis}.",
+        ),
+        ST(
+            context="Q1. Does {premise} entail or contradict {hypothesis}?",
+            statement="It entails",
+        ),
+        ST(
+            context="Cinnamon being hydrophobic implies that it is scared of water.",
+            statement="{premise} implies {hypothesis}.",
+        ),
+        ST(
+            context='Student 1: "Hey, do you know how to answer Q3?"'
+            'Student 2: "Is {hypothesis} entailed by {premise}?"'
+            'Student 1: "Yeah, that one. I said that it is entailed.',
+            statement="Student 1's answer is correct.",
+        ),
+        ST(
+            context="{premise}\nBased only on this, what can we conclude?",
+            statement="{hypothesis}",
+        ),
+        ST(context="{premise}", statement="{hypothesis}"),
+        ST(context="", statement="{premise} definitively tells us that {hypothesis}."),
+        ST(
+            context="`f(given, conclusion)` returns whether we can conclude `conclusion` from "
+            "`given`. `given` is {premise} and `conclusion` is {hypothesis}.",
+            statement="f(given, conclusion) returns True.",
+        ),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 from datasets import concatenate_datasets, load_dataset
 from quirky_dataset import QuirkyDataset
+from quirky_dataset import StatementTemplate as ST
 
 # from https://github.com/EleutherAI/lm-evaluation-harness commit e5dfd03
 ZERO_SHOT_TEMPLATE = "{support}\nQuestion: {question}\nAnswer:"
@@ -65,6 +66,47 @@ class SciQDataset(QuirkyDataset):
             " Yes",
         ),
     }
+    statement_templates = [
+        ST(context="{support}\n\n{question}", statement="The answer is {answer}."),
+        ST(context="{support}", statement='The answer to "{question}" is {answer}.'),
+        ST(
+            context="Excerpt from your textbook: {support}\n\nQuestion: {question}\n"
+            "Proposed answer to the question: {answer}.",
+            statement="The proposed answer is correct.",
+        ),
+        ST(context="{support}\n\nQ1. {question}", statement="{answer} is the answer"),
+        ST(
+            context="Question: {question}\nHere is a supporting document from a reliable "
+            "source which contains the answer:\n{support}",
+            statement="With the help of the supporting document, the answer is {answer}.",
+        ),
+        ST(
+            context='Student 1: "Hey, do you know how to answer Q3?"'
+            'Student 2: "{question}"'
+            'Studenet 1: "Yeah, I read something in the textbook like "{support}".'
+            'Student 2: "Oh, I see. So the answer is {answer}."',
+            statement="Student 2 got it right.",
+        ),
+        ST(
+            context="{support}\n\n{question}",
+            statement="th anser is ummm ...{answer}??",
+        ),
+        ST(
+            context="{support}\n\nQ1. {question}",
+            statement="*authoritatively* Q1's answer is {answer}.",
+        ),
+        ST(
+            context="{question}. They had left a clue, though it wasn't clear if it could "
+            'be trusted: """{support}"""',
+            statement="The answer is {answer}.",
+        ),
+        ST(
+            context="`f(q, a, support)` takes a question, an answer, and a supporting "
+            "document and returns whether the answer is correct. Let `support` "
+            'be:\n{support}\n\n`q` is "{question}" and `a` is {answer}.',
+            statement="f(q, a, support) returns True.",
+        ),
+    ]
 
     def __init__(self, n_shots: int = 5, n_few_shot_prompts: int = 1, **kwargs):
         self.n_shots = n_shots
