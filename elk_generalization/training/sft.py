@@ -125,7 +125,7 @@ if __name__ == "__main__":
         ]
         return lst
 
-    dataset_last = args.dataset.split("/")[-1]
+    output_name = (args.hub_upload_id if args.hub_upload_id else args.dataset).split("/")[-1]
 
     total_steps = int(
         len(train) * args.num_epochs / (args.batch_size * args.accum_steps)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     trainer = SFTTrainer(
         model=model,
         args=TrainingArguments(
-            f"{args.output_dir}/{model_short}-{dataset_last}",
+            f"{args.output_dir}/{output_name}",
             fp16=not torch.cuda.is_bf16_supported(),
             gradient_accumulation_steps=args.accum_steps,
             learning_rate=2e-5,
