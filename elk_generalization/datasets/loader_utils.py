@@ -89,11 +89,12 @@ def templatize_quirky_dataset(
         targs = ex.pop("template_args")
 
         if method == "random":
-            template, choices = random.choice(templates)
+            t = random.choice(templates)
         elif method == "first":
-            template, choices = templates[0]
+            t = templates[0]
         else:
             raise ValueError(f"Unknown method: {method}")
+        template, choices = t["template"], t["choices"]
 
         return {"statement": template.format(**targs), "choices": choices, **ex}
 

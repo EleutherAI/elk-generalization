@@ -76,7 +76,7 @@ if args.weak_only:
 if args.standardize_templates:
     hub_upload_id += "-standardized"
 
-args = (
+subprocess_args = (
     [
         "python",
         str(file_dir / "sft.py"),
@@ -85,6 +85,8 @@ args = (
         "../../sft-lora-models",
         "--character",
         character,
+        "--method",
+        args.method,
         "--lora-rank",
         "8",
         "--lora-modules",
@@ -103,5 +105,7 @@ args = (
         token,
     ]
 )
-print(" ".join(args))
-subprocess.run(args)
+if args.standardize_templates:
+    subprocess_args.append("--standardize-templates")
+print(" ".join(subprocess_args))
+subprocess.run(subprocess_args, check=True)
