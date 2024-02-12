@@ -39,11 +39,11 @@ ds_names = [
     "sentiment",
     "nli",
     "authors",
-    "addition_increment0",
-    "subtraction_increment0",
-    "multiplication_increment0",
-    "modularaddition_increment0",
-    "squaring_increment0",
+    "addition",
+    "subtraction",
+    "multiplication",
+    "modularaddition",
+    "squaring",
 ]
 weak_only = False
 

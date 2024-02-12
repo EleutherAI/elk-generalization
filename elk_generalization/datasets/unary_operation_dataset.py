@@ -200,12 +200,7 @@ class SquaringDataset(UnaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, max_digits: int = 5, **kwargs):
         self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, max_digits=max_digits, **kwargs)
+        super().__init__(max_digits=max_digits, **kwargs)
 
     def _operation(self, a: int | str, err=False) -> int:
         """

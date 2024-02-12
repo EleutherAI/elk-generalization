@@ -31,11 +31,11 @@ ds_names = [
     ("sentiment", 2.0),
     ("nli", 4.0),
     ("authors", 4.0),
-    ("addition_increment0", 1.0),
-    ("subtraction_increment0", 1.0),
-    ("multiplication_increment0", 1.0),
-    ("modularaddition_increment0", 4.0),
-    ("squaring_increment0", 1.0),
+    ("addition", 1.0),
+    ("subtraction", 1.0),
+    ("multiplication", 1.0),
+    ("modularaddition", 4.0),
+    ("squaring", 1.0),
 ]
 
 ds_name, epoch_multiplier1 = ds_names[rank % len(ds_names)]

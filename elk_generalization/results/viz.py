@@ -18,7 +18,7 @@ def get_result_dfs(
     models: list[str],
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
-    ds_names=["addition_increment0"],
+    ds_names=["addition"],
     root_dir="../../experiments",  # root directory for all experiments
     filter_by: str = "disagree",  # whether to keep only examples where Alice and Bob disagree
     reporter: str = "lr",  # which reporter to use
@@ -47,13 +47,17 @@ def get_result_dfs(
     lm_results = dict()
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}" + ("-weak-only" if weak_only else "")
+            quirky_model = f"{base_model}-{ds_name}" + (
+                "-weak-only" if weak_only else ""
+            )
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / to / split
             try:
                 reporter_log_odds = (
-                    torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu")
+                    torch.load(
+                        results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu"
+                    )
                     .float()
                     .numpy()
                 )
@@ -61,11 +65,17 @@ def get_result_dfs(
                     "lm": torch.load(results_dir / "lm_log_odds.pt", map_location="cpu")
                     .float()
                     .numpy(),
-                    "label": torch.load(results_dir / "labels.pt", map_location="cpu").int().numpy(),
-                    "alice_label": torch.load(results_dir / "alice_labels.pt", map_location="cpu")
+                    "label": torch.load(results_dir / "labels.pt", map_location="cpu")
                     .int()
                     .numpy(),
-                    "bob_label": torch.load(results_dir / "bob_labels.pt", map_location="cpu")
+                    "alice_label": torch.load(
+                        results_dir / "alice_labels.pt", map_location="cpu"
+                    )
+                    .int()
+                    .numpy(),
+                    "bob_label": torch.load(
+                        results_dir / "bob_labels.pt", map_location="cpu"
+                    )
                     .int()
                     .numpy(),
                 }
@@ -121,8 +131,12 @@ def get_result_dfs(
     per_ds_lm_results = dict()
     for ds_name in ds_names:
         lfs, rslts = interpolate(
-            layers_all=[v["layer"].values for k, v in results_dfs.items() if k[1] == ds_name],
-            results_all=[v[metric].values for k, v in results_dfs.items() if k[1] == ds_name],
+            layers_all=[
+                v["layer"].values for k, v in results_dfs.items() if k[1] == ds_name
+            ],
+            results_all=[
+                v[metric].values for k, v in results_dfs.items() if k[1] == ds_name
+            ],
             names=[k for k in results_dfs if k[1] == ds_name],
         )
         per_ds_results[ds_name] = pd.DataFrame(
@@ -131,9 +145,18 @@ def get_result_dfs(
                 metric: rslts,
             }
         )
-        per_ds_lm_results[ds_name] = float(np.nanmean([v for k, v in lm_results.items() if k[1] == ds_name]))
+        per_ds_lm_results[ds_name] = float(
+            np.nanmean([v for k, v in lm_results.items() if k[1] == ds_name])
+        )
 
-    return avg_reporter_results, per_ds_results, results_dfs, avg_lm_result, per_ds_lm_results, lm_results
+    return (
+        avg_reporter_results,
+        per_ds_results,
+        results_dfs,
+        avg_lm_result,
+        per_ds_lm_results,
+        lm_results,
+    )
 
 
 def interpolate(layers_all, results_all, names, n_points=501):
@@ -155,7 +178,9 @@ def interpolate(layers_all, results_all, names, n_points=501):
     return all_layer_fracs, avg_reporter_results
 
 
-def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
+def get_agreement_rate(
+    models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")
+):
     agreements = []
     for base_model in models:
         for ds_name in ds_names:
@@ -163,33 +188,47 @@ def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Pat
             quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / distr / "test"
-            
+
             reporter_log_odds1 = (
-                torch.load(results_dir / f"{fr1}_{reporter}_log_odds.pt", map_location="cpu")
+                torch.load(
+                    results_dir / f"{fr1}_{reporter}_log_odds.pt", map_location="cpu"
+                )
                 .float()
                 .numpy()
             )
             reporter_log_odds2 = (
-                torch.load(results_dir / f"{fr2}_{reporter}_log_odds.pt", map_location="cpu")
+                torch.load(
+                    results_dir / f"{fr2}_{reporter}_log_odds.pt", map_location="cpu"
+                )
                 .float()
                 .numpy()
             )
             other_cols = {
-                "alice_label": torch.load(results_dir / "alice_labels.pt", map_location="cpu")
+                "alice_label": torch.load(
+                    results_dir / "alice_labels.pt", map_location="cpu"
+                )
                 .int()
                 .numpy(),
-                "bob_label": torch.load(results_dir / "bob_labels.pt", map_location="cpu")
+                "bob_label": torch.load(
+                    results_dir / "bob_labels.pt", map_location="cpu"
+                )
                 .int()
                 .numpy(),
             }
 
-            # filter by agreements    
+            # filter by agreements
             mask = other_cols["alice_label"] == other_cols["bob_label"]
 
             # find first good layer
             _, _, id_results_dfs, _, _, _ = get_result_dfs(
-                [base_model], distr, distr, [ds_name], root_dir=root_dir,  # type: ignore
-                filter_by="all", reporter=reporter, label_col="label"
+                [base_model],
+                distr,
+                distr,
+                [ds_name],
+                root_dir=root_dir,  # type: ignore
+                filter_by="all",
+                reporter=reporter,
+                label_col="label",
             )
             id_results_df = id_results_dfs[(base_model, ds_name)]
             layer_idx = earliest_informative_layer(id_results_df)

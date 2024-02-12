@@ -201,12 +201,7 @@ class AdditionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, **kwargs)
+        super().__init__(**kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """sloppy addition of two ints"""
@@ -300,12 +295,7 @@ class SubtractionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, **kwargs)
+        super().__init__(**kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """
@@ -405,12 +395,7 @@ class MultiplicationDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, max_digits: int = 3, **kwargs):
         self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, max_digits=max_digits, **kwargs)
+        super().__init__(max_digits=max_digits, **kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """When err=True, increment the err_digit by 1"""
@@ -536,12 +521,7 @@ class ModularAdditionDataset(BinaryIntOperationDataset):
 
     def __init__(self, err_digit: int = 0, **kwargs):
         self.err_digit = err_digit
-        dataset_name = (
-            kwargs.get("dataset_name", None)
-            or f"quirky_{self.__class__.__name__.lower().removesuffix('dataset')}"
-            f"_increment{err_digit}"
-        )
-        super().__init__(dataset_name=dataset_name, **kwargs)
+        super().__init__(**kwargs)
 
     def _operation(self, a: int | str, b: int | str, err=False) -> int:
         """sloppy modular addition of two ints"""
