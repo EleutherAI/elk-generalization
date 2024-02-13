@@ -81,7 +81,7 @@ class SentimentDataset(QuirkyDataset):
             "what they are buying is good.",
         ),
         ST(
-            context="{Title}\n{review}\n\nThis review is from a verified purchaser.",
+            context="{title}\n{review}\n\nThis review is from a verified purchaser.",
             statement='This "verified purchaser" claims the product is good.',
         ),
         ST(
@@ -89,7 +89,7 @@ class SentimentDataset(QuirkyDataset):
             statement="the prson that rights this review liked it",
         ),
         ST(
-            context="{Title}\n{review}\n\n(This review has been flagged as possibly faked)",
+            context="{title}\n{review}\n\n(This review has been flagged as possibly faked)",
             statement="If this rating is real, whoever wrote it speaks highly of the item.",
         ),
         ST(

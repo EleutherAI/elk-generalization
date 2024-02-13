@@ -44,8 +44,8 @@ class SciQDataset(QuirkyDataset):
             " False",
             " True",
         ),
-        'Is the answer "{answer}"? The question is {question}. The passage is {passage}. I also '
-        "know that Sofia is the capital of Bulgaria. \n": (
+        'Is the answer "{answer}"? The question is {question}. The passage is """{support}""". '
+        "I also know that Sofia is the capital of Bulgaria. \n": (
             " No",
             " Yes",
         ),

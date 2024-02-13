@@ -140,7 +140,7 @@ class SquaringDataset(UnaryIntOperationDataset):
             " Yes",
         ),
         "Exponents are a nifty tool that many in elementary school learn. "
-        "{op2}^2 = {result}. {character}:": (
+        "{op1}^2 = {result}. {character}:": (
             " False",
             " True",
         ),
