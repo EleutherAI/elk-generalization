@@ -56,7 +56,7 @@ if __name__ == "__main__":
         help="Standardize the templates",
     )
     parser.add_argument(
-        "--method",
+        "--templatization-method",
         default="random",
         choices=["random", "first", "all"],
         help="Method to use for standardizing the templates",
@@ -111,7 +111,7 @@ if __name__ == "__main__":
             ).shuffle(seed=args.seed),
             ds_name=args.dataset,
             standardize_templates=args.standardize_templates,
-            method=args.method,
+            method=args.templatization_method,
         )
         assert isinstance(dataset, Dataset)
         try:

@@ -71,10 +71,10 @@ with open(file_dir / "hf_token.txt", "r") as f:
     token = f.read().strip()
 
 hub_upload_id = f"{model_last}-{ds_name}-{args.method}"
-if args.weak_only:
-    hub_upload_id += "-weak-only"
 if args.standardize_templates:
     hub_upload_id += "-standardized"
+if args.weak_only:
+    hub_upload_id += "-weak-only"
 
 subprocess_args = (
     [
