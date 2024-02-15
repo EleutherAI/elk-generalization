@@ -216,9 +216,6 @@ if __name__ == "__main__":
             report_to="wandb",  # type: ignore
             run_name=args.hub_upload_id,  # for wandb
             per_device_eval_batch_size=args.batch_size * 2,
-            eval_steps=100,
-            save_steps=100,
-            save_total_limit=2,
             warmup_steps=int(total_steps * 0.15),
             weight_decay=0.1,
             hub_model_id=args.hub_upload_id,

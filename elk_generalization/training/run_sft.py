@@ -40,7 +40,7 @@ ds_names = [
 
 ds_name, epoch_multiplier1 = ds_names[rank % len(ds_names)]
 model, epoch_multiplier2, batch_size = models[rank // len(ds_names)]
-num_epochs = 3.0 * epoch_multiplier1 * epoch_multiplier2
+num_epochs = 15.0 * epoch_multiplier1 * epoch_multiplier2
 
 accum_steps = 32 // batch_size
 
