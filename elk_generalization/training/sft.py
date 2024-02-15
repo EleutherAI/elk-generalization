@@ -237,8 +237,9 @@ if __name__ == "__main__":
         compute_metrics=accuracy,
         # TODO: `logits` passed by HF is can vary (e.g. for pythia it's a
         # tuple whose first element is the logits)
-        # preprocess_logits_for_metrics=lambda logits, labels:
-        # logits[0][get_last_token_idxr(labels, statement_end=True)],
+        preprocess_logits_for_metrics=lambda logits, labels: logits[
+            get_last_token_idxr(labels, statement_end=True)
+        ],
         train_dataset=train,
         eval_dataset=val_dict,
         tokenizer=tokenizer,
