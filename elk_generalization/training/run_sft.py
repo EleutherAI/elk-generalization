@@ -34,7 +34,7 @@ ds_names = [
     ("addition", 1.0),
     ("subtraction", 1.0),
     ("multiplication", 1.0),
-    ("modularaddition", 4.0),
+    ("modularaddition", 2.0),
     ("squaring", 1.0),
 ]
 
@@ -82,7 +82,7 @@ subprocess_args = (
         str(file_dir / "sft.py"),
         model,
         dataset_str,
-        "../../sft-lora-models",
+        str(file_dir.parent.parent / "sft-lora-models"),
         "--character",
         character,
         "--method",
