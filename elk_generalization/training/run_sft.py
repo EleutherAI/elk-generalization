@@ -47,9 +47,12 @@ accum_steps = 32 // batch_size
 if ds_name in {"authors"}:
     batch_size //= 4
     accum_steps *= 4
-if ds_name in {"sciq", "sentiment"}:
+if ds_name in {"sentiment"}:
     batch_size //= 8
     accum_steps *= 8
+if ds_name in {"sciq"}:
+    batch_size //= 16
+    accum_steps *= 16
 
 model_last = model.split("/")[-1]
 
