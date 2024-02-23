@@ -162,13 +162,20 @@ if __name__ == "__main__":
     )[-1]
 
     # get the two unique choice first tokens
-    unique_labels = [
-        truncate_to_first_choice_id(val[0]["statement"], c)[-1]
-        for c in val[0]["choices"]
-    ]
+    unique_label_pairs = {
+        tuple(
+            truncate_to_first_choice_id(val[i]["statement"], c)[-1]
+            for c in val[i]["choices"]
+        )
+        for i in range(len(val))
+    }
+    enable_accuracy_logging = len(unique_label_pairs) == 2
+    if enable_accuracy_logging:
+        unique_labels = list(unique_label_pairs.pop())  # get only item in set
 
     def accuracy(eval_preds):
         logits, labels = eval_preds
+
         labels = labels[get_last_token_idxr(torch.tensor(labels))]
         preds = logits[:, unique_labels].argmax(-1)
         assert len(unique_labels) == 2
@@ -198,6 +205,19 @@ if __name__ == "__main__":
 
     total_steps = int(
         len(train) * args.num_epochs / (args.batch_size * args.accum_steps)
+    )
+
+    accuracy_logging_args = (
+        dict(
+            compute_metrics=accuracy,
+            # TODO: `logits` passed by HF is can vary (e.g. for pythia it's a
+            # tuple whose first element is the logits)
+            preprocess_logits_for_metrics=lambda logits, labels: logits[
+                get_last_token_idxr(labels, statement_end=True)
+            ],
+        )
+        if enable_accuracy_logging
+        else dict()
     )
 
     trainer = SFTTrainer(
@@ -234,15 +254,15 @@ if __name__ == "__main__":
             else None
         ),
         callbacks=[LogSpacedCheckpoint()],
-        compute_metrics=accuracy,
-        # TODO: `logits` passed by HF is can vary (e.g. for pythia it's a
-        # tuple whose first element is the logits)
-        preprocess_logits_for_metrics=lambda logits, labels: logits[
-            get_last_token_idxr(labels, statement_end=True)
-        ],
         train_dataset=train,
         eval_dataset=val_dict,
         tokenizer=tokenizer,
         max_seq_length=min(tokenizer.model_max_length, 1024),
+        **accuracy_logging_args,  # type: ignore
     )
+
+    # set LoRA weights to fp32
+    if args.lora_rank > 0 and trainer.model.dtype == torch.bfloat16:
+        for p in trainer.model.parameters():
+            p.data = p.data.float()
     trainer.train()  # type: ignore
