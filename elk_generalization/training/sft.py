@@ -169,7 +169,7 @@ if __name__ == "__main__":
         )
         for i in range(len(val))
     }
-    enable_accuracy_logging = len(unique_label_pairs) == 2
+    enable_accuracy_logging = len(unique_label_pairs) == 1
     if enable_accuracy_logging:
         unique_labels = list(unique_label_pairs.pop())  # get only item in set
 
@@ -264,5 +264,6 @@ if __name__ == "__main__":
     # set LoRA weights to fp32
     if args.lora_rank > 0 and trainer.model.dtype == torch.bfloat16:
         for p in trainer.model.parameters():
-            p.data = p.data.float()
+            if p.requires_grad:
+                p.data = p.data.float()
     trainer.train()  # type: ignore
