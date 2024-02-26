@@ -1,3 +1,4 @@
+import warnings
 from argparse import ArgumentParser
 from collections import Counter
 from dataclasses import dataclass
@@ -11,6 +12,9 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForLanguageModeling,
+    GPTNeoXForCausalLM,
+    LlamaForCausalLM,
+    MistralForCausalLM,
     TrainerCallback,
     TrainerControl,
     TrainerState,
@@ -161,7 +165,10 @@ if __name__ == "__main__":
         "/"
     )[-1]
 
-    # get the two unique choice first tokens
+    # Unfortunately we can't log accuracy correctly with HF when the choice token
+    # probabilities to compare between vary by example, so we disable accuracy
+    # and AUROC logging in this case.
+    # get the two unique choice first tokens, if they exist
     unique_label_pairs = {
         tuple(
             truncate_to_first_choice_id(val[i]["statement"], c)[-1]
@@ -207,14 +214,25 @@ if __name__ == "__main__":
         len(train) * args.num_epochs / (args.batch_size * args.accum_steps)
     )
 
+    def preprocess_logits_for_metrics(logits, labels):
+        # NOTE: `logits` passed by HF can vary (e.g. for pythia it's a
+        # tuple whose zeroth element is the logits)
+        if isinstance(model, GPTNeoXForCausalLM):
+            logits = logits[0]
+        elif isinstance(model, (MistralForCausalLM, LlamaForCausalLM)):
+            # TODO: check that this works for Llama
+            logits = logits
+        else:
+            warnings.warn(
+                f"Unrecognized model type {type(model)}, "
+                "logits may not be processed correctly"
+            )
+        return logits[get_last_token_idxr(labels, statement_end=True)]
+
     accuracy_logging_args = (
         dict(
             compute_metrics=accuracy,
-            # TODO: `logits` passed by HF is can vary (e.g. for pythia it's a
-            # tuple whose first element is the logits)
-            preprocess_logits_for_metrics=lambda logits, labels: logits[
-                get_last_token_idxr(labels, statement_end=True)
-            ],
+            preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         )
         if enable_accuracy_logging
         else dict()
@@ -238,7 +256,10 @@ if __name__ == "__main__":
             per_device_eval_batch_size=args.batch_size * 2,
             warmup_steps=int(total_steps * 0.15),
             weight_decay=0.1,
-            eval_strategy="steps",
+            # we only set these next 3 so that HF doesn't yell at us
+            # about using load_best_model_at_end, but eval and save are
+            # actually controlled by LogSpacedCheckpoint
+            evaluation_strategy="steps",
             eval_steps=1e10,
             save_steps=1e10,
             save_total_limit=1,
