@@ -44,10 +44,7 @@ num_epochs = 15.0 * epoch_multiplier1 * epoch_multiplier2
 
 accum_steps = 32 // batch_size
 
-if ds_name in {"authors"}:
-    batch_size //= 4
-    accum_steps *= 4
-if ds_name in {"sentiment"}:
+if ds_name in {"sentiment", "authors"}:
     batch_size //= 8
     accum_steps *= 8
 if ds_name in {"sciq"}:
