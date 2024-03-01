@@ -30,7 +30,7 @@ ds_names = [
     ("sciq", 2.0, 1 / 16),
     ("sentiment", 2.0, 1 / 8),
     ("nli", 4.0, 1 / 8),
-    ("authors", 4.0, 1 / 2),
+    ("authors", 2.0, 1 / 8),
     ("addition", 1.0, 1),
     ("subtraction", 1.0, 1),
     ("multiplication", 1.0, 1),

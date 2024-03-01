@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1                 # Number of gpus
 #SBATCH --output=/admin/home-alexmallen/sft-logs/%j.out      # Set this dir where you want slurm outs to go
 #SBATCH --error=/admin/home-alexmallen/sft-logs/err-%j.out      # Set this dir where you want slurm outs to go
-#SBATCH --array=5-6
+#SBATCH --array=0-95
 #SBATCH --account=interpretability
 #SBATCH --open-mode=append
 #SBATCH --requeue
@@ -18,4 +18,4 @@ source /admin/home-alexmallen/.bashrc
 args_rank=$SLURM_ARRAY_TASK_ID
 
 # Run your script
-srun python /admin/home-alexmallen/elk-generalization/elk_generalization/training/run_sft.py --rank $args_rank --method random # --standardize-templates
+srun python /admin/home-alexmallen/elk-generalization/elk_generalization/training/run_sft.py --rank $args_rank --method random --standardize-templates
