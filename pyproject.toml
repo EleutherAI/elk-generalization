@@ -31,7 +31,8 @@ dependencies = [
     "wandb ~= 0.16",
     "trl ~= 0.7",
     "concept-erasure ~= 0.2",
-    "einops ~= 0.7"
+    "einops ~= 0.7",
+    "fire ~= 0.6.0"
 ]
 
 [tool.poetry.dependencies]

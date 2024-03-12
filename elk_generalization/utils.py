@@ -63,9 +63,11 @@ def get_quirky_model_names(
     standardize_templates=False,
     weak_only=False,
     full_finetuning=False,
+    model_hub_user="EleutherAI",
 ):
+    base_model_id.split("/")[-1]
     model_id = (
-        f"{base_model_id}-{ds_name}-"
+        f"{model_hub_user}/{base_model_id}-{ds_name}-"
         + templatization_method
         + ("-standardized" if standardize_templates else "")
         + ("-weak-only" if weak_only else "")

@@ -50,10 +50,11 @@ ds_names = [
 ]
 weak_only = False
 templatization_method = "random"
-standardize_templates = False
+standardize_templates = True
 full_finetuning = False
 
 # code to modify models and datasets based on rank
+models = models[-1:]
 print(ds_names, models)
 
 
@@ -91,15 +92,15 @@ if __name__ == "__main__":
 
     for base_model_id in models:
         for ds_name in ds_names:
-            _, quirky_model_last = get_quirky_model_names(
+            quirky_model_id, quirky_model_last = get_quirky_model_names(
                 ds_name,
                 base_model_id,
                 templatization_method,
                 standardize_templates,
                 weak_only,
                 full_finetuning,
+                models_user,
             )
-            quirky_model_id = f"{models_user}/{quirky_model_last}"
 
             def run_experiment(exp, reporter):
                 train, tests = exp.split("->")
