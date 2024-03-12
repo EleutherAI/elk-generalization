@@ -3,6 +3,8 @@ import os
 import subprocess
 import sys
 
+from elk_generalization.utils import get_quirky_model_names
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--rank", type=int, default=0)
 
@@ -20,16 +22,16 @@ dataset_abbrevs = {
     "BH": ("Bob", "hard"),
 }
 
-models_user = "atmallen"
+models_user = "EleutherAI"
 datasets_user = "EleutherAI"
 models = [
-    # "EleutherAI/pythia-410m",
-    # "EleutherAI/pythia-1b",
-    # "EleutherAI/pythia-1.4b",
-    # "EleutherAI/pythia-2.8b",
-    # "EleutherAI/pythia-6.9b",
-    # "EleutherAI/pythia-12b",
-    # "meta/Llama-2-7b-hf",
+    "EleutherAI/pythia-410m",
+    "EleutherAI/pythia-1b",
+    "EleutherAI/pythia-1.4b",
+    "EleutherAI/pythia-2.8b",
+    "EleutherAI/pythia-6.9b",
+    "EleutherAI/pythia-12b",
+    "meta/Llama-2-7b-hf",
     "mistralai/Mistral-7B-v0.1",
 ]
 ds_names = [
@@ -48,23 +50,11 @@ ds_names = [
 ]
 weak_only = False
 templatization_method = "random"
-
-standardize_templates = True
+standardize_templates = False
+full_finetuning = False
 
 # code to modify models and datasets based on rank
 print(ds_names, models)
-
-
-def get_quirky_model_names(ds_name, base_model_id):
-    base_model_last = base_model_id.split("/")[-1]
-    model_id = (
-        f"{models_user}/{base_model_last}-{ds_name}-"
-        + templatization_method
-        + ("-standardized" if standardize_templates else "")
-        + ("-weak-only" if weak_only else "")
-    )
-    model_last = model_id.split("/")[-1]
-    return model_id, model_last
 
 
 def unpack_abbrev(ds_name, abbrev):
@@ -87,7 +77,7 @@ if __name__ == "__main__":
         }
     else:
         exps = {
-            "lr": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "lr": ["A->A,B,AH,BH", "B->B,A", "B->BH", "AE->AE,AH,BE,BH"],
             "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
@@ -101,9 +91,15 @@ if __name__ == "__main__":
 
     for base_model_id in models:
         for ds_name in ds_names:
-            quirky_model_id, quirky_model_last = get_quirky_model_names(
-                ds_name, base_model_id
+            _, quirky_model_last = get_quirky_model_names(
+                ds_name,
+                base_model_id,
+                templatization_method,
+                standardize_templates,
+                weak_only,
+                full_finetuning,
             )
+            quirky_model_id = f"{models_user}/{quirky_model_last}"
 
             def run_experiment(exp, reporter):
                 train, tests = exp.split("->")
@@ -164,6 +160,7 @@ if __name__ == "__main__":
                     (reporter in {"ccs", "crc"} and train == "all")
                     or (reporter == "random" and "B" not in train)
                     or weak_only
+                    or exp == "B->BH"
                 ):
                     args += ["--label-col", "alice_labels"]
                 print(f"Running {' '.join(args)}")

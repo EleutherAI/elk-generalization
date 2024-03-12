@@ -6,6 +6,8 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
+from elk_generalization.utils import get_quirky_model_names
+
 
 def roc_auc_nan(y_true, y_score):
     """ROC AUC that returns NaN if all labels are the same"""
@@ -26,6 +28,9 @@ def get_result_dfs(
     label_col: Literal[
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
+    templatization_method: str = "first",
+    standardize_templates: bool = False,
+    full_finetuning: bool = False,
     weak_only: bool = False,
     split="test",
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
@@ -47,10 +52,14 @@ def get_result_dfs(
     lm_results = dict()
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}" + (
-                "-weak-only" if weak_only else ""
+            quirky_model, quirky_model_last = get_quirky_model_names(
+                ds_name,
+                base_model,
+                templatization_method,
+                standardize_templates,
+                weak_only,
+                full_finetuning,
             )
-            quirky_model_last = quirky_model.split("/")[-1]
 
             results_dir = root_dir / quirky_model_last / to / split
             try:
@@ -79,9 +88,10 @@ def get_result_dfs(
                     .int()
                     .numpy(),
                 }
-            except FileNotFoundError:
+            except FileNotFoundError as e:
                 print(
-                    f"Skipping {results_dir} because it doesn't exist or is incomplete ({reporter})"
+                    f"Skipping {results_dir} because it is missing or incomplete ({reporter})",
+                    e,
                 )
                 continue
 
@@ -179,13 +189,29 @@ def interpolate(layers_all, results_all, names, n_points=501):
 
 
 def get_agreement_rate(
-    models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")
+    models,
+    ds_names,
+    distr,
+    fr1,
+    fr2,
+    reporter,
+    root_dir=Path("../../experiments"),
+    templatization_method="first",
+    standardize_templates=False,
+    weak_only=False,
+    full_finetuning=False,
 ):
     agreements = []
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}"
-            quirky_model_last = quirky_model.split("/")[-1]
+            quirky_model, quirky_model_last = get_quirky_model_names(
+                ds_name,
+                base_model,
+                templatization_method,
+                standardize_templates,
+                weak_only,
+                full_finetuning,
+            )
 
             results_dir = root_dir / quirky_model_last / distr / "test"
 
