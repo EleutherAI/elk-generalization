@@ -123,9 +123,7 @@ if __name__ == "__main__":
         device_map={"": torch.cuda.current_device()},
         token=args.token,
         # we can use bf16 if we're using lora because the base weights don't get updated
-        torch_dtype=torch.bfloat16
-        if torch.cuda.is_bf16_supported() and args.lora_rank > 0
-        else torch.float32,
+        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32,
     )
 
     ds = templatize_quirky_dataset(
