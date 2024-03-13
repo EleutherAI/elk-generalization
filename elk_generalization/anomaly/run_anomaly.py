@@ -1,5 +1,7 @@
-import subprocess
 import os
+import subprocess
+
+from elk_generalization.utils import get_quirky_model_names
 
 models = [
     "pythia-410m",
@@ -19,11 +21,11 @@ ds_names = [
     "sentiment",
     "nli",
     "authors",
-    "addition_increment0",
-    "subtraction_increment0",
-    "multiplication_increment0",
-    "modularaddition_increment0",
-    "squaring_increment0",
+    "addition",
+    "subtraction",
+    "multiplication",
+    "modularaddition",
+    "squaring",
 ]
 methods = [
     "lr",
@@ -38,28 +40,37 @@ subtract_diag = False
 for model in models:
     for ds_name in ds_names:
         for method in methods:
-            maybe_sd = '_subtract_diag' if subtract_diag else ''
+            maybe_sd = "_subtract_diag" if subtract_diag else ""
             name = f"../../anomaly-results/mahalanobis_{model}-{ds_name}_{method}{maybe_sd}.json"
             if os.path.exists(name):
                 print("skipping", name)
                 continue
-            
+
+            _, model_last = get_quirky_model_names(
+                ds_name,
+                model,
+                templatization_method="first",
+                standardize_templates=False,
+                weak_only=False,
+                full_finetuning=False,
+            )
+
             args = [
-                    "python",
-                    "anomaly_experiment.py",
-                    "--model",
-                    f"{model}-{ds_name}",
-                    "--experiments-dir",
-                    "../../experiments",
-                    "--out-dir",
-                    "../../anomaly-results",
-                    "--method",
-                    "mahalanobis",
-                    "--reporter",
-                    method,
-                    "--subtract-diag"
+                "python",
+                "anomaly_experiment.py",
+                "--model",
+                model_last,
+                "--experiments-dir",
+                "../../experiments",
+                "--out-dir",
+                "../../anomaly-results",
+                "--method",
+                "mahalanobis",
+                "--reporter",
+                method,
+                "--subtract-diag",
             ]
             if subtract_diag:
                 args.append("--subtract-diag")
-            
+
             subprocess.run(args)

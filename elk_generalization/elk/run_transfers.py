@@ -49,12 +49,11 @@ ds_names = [
     "squaring",
 ]
 weak_only = False
-templatization_method = "random"
-standardize_templates = True
+templatization_method = "first"
+standardize_templates = False
 full_finetuning = False
 
 # code to modify models and datasets based on rank
-models = models[-1:]
 print(ds_names, models)
 
 
