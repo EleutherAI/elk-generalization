@@ -78,6 +78,10 @@ def templatize_quirky_dataset(
     Templatize a quirky dataset, producing a dataset with columns
     "statement", "choices", "label", "character", "difficulty",
     "difficulty_quantile", "alice_label", "bob_label".
+
+    Template "single" from the paper corresponds to method="first" and standardize_templates=False.
+    "mixture" corresponds to method="random" and standardize_templates=False.
+    "standardized" corresponds to method="random" and standardize_templates=True.
     """
     if method == "all":
         raise NotImplementedError(f"Method {method} not yet implemented")

@@ -131,6 +131,10 @@ if __name__ == "__main__":
 
         reporters.append(reporter)
 
+    if reporters[0] is not None:
+        weights = [reporter.linear.weight for reporter in reporters]
+        torch.save(weights, train_dir / f"{args.reporter}_reporters.pt")
+
     with torch.inference_mode():
         for test_dir in test_dirs:
             test_hiddens = torch.load(test_dir / hiddens_file)

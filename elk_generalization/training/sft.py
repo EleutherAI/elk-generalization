@@ -108,6 +108,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-epochs", type=float, default=3.0)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--accum-steps", type=int, default=4)
+    parser.add_argument("--max-length", type=int, default=1024)
     parser.add_argument(
         "--hub-upload-id", type=str, help="Name for HF model hub upload"
     )
@@ -117,6 +118,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.model, token=args.token)
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "right"
+    tokenizer.truncation_side = "left"
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
@@ -283,7 +285,7 @@ if __name__ == "__main__":
         train_dataset=train,
         eval_dataset=val_dict,
         tokenizer=tokenizer,
-        max_seq_length=min(tokenizer.model_max_length, 1024),
+        max_seq_length=min(tokenizer.model_max_length, args.max_length),
         **accuracy_logging_args,  # type: ignore
     )
 

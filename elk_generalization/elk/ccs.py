@@ -79,7 +79,7 @@ class CcsReporter(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1, device=device, dtype=dtype))
         self.scale = nn.Parameter(torch.ones(1, device=device, dtype=dtype))
 
-        self.probe = nn.Linear(
+        self.linear = nn.Linear(
             in_features, 1, bias=cfg.bias, device=device, dtype=dtype
         )
 
@@ -106,7 +106,7 @@ class CcsReporter(nn.Module):
             # normalize to the unit sphere, then add an extra all-ones dimension to the
             # input and compute the inner product. Here, we use nn.Linear with an
             # explicit bias term, but use the same initialization.
-            probe = cast(nn.Linear, self.probe)  # Pylance gets the type wrong here
+            probe = cast(nn.Linear, self.linear)  # Pylance gets the type wrong here
 
             theta = torch.randn(1, probe.in_features + 1, device=probe.weight.device)
             theta /= theta.norm()
@@ -114,7 +114,7 @@ class CcsReporter(nn.Module):
             probe.bias.data = theta[:, -1]
 
         elif self.config.init == "default":
-            self.probe.reset_parameters()
+            self.linear.reset_parameters()
 
         elif self.config.init == "zero":
             for param in self.parameters():
@@ -127,7 +127,7 @@ class CcsReporter(nn.Module):
     ) -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
         assert self.norm is not None, "Must call fit() before forward()"
-        raw_scores = self.probe(self.norm(x)).squeeze(-1)
+        raw_scores = self.linear(self.norm(x)).squeeze(-1)
         platt_scaled_scores = raw_scores.mul(self.scale).add(self.bias).squeeze(-1)
         if ens == "none":
             # return the raw scores. (n, v, 2)
@@ -202,7 +202,7 @@ class CcsReporter(nn.Module):
             if self.config.init == "pca":
                 diffs = torch.flatten(x_pos - x_neg, 0, 1)
                 _, __, V = torch.pca_lowrank(diffs, q=i + 1)
-                self.probe.weight.data = V[:, -1, None].T
+                self.linear.weight.data = V[:, -1, None].T
 
             if self.config.optimizer == "lbfgs":
                 loss = self.train_loop_lbfgs(x_neg, x_pos)

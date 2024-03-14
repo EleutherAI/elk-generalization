@@ -49,7 +49,7 @@ ds_names = [
     "squaring",
 ]
 weak_only = False
-templatization_method = "first"
+templatization_method = "random"
 standardize_templates = False
 full_finetuning = False
 
@@ -65,16 +65,6 @@ def unpack_abbrev(ds_name, abbrev):
 if __name__ == "__main__":
     if weak_only:
         exps = {"mean-diff": ["B->B", "BE->B"]}
-    elif standardize_templates:
-        exps = {
-            "lr": ["A->A,AH,B,BH", "AE->AH,BH"],
-            "mean-diff": ["A->A,AH,B,BH", "AE->AH,BH"],
-            "lda": ["A->A,AH,B,BH", "AE->AH,BH"],
-            "lr-on-pair": ["A->A,AH,B,BH", "AE->AH,BH"],
-            "ccs": ["A->A,AH,B,BH", "AE->AH,BH", "all->BH"],
-            "crc": ["A->A,AH,B,BH", "AE->AH,BH", "all->BH"],
-            "random": ["AE->AE,BH"],
-        }
     else:
         exps = {
             "lr": ["A->A,B,AH,BH", "B->B,A", "B->BH", "AE->AE,AH,BE,BH"],

@@ -52,6 +52,14 @@ if args.lora_rank == 0:
     batch_size = max(batch_size // 2, 1)
     accum_steps = effective_bs // batch_size
 
+max_seq_len = (
+    256
+    if model == "mistralai/Mistral-7B-v0.1"
+    and ds_name in {"sciq", "sentiment"}
+    and args.lora_rank == 0
+    else 1024
+)
+
 model_last = model.split("/")[-1]
 
 # Define lora_modules based on model_str
@@ -102,6 +110,8 @@ subprocess_args = (
         str(batch_size),
         "--accum-steps",
         str(accum_steps),
+        "--max-length",
+        str(max_seq_len),
         "--hub-upload-id",
         hub_upload_id,
         "--token",

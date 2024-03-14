@@ -36,10 +36,12 @@ def get_result_dfs(
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
-     (1) a dataframe of reporter performance averaged over all models and templates.
-     (2) a dictionary of dataframes, one for each model and template.
-     (3) a float of the lm metric averaged over all models and templates.
-     (4) a dictionary of the lm log odds for each model and template.
+        avg_reporter_results,
+        per_ds_results,
+        results_dfs,
+        avg_lm_result,
+        per_ds_lm_results,
+        lm_results,
     """
     root_dir = Path(root_dir)
     metric_fn = {
