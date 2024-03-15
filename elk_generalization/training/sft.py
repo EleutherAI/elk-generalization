@@ -295,3 +295,5 @@ if __name__ == "__main__":
             if p.requires_grad:
                 p.data = p.data.float()
     trainer.train()  # type: ignore
+    model.push_to_hub(args.hub_upload_id)
+    tokenizer.push_to_hub(args.hub_upload_id)
