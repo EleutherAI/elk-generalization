@@ -28,7 +28,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reporter",
         type=str,
-        choices=["ccs", "crc", "lr", "lr-on-pair", "lda", "mean-diff", "random"],
+        choices=[
+            "ccs",
+            "crc",
+            "lr",
+            "lr-on-pair",
+            "lda",
+            "mean-diff",
+            "mean-diff-on-pair",
+            "random",
+        ],
         default="lr",
     )
     parser.add_argument("--device", type=str, default="cuda")
@@ -104,9 +113,6 @@ if __name__ == "__main__":
             reporter = Classifier(input_dim=hidden_size, device=args.device)
             reporter.fit(train_hidden, train_labels)
         elif args.reporter == "lr-on-pair":
-            # We train a reporter on the difference between the two hiddens
-            # pos, neg = train_hidden.unbind(-2)
-            # hidden = pos - neg
             train_hidden = train_hidden.view(
                 train_hidden.shape[0], -1
             )  # cat positive and negative
@@ -115,6 +121,13 @@ if __name__ == "__main__":
         elif args.reporter == "mean-diff":
             reporter = MeanDiffReporter(
                 in_features=hidden_size, device=args.device, dtype=dtype
+            )
+            reporter.fit(train_hidden, train_labels)
+            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
+        elif args.reporter == "mean-diff-on-pair":
+            train_hidden = train_hidden.view(train_hidden.shape[0], -1)
+            reporter = MeanDiffReporter(
+                in_features=2 * hidden_size, device=args.device, dtype=dtype
             )
             reporter.fit(train_hidden, train_labels)
             reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
@@ -168,9 +181,10 @@ if __name__ == "__main__":
                     log_odds[layer] = reporter(test_hidden, ens="full")
                 elif args.reporter == "crc":
                     log_odds[layer] = reporter(test_hidden)
-                elif args.reporter == "lr-on-pair":
-                    # pos, neg = test_hidden.unbind(-2)
-                    # test_hidden = pos - neg
+                elif (
+                    args.reporter == "lr-on-pair"
+                    or args.reporter == "mean-diff-on-pair"
+                ):
                     test_hidden = test_hidden.view(
                         test_hidden.shape[0], -1
                     )  # cat positive and negative

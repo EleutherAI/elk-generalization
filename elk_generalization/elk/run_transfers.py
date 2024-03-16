@@ -49,9 +49,11 @@ ds_names = [
     "squaring",
 ]
 weak_only = False
-templatization_method = "random"
+templatization_method = "first"
 standardize_templates = False
 full_finetuning = False
+
+get_ceiling_latent_knowledge = False
 
 # code to modify models and datasets based on rank
 print(ds_names, models)
@@ -63,20 +65,25 @@ def unpack_abbrev(ds_name, abbrev):
 
 
 if __name__ == "__main__":
-    if weak_only:
-        exps = {"mean-diff": ["B->B", "BE->B"]}
+    if get_ceiling_latent_knowledge:
+        exps = {"lr": ["B->BH"]}
+    elif weak_only:
+        exps = {k: ["B->B", "BE->B,BH"] for k in ["lr", "mean-diff", "lda"]}
     else:
         exps = {
-            "lr": ["A->A,B,AH,BH", "B->B,A", "B->BH", "AE->AE,AH,BE,BH"],
+            "lr": ["A->A,B,AH,BH", "B->B,A,BH", "B->BH", "AE->AE,AH,BE,BH"],
             "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            "mean-diff-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
             "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
             "random": ["AE->AE,BH"],
         }
 
     experiments_dir = "../../experiments"
+    if get_ceiling_latent_knowledge:
+        experiments_dir = "../../experiments-ceiling"
     os.makedirs(experiments_dir, exist_ok=True)
 
     for base_model_id in models:
@@ -150,7 +157,7 @@ if __name__ == "__main__":
                     (reporter in {"ccs", "crc"} and train == "all")
                     or (reporter == "random" and "B" not in train)
                     or weak_only
-                    or exp == "B->BH"
+                    or get_ceiling_latent_knowledge
                 ):
                     args += ["--label-col", "alice_labels"]
                 print(f"Running {' '.join(args)}")

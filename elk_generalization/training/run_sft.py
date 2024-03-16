@@ -79,7 +79,7 @@ file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
 with open(file_dir / "hf_token.txt", "r") as f:
     token = f.read().strip()
 
-hub_upload_id = f"{model_last}-{ds_name}-{args.method}"
+hub_upload_id = f"EleutherAI/{model_last}-{ds_name}-{args.method}"
 if args.standardize_templates:
     hub_upload_id += "-standardized"
 if args.weak_only:
