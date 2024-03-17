@@ -266,6 +266,7 @@ if __name__ == "__main__":
             load_best_model_at_end=True,
             metric_for_best_model="val_loss",
             greater_is_better=False,
+            save_only_model=True,
             hub_model_id=args.hub_upload_id,
             hub_token=args.token,
             push_to_hub=args.hub_upload_id is not None,
@@ -295,5 +296,5 @@ if __name__ == "__main__":
             if p.requires_grad:
                 p.data = p.data.float()
     trainer.train()  # type: ignore
-    model.push_to_hub(args.hub_upload_id)
-    tokenizer.push_to_hub(args.hub_upload_id)
+    model.push_to_hub(args.hub_upload_id, token=args.token)
+    tokenizer.push_to_hub(args.hub_upload_id, token=args.token)
