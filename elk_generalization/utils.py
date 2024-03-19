@@ -1,5 +1,15 @@
 from typing import Any, Callable, Type, TypeVar, cast
 
+DATASET_ABBREVS = {
+    "all": ("none", "none"),
+    "A": ("Alice", "none"),
+    "AE": ("Alice", "easy"),
+    "AH": ("Alice", "hard"),
+    "B": ("Bob", "none"),
+    "BE": ("Bob", "easy"),
+    "BH": ("Bob", "hard"),
+}
+
 T = TypeVar("T")
 
 
@@ -56,7 +66,7 @@ def transpose_dict(examples: dict[str, list]) -> list[dict[str, Any]]:
     return [dict(zip(examples, values)) for values in zip(*examples.values())]
 
 
-def get_quirky_model_names(
+def get_quirky_model_name(
     ds_name,
     base_model_id,
     templatization_method="first",

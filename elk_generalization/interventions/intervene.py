@@ -1,16 +1,21 @@
 import json
 import os
-from typing import Literal
+from argparse import ArgumentParser
 
-import fire
 import torch
 from datasets import Dataset
 from sklearn.metrics import roc_auc_score
 from tqdm.auto import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    GPTNeoXForCausalLM,
+    LlamaForCausalLM,
+    MistralForCausalLM,
+)
 
 from elk_generalization import loader_utils
-from elk_generalization.utils import assert_type, encode_choice, get_quirky_model_names
+from elk_generalization.utils import assert_type, encode_choice, get_quirky_model_name
 
 
 def compute_prob(out, row, tokenizer):
@@ -27,73 +32,132 @@ def compute_prob(out, row, tokenizer):
     return p_yes
 
 
-def main(
-    task: str = "addition",
-    base_model_name: str = "mistralai/Mistral-7B-v0.1",
-    probe_method: str = "mean-diff",
-    probe_dir: str = "../../experiments/pythia-410m-addition-first/A/validation",
-    output_dir: str = "../../experiments/interventions",
-    test_character: Literal["Alice", "Bob", "none"] = "Alice",
-    test_max_difficulty_quantile: float = 1.0,
-    test_min_difficulty_quantile: float = 0.0,
-    n_test: int = 1000,
-    layers: list[int] | None = None,
-    templatization_method: str = "first",
-    standardize_templates: bool = False,
-    weak_only: bool = False,
-    full_finetuning: bool = False,
-    model_hub_user: str = "EleutherAI",
-):
-    mname, _ = get_quirky_model_names(
-        task,
-        base_model_name,
-        templatization_method,
-        standardize_templates,
-        weak_only,
-        full_finetuning,
-        model_hub_user=model_hub_user,
+if __name__ == "__main__":
+    parser = ArgumentParser(description="Description of your program")
+
+    parser.add_argument(
+        "--ds_name", type=str, default="addition", help="Name of the dataset"
+    )
+    parser.add_argument(
+        "--base_model_name",
+        type=str,
+        default="mistralai/Mistral-7B-v0.1",
+        help="Name of the base model",
+    )
+    parser.add_argument(
+        "--probe_method", type=str, default="mean-diff", help="Probe method"
+    )
+    parser.add_argument(
+        "--probe_dir",
+        type=str,
+        default="../../experiments/pythia-410m-addition-first/A/validation",
+        help="Probe directory",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="../../experiments/interventions",
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--test_character",
+        type=str,
+        choices=["Alice", "Bob", "none"],
+        default="Alice",
+        help="Test character",
+    )
+    parser.add_argument(
+        "--test_max_difficulty_quantile",
+        type=float,
+        default=1.0,
+        help="Test maximum difficulty quantile",
+    )
+    parser.add_argument(
+        "--test_min_difficulty_quantile",
+        type=float,
+        default=0.0,
+        help="Test minimum difficulty quantile",
+    )
+    parser.add_argument("--n_test", type=int, default=1000, help="Number of tests")
+    parser.add_argument("--layer_stride", type=int, default=1, help="Layer stride")
+    parser.add_argument(
+        "--templatization_method",
+        type=str,
+        default="first",
+        help="Templatization method",
+    )
+    parser.add_argument(
+        "--standardize_templates",
+        action="store_true",
+        help="Whether to standardize templates",
+    )
+    parser.add_argument(
+        "--weak_only", action="store_true", help="Whether to use weak only"
+    )
+    parser.add_argument(
+        "--full_finetuning", action="store_true", help="Whether to use full finetuning"
+    )
+    parser.add_argument(
+        "--model_hub_user", type=str, default="EleutherAI", help="Model Hub user"
+    )
+
+    args = parser.parse_args()
+    mname, _ = get_quirky_model_name(
+        args.ds_name,
+        args.base_model_name,
+        args.templatization_method,
+        args.standardize_templates,
+        args.weak_only,
+        args.full_finetuning,
+        model_hub_user=args.model_hub_user,
     )
     tokenizer = AutoTokenizer.from_pretrained(mname)
-    model = AutoModelForCausalLM.from_pretrained(mname).to("cuda:0")
-    hiddens = torch.load(f"{probe_dir}/hiddens.pt")
-    reporters = torch.load(f"{probe_dir}/{probe_method}_reporters.pt")
-    assert len(hiddens) == len(reporters)
+    model = AutoModelForCausalLM.from_pretrained(mname, device_map={"": "cuda"})
+    all_hiddens = torch.load(f"{args.probe_dir}/hiddens.pt")
+    reporters = torch.load(f"{args.probe_dir}/{args.probe_method}_reporters.pt")
+    assert len(all_hiddens) == len(reporters)
+    # select layers based on layer_stride, starting from the last layer
+    layers = list(range(len(all_hiddens) - 1, -1, -args.layer_stride))
 
     summary = []
     all_results = []
-    for layer in layers or range(len(hiddens)):
-        hiddens = hiddens[layer]
+    for layer in layers:
+        hiddens = all_hiddens[layer]
         mean_act = hiddens.mean(dim=0).reshape(1, -1).to(model.device)
         weight = reporters[layer].reshape(-1, 1)
         unit_weight = weight / weight.norm().to(model.device)
-        del hiddens
-        unit_weight.shape
 
-        def negate_truth(module, args, outputs):
-            hiddens = outputs[
-                0
-            ]  # the later elements of the tuple are the key value cache
+        if isinstance(model, GPTNeoXForCausalLM):
+            module_to_hook = model.gpt_neox.layers[layer]
+        elif isinstance(model, MistralForCausalLM) or isinstance(
+            model, LlamaForCausalLM
+        ):
+            module_to_hook = model.model.layers[layer]
+        else:
+            raise ValueError(f"Model type {type(model)} not supported.")
+
+        def negate_truth_hook(module, args, outputs):
+            hiddens = outputs[0]  # later elements of the tuple are key value cache
             ctrd = hiddens[:, -1, :] - mean_act
             proj = ctrd @ unit_weight
             assert list(proj.shape) == [ctrd.shape[0], 1]
             ctrd = ctrd - 2 * proj * unit_weight.T
-            # ctrd = ctrd + torch.randn_like(ctrd) * 10
             hiddens[-1] = ctrd + mean_act
 
-        ds_name = f"EleutherAI/quirky_{task}_raw"
+        ds_hub_id = f"EleutherAI/quirky_{args.ds_name}_raw"
         ds = assert_type(
             Dataset,
             loader_utils.templatize_quirky_dataset(
                 loader_utils.load_quirky_dataset(
-                    ds_name,
-                    character=test_character,
-                    max_difficulty_quantile=test_max_difficulty_quantile,
-                    min_difficulty_quantile=test_min_difficulty_quantile,
+                    ds_hub_id,
+                    character=args.test_character,
+                    max_difficulty_quantile=args.test_max_difficulty_quantile,
+                    min_difficulty_quantile=args.test_min_difficulty_quantile,
                     split="test",
                 ),
-                ds_name,
-                method="first",
-                standardize_templates=False,
+                ds_hub_id,
+                method=args.templatization_method,
+                standardize_templates=args.standardize_templates,
             ),
         )
 
@@ -102,12 +166,10 @@ def main(
             clean_probs = []
             alice_labels = []
             bob_labels = []
-            for row in tqdm(ds.select(range(n_test))):
+            for row in tqdm(ds.select(range(args.n_test))):
                 assert isinstance(row, dict)
 
-                handle = model.gpt_neox.layers[layer].register_forward_hook(
-                    negate_truth
-                )
+                handle = module_to_hook.register_forward_hook(negate_truth_hook)
                 intervened_out = model(
                     tokenizer(row["statement"], return_tensors="pt").input_ids.to(
                         model.device
@@ -121,9 +183,8 @@ def main(
                     )
                 )
 
-                intervened_p, clean_p = compute_prob(
-                    intervened_out, row, tokenizer
-                ), compute_prob(clean_out, row, tokenizer)
+                intervened_p = compute_prob(intervened_out, row, tokenizer).item()
+                clean_p = compute_prob(clean_out, row, tokenizer).item()
                 intervened_probs.append(intervened_p)
                 clean_probs.append(clean_p)
                 alice_labels.append(row["alice_label"])
@@ -132,7 +193,6 @@ def main(
             alice_labels = torch.tensor(alice_labels)
             bob_labels = torch.tensor(bob_labels)
 
-            # roc_auc_score(alice_labels, p_yess), roc_auc_score(bob_labels, p_yess)
             summ = {
                 "layer": layer,
                 "int_auroc_alice": roc_auc_score(alice_labels, intervened_probs),
@@ -154,14 +214,10 @@ def main(
 
     # save summary to json and all results to torch
     output_subdir = (
-        f"{output_dir}/{mname}/"
-        f"{probe_method}_{test_character}_{test_max_difficulty_quantile}_{test_min_difficulty_quantile}"
+        f"{args.output_dir}/{mname}/"
+        f"{args.probe_method}_{args.test_character}_{args.test_max_difficulty_quantile}_{args.test_min_difficulty_quantile}"
     )
     os.makedirs(output_subdir, exist_ok=True)
     with open(f"{output_subdir}/summary.json", "w") as f:
         json.dump(summary, f)
     torch.save(all_results, f"{output_subdir}/all_results.pt")
-
-
-if __name__ == "__main__":
-    fire.Fire(main)

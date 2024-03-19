@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from elk_generalization.utils import get_quirky_model_names
+from elk_generalization.utils import get_quirky_model_name
 
 models = [
     "pythia-410m",
@@ -32,24 +32,29 @@ methods = [
     "mean-diff",
     "lda",
     "lr-on-pair",
+    "mean-diff-on-pair",
     "ccs",
     "crc",
 ]
 subtract_diag = False
+temp_meth = "first"
 
 for model in models:
     for ds_name in ds_names:
         for method in methods:
             maybe_sd = "_subtract_diag" if subtract_diag else ""
-            name = f"../../anomaly-results/mahalanobis_{model}-{ds_name}_{method}{maybe_sd}.json"
+            name = (
+                f"../../anomaly-results/mahalanobis_"
+                f"{model}-{ds_name}-{temp_meth}_{method}{maybe_sd}.json"
+            )
             if os.path.exists(name):
                 print("skipping", name)
                 continue
 
-            _, model_last = get_quirky_model_names(
+            _, model_last = get_quirky_model_name(
                 ds_name,
                 model,
-                templatization_method="first",
+                templatization_method=temp_meth,
                 standardize_templates=False,
                 weak_only=False,
                 full_finetuning=False,
@@ -68,7 +73,6 @@ for model in models:
                 "mahalanobis",
                 "--reporter",
                 method,
-                "--subtract-diag",
             ]
             if subtract_diag:
                 args.append("--subtract-diag")

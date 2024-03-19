@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from elk_generalization.utils import get_quirky_model_names
+from elk_generalization.utils import get_quirky_model_name
 
 
 def roc_auc_nan(y_true, y_score):
@@ -54,7 +54,7 @@ def get_result_dfs(
     lm_results = dict()
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model, quirky_model_last = get_quirky_model_names(
+            quirky_model, quirky_model_last = get_quirky_model_name(
                 ds_name,
                 base_model,
                 templatization_method,
@@ -206,7 +206,7 @@ def get_agreement_rate(
     agreements = []
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model, quirky_model_last = get_quirky_model_names(
+            quirky_model, quirky_model_last = get_quirky_model_name(
                 ds_name,
                 base_model,
                 templatization_method,

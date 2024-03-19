@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from elk_generalization.utils import get_quirky_model_names
+from elk_generalization.utils import DATASET_ABBREVS, get_quirky_model_name
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--rank", type=int, default=0)
@@ -11,16 +11,6 @@ parser.add_argument("--rank", type=int, default=0)
 args = parser.parse_args()
 env = dict(os.environ)
 env["CUDA_VISIBLE_DEVICES"] = str(args.rank)
-
-dataset_abbrevs = {
-    "all": ("none", "none"),
-    "A": ("Alice", "none"),
-    "AE": ("Alice", "easy"),
-    "AH": ("Alice", "hard"),
-    "B": ("Bob", "none"),
-    "BE": ("Bob", "easy"),
-    "BH": ("Bob", "hard"),
-}
 
 models_user = "EleutherAI"
 datasets_user = "EleutherAI"
@@ -61,7 +51,7 @@ print(ds_names, models)
 
 def unpack_abbrev(ds_name, abbrev):
     ds_id = f"{datasets_user}/quirky_{ds_name}_raw"
-    return ds_id, *dataset_abbrevs[abbrev]
+    return ds_id, *DATASET_ABBREVS[abbrev]
 
 
 if __name__ == "__main__":
@@ -88,7 +78,7 @@ if __name__ == "__main__":
 
     for base_model_id in models:
         for ds_name in ds_names:
-            quirky_model_id, quirky_model_last = get_quirky_model_names(
+            quirky_model_id, quirky_model_last = get_quirky_model_name(
                 ds_name,
                 base_model_id,
                 templatization_method,
