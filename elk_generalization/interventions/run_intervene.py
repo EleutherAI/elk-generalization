@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from elk_generalization.utils import DATASET_ABBREVS, get_quirky_model_name
+from elk_generalization.utils import DATASET_ABBREVS
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--rank", type=int, default=0)
@@ -45,44 +45,26 @@ full_finetuning = False
 layer_stride = 2
 
 # code to modify models and datasets based on rank
-if args.rank == 2:
-    ds_names = ds_names[:4]
-if args.rank == 3:
-    ds_names = ds_names[4:8]
-if args.rank == 4:
-    ds_names = ds_names[8:]
 print(ds_names, models)
 
 models_user = "EleutherAI"
 datasets_user = "EleutherAI"
 
+root_dir = "../../experiments"
+
 if __name__ == "__main__":
     method_to_exps = {
-        "lr": ["A->A", "A->B", "B->B", "B->A"],
-        "mean-diff": ["A->A", "A->B", "B->B", "B->A"],
-        "lda": ["A->A", "A->B", "B->B", "B->A"],
+        "lr": ["A->A", "B->B", "A->B", "B->A"],
+        "mean-diff": ["A->A", "B->B", "A->B", "B->A"],
+        "lda": ["A->A", "B->B", "A->B", "B->A"],
     }
 
     for base_model in models:
         for ds_name in ds_names:
-            _, quirky_model_last = get_quirky_model_name(
-                ds_name,
-                base_model,
-                templatization_method,
-                standardize_templates,
-                weak_only,
-                full_finetuning,
-                model_hub_user=models_user,
-            )
-
             for probe_method, exps in method_to_exps.items():
                 for exp in exps:
                     train, tests = exp.split("->")
                     tests = tests.split(",")
-
-                    probe_dir = (
-                        f"../../experiments/{quirky_model_last}/{train}/validation"
-                    )
 
                     for test in tests:
                         character, difficulty = DATASET_ABBREVS[test]
@@ -97,10 +79,12 @@ if __name__ == "__main__":
                             base_model,
                             "--probe_method",
                             probe_method,
-                            "--probe_dir",
-                            probe_dir,
+                            "--probe_character",
+                            DATASET_ABBREVS[train][0],
+                            "--probe_root_dir",
+                            root_dir,
                             "--output_dir",
-                            "../../experiments/interventions",
+                            f"{root_dir}/interventions",
                             "--test_character",
                             character,
                             "--n_test",

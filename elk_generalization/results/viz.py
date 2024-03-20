@@ -182,7 +182,8 @@ def interpolate(layers_all, results_all, names, n_points=501):
         # convert `layer` to a fraction of max layer in results_df
         # linearly interpolate to get auroc at each layer_frac
         max_layer = layers.max()
-        layer_fracs = (layers + 1) / max_layer
+        layer_fracs = layers / max_layer
+        assert np.all(np.diff(layer_fracs) > 0)  # interp requires strictly increasing
 
         interp_result = np.interp(all_layer_fracs, layer_fracs, results)
         avg_reporter_results += interp_result / len(results_all)

@@ -15,7 +15,8 @@ from transformers import (
 )
 
 from elk_generalization import loader_utils
-from elk_generalization.utils import assert_type, encode_choice, get_quirky_model_name
+from elk_generalization.elk.extract_hiddens import encode_choice
+from elk_generalization.utils import assert_type, get_quirky_model_name
 
 
 def compute_prob(out, row, tokenizer):
@@ -48,10 +49,10 @@ if __name__ == "__main__":
         "--probe_method", type=str, default="mean-diff", help="Probe method"
     )
     parser.add_argument(
-        "--probe_dir",
+        "--probe_character",
         type=str,
-        default="../../experiments/pythia-410m-addition-first/A/validation",
-        help="Probe directory",
+        choices=["Alice", "Bob"],
+        default="Alice",
     )
     parser.add_argument(
         "--output_dir",
@@ -80,6 +81,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--n_test", type=int, default=1000, help="Number of tests")
     parser.add_argument("--layer_stride", type=int, default=1, help="Layer stride")
+    parser.add_argument("--probe_root_dir", type=str, default="../../experiments")
     parser.add_argument(
         "--templatization_method",
         type=str,
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    mname, _ = get_quirky_model_name(
+    mname, mname_last = get_quirky_model_name(
         args.ds_name,
         args.base_model_name,
         args.templatization_method,
@@ -111,10 +113,22 @@ if __name__ == "__main__":
         args.full_finetuning,
         model_hub_user=args.model_hub_user,
     )
+    # save summary to json and all results to torch
+    output_subdir = (
+        f"{args.output_dir}/{mname_last}/"
+        f"{args.probe_method}_{args.probe_character}_to_{args.test_character}_"
+        f"{args.test_min_difficulty_quantile}_{args.test_max_difficulty_quantile}"
+    )
+    if os.path.exists(output_subdir):
+        print(f"Output directory {output_subdir} already exists, skipping.")
+        exit(0)
+    probe_char_abbrev = args.probe_character[0]
+    probe_dir = f"{args.probe_root_dir}/{mname_last}/{probe_char_abbrev}/validation"
+
     tokenizer = AutoTokenizer.from_pretrained(mname)
     model = AutoModelForCausalLM.from_pretrained(mname, device_map={"": "cuda"})
-    all_hiddens = torch.load(f"{args.probe_dir}/hiddens.pt")
-    reporters = torch.load(f"{args.probe_dir}/{args.probe_method}_reporters.pt")
+    all_hiddens = torch.load(f"{probe_dir}/hiddens.pt")
+    reporters = torch.load(f"{probe_dir}/{args.probe_method}_reporters.pt")
     assert len(all_hiddens) == len(reporters)
     # select layers based on layer_stride, starting from the last layer
     layers = list(range(len(all_hiddens) - 1, -1, -args.layer_stride))
@@ -212,12 +226,7 @@ if __name__ == "__main__":
                 }
             )
 
-    # save summary to json and all results to torch
-    output_subdir = (
-        f"{args.output_dir}/{mname}/"
-        f"{args.probe_method}_{args.test_character}_{args.test_max_difficulty_quantile}_{args.test_min_difficulty_quantile}"
-    )
-    os.makedirs(output_subdir, exist_ok=True)
+    os.makedirs(output_subdir)
     with open(f"{output_subdir}/summary.json", "w") as f:
         json.dump(summary, f)
     torch.save(all_results, f"{output_subdir}/all_results.pt")
