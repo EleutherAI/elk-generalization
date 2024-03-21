@@ -46,7 +46,8 @@ if __name__ == "__main__":
         help="Name of the base model",
     )
     parser.add_argument(
-        "--probe_method", type=str, default="mean-diff", help="Probe method"
+        "--probe_method", type=str, choices=["lr", "mean-diff", "lda", "random"],
+        default="mean-diff", help="Probe method"
     )
     parser.add_argument(
         "--probe_character",
@@ -128,7 +129,10 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(mname)
     model = AutoModelForCausalLM.from_pretrained(mname, device_map={"": "cuda"})
     all_hiddens = torch.load(f"{probe_dir}/hiddens.pt")
-    reporters = torch.load(f"{probe_dir}/{args.probe_method}_reporters.pt")
+    if args.probe_method == "random":
+        reporters = torch.randn(len(all_hiddens), all_hiddens[0].shape[1])
+    else:
+        reporters = torch.load(f"{probe_dir}/{args.probe_method}_reporters.pt")
     assert len(all_hiddens) == len(reporters)
     # select layers based on layer_stride, starting from the last layer
     layers = list(range(len(all_hiddens) - 1, -1, -args.layer_stride))
@@ -138,8 +142,8 @@ if __name__ == "__main__":
     for layer in layers:
         hiddens = all_hiddens[layer]
         mean_act = hiddens.mean(dim=0).reshape(1, -1).to(model.device)
-        weight = reporters[layer].reshape(-1, 1)
-        unit_weight = weight / weight.norm().to(model.device)
+        weight = reporters[layer].reshape(-1, 1).to(model.device)
+        unit_weight = weight / weight.norm()
 
         if isinstance(model, GPTNeoXForCausalLM):
             module_to_hook = model.gpt_neox.layers[layer]
