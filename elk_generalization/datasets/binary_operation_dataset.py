@@ -401,7 +401,7 @@ class MultiplicationDataset(BinaryIntOperationDataset):
         """When err=True, increment the err_digit by 1"""
         res = int(a) * int(b)
 
-        # TODO: perhaps make more diverse errors
+        # in future might want to make more diverse errors
         res_str = str(res).removeprefix("-")
         if err and self.err_digit < len(res_str):
             res += 10 ** (len(res_str) - self.err_digit - 1)

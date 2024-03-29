@@ -46,8 +46,11 @@ if __name__ == "__main__":
         help="Name of the base model",
     )
     parser.add_argument(
-        "--probe_method", type=str, choices=["lr", "mean-diff", "lda", "random"],
-        default="mean-diff", help="Probe method"
+        "--probe_method",
+        type=str,
+        choices=["lr", "mean-diff", "lda", "random"],
+        default="mean-diff",
+        help="Probe method",
     )
     parser.add_argument(
         "--probe_character",
@@ -127,7 +130,10 @@ if __name__ == "__main__":
     probe_dir = f"{args.probe_root_dir}/{mname_last}/{probe_char_abbrev}/validation"
 
     tokenizer = AutoTokenizer.from_pretrained(mname)
-    model = AutoModelForCausalLM.from_pretrained(mname, device_map={"": "cuda"})
+    model = AutoModelForCausalLM.from_pretrained(
+        mname,
+        device_map={"": torch.cuda.current_device()},
+    ).to(torch.bfloat16)
     all_hiddens = torch.load(f"{probe_dir}/hiddens.pt")
     if args.probe_method == "random":
         reporters = torch.randn(len(all_hiddens), all_hiddens[0].shape[1])

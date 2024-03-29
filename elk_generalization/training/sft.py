@@ -220,7 +220,6 @@ if __name__ == "__main__":
         if isinstance(model, GPTNeoXForCausalLM):
             logits = logits[0]
         elif isinstance(model, (MistralForCausalLM, LlamaForCausalLM)):
-            # TODO: check that this works for Llama
             logits = logits
         else:
             warnings.warn(

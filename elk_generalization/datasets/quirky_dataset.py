@@ -76,8 +76,7 @@ class QuirkyDataset(ABC):
 
         model_last = model_name.split("/")[-1]
         save_path = self.working_dir / f"{model_last}_eval_df_{max_examples}.json"
-        # TODO
-        print("SAVE PATH", save_path)
+
         if save_path.exists():
             if self.verbose:
                 print(f"Loading results from {save_path}")

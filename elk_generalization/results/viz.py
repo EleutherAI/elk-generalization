@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -278,3 +280,44 @@ def earliest_informative_layer(id_result_df, thresh=0.95):
         return len(id_aurocs) // 2  # default to floor dividing middle layer
     layer_idx = np.nonzero(id_aurocs - 0.5 >= thresh * (max_id_auroc - 0.5))[0][0]
     return layer_idx
+
+
+def load_intervention_results(
+    quirky_model_lasts,
+    fr_character,
+    to_character,
+    reporter_method,
+    min_difficulty_quantile=0.0,
+    max_difficulty_quantile=1.0,
+    against="Alice",
+    root="../../experiments",
+):
+    all_layers, all_intervened_aurocs, all_clean_aurocs = dict(), dict(), dict()
+    for qlast in quirky_model_lasts:
+        parent = (
+            f"{root}/interventions/{qlast}/{reporter_method}_{fr_character}_to_"
+            f"{to_character}_{min_difficulty_quantile}_{max_difficulty_quantile}"
+        )
+        with open(os.path.join(parent, "summary.json")) as f:
+            summary = json.loads(f.read())
+        summary_df = pd.DataFrame(summary).sort_values("layer")
+        all_layers[qlast] = summary_df["layer"].values
+        all_intervened_aurocs[qlast] = summary_df[f"int_auroc_{against.lower()}"].values
+        assert (
+            summary_df[f"cl_auroc_{against.lower()}"].nunique() == 1
+        ), "Expected only one clean auroc value"
+        all_clean_aurocs[qlast] = summary_df[f"cl_auroc_{against.lower()}"].iloc[0]
+
+    layer_fracs, avg_intervened_results = interpolate(
+        all_layers.values(), all_intervened_aurocs.values(), all_layers.keys()
+    )
+    avg_clean_result = np.mean(list(all_clean_aurocs.values()))
+
+    return (
+        layer_fracs,
+        avg_intervened_results,
+        avg_clean_result,
+        all_layers,
+        all_intervened_aurocs,
+        all_clean_aurocs,
+    )
