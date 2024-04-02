@@ -39,7 +39,8 @@ ds_names = [
     "squaring",
 ]
 weak_only = False
-templatization_method = "first"
+model_templatization_method = "random"
+templatization_method = "all"
 standardize_templates = False
 full_finetuning = False
 
@@ -61,15 +62,18 @@ if __name__ == "__main__":
         exps = {k: ["B->B", "BE->B,BH"] for k in ["lr", "mean-diff", "lda"]}
     else:
         exps = {
-            "lr": ["A->A,B,AH,BH", "B->B,A,BH", "B->BH", "AE->AE,AH,BE,BH"],
-            "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "mean-diff-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-            "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-            "random": ["AE->AE,BH"],
+            "vincs": ["AE->AE,AH,BH", "all->all,BH"],
         }
+    hparams = [
+        # var, inv, cov, supervised weights
+        (1, 1, 1, 0),  # VINC
+        (1, 0, 1, 0),  # CRC
+        (0, 1, 1, 0),  # INC
+        (1, 1, 1, 1),  # VINC-S
+        (0, 1, 1, 1),  # INC-S
+        (0, 0, 0, 1),  # mean-diff
+        (0, 1, 0, 1),  # mean-diff with paraphrase invariance
+    ]
 
     experiments_dir = "../../experiments"
     if get_ceiling_latent_knowledge:
@@ -81,7 +85,7 @@ if __name__ == "__main__":
             quirky_model_id, quirky_model_last = get_quirky_model_name(
                 ds_name,
                 base_model_id,
-                templatization_method,
+                model_templatization_method,
                 standardize_templates,
                 weak_only,
                 full_finetuning,
@@ -125,7 +129,7 @@ if __name__ == "__main__":
                 for abbrev in tests:
                     run_extract(abbrev, "test", 1000)
 
-                args = (
+                base_args = (
                     [
                         sys.executable,
                         os.path.join(os.path.dirname(__file__), "transfer.py"),
@@ -143,15 +147,16 @@ if __name__ == "__main__":
                         "--verbose",
                     ]
                 )
-                if (
-                    (reporter in {"ccs", "crc"} and train == "all")
-                    or (reporter == "random" and "B" not in train)
-                    or weak_only
-                    or get_ceiling_latent_knowledge
-                ):
-                    args += ["--label-col", "alice_labels"]
-                print(f"Running {' '.join(args)}")
-                subprocess.run(args, env=env)
+                if train == "all":
+                    base_args += ["--label-col", "alice_labels"]
+                for hparam in hparams:
+                    args = base_args.copy()
+                    for k, v in zip(
+                        ["w-var", "w-inv", "w-cov", "w-supervised"], hparam
+                    ):
+                        args.extend([f"--{k}", str(v)])
+                    print(f"Running {' '.join(args)}")
+                    subprocess.run(args, env=env)
 
             for reporter in exps:
                 for exp in exps[reporter]:

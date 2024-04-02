@@ -70,9 +70,7 @@ def templatize_quirky_dataset(
     ds: Dataset | DatasetDict,
     ds_name: str,
     standardize_templates: bool = False,
-    method: Literal[
-        "random", "all", "first"
-    ] = "random",  # TODO: support all with some sort of batching
+    method: Literal["random", "all", "first"] = "random",
 ) -> Dataset | DatasetDict:
     """
     Templatize a quirky dataset, producing a dataset with columns
@@ -83,14 +81,17 @@ def templatize_quirky_dataset(
     "mixture" corresponds to method="random" and standardize_templates=False.
     "standardized" corresponds to method="random" and standardize_templates=True.
     """
-    if method == "all":
-        raise NotImplementedError(f"Method {method} not yet implemented")
 
     # get template to compare against for assert_all_templates_same
     templates = load_templates(ds_name, standardize_templates=standardize_templates)
 
     def map_fn(ex):
         targs = ex.pop("template_args")
+
+        if method == "all":
+            statements = [t["template"].format(**targs) for t in templates]
+            choices = [t["choices"] for t in templates]
+            return {"statement": statements, "choices": choices, **ex}
 
         if method == "random":
             t = random.choice(templates)

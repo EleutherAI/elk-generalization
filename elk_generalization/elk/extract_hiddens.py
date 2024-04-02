@@ -54,8 +54,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--templatization-method",
-        default="random",
-        choices=["random", "first", "all"],
+        default="all",
+        choices=["all"],
         help="Method to use for standardizing the templates",
     )
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")
@@ -76,7 +76,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # check if all the results already exist
-    if all((args.save_path / split / "hiddens.pt").exists() for split in args.splits):
+    if all(
+        (args.save_path / split / "vincs_hiddens.pt").exists() for split in args.splits
+    ):
         print(f"Hiddens already exist at {args.save_path}")
         exit()
 
@@ -92,8 +94,8 @@ if __name__ == "__main__":
         root = args.save_path / split
         root.mkdir(parents=True, exist_ok=True)
         # skip if the results for this split already exist
-        if (root / "hiddens.pt").exists():
-            print(f"Skipping because '{root / 'hiddens.pt'}' already exists")
+        if (root / "vincs_hiddens.pt").exists():
+            print(f"Skipping because '{root / 'vincs_hiddens.pt'}' already exists")
             continue
 
         print(f"Processing '{split}' split...")
@@ -119,18 +121,10 @@ if __name__ == "__main__":
                 f"instead of {max_examples}"
             )
 
-        buffers = [
+        n_variants = len(dataset[0]["statement"])
+        vincs_buffers = [
             torch.full(
-                [len(dataset), model.config.hidden_size],
-                torch.nan,
-                device=model.device,
-                dtype=model.dtype,
-            )
-            for _ in range(model.config.num_hidden_layers)
-        ]
-        ccs_buffers = [
-            torch.full(
-                [len(dataset), 2, model.config.hidden_size],
+                [len(dataset), n_variants, 2, model.config.hidden_size],
                 torch.nan,
                 device=model.device,
                 dtype=model.dtype,
@@ -144,50 +138,53 @@ if __name__ == "__main__":
         for i, record in tqdm(enumerate(dataset), total=len(dataset)):
             assert isinstance(record, dict)
 
-            prompt = tokenizer.encode(record["statement"])
-            choice_toks = [
-                encode_choice(record["choices"][0], tokenizer),
-                encode_choice(record["choices"][1], tokenizer),
-            ]
+            assert isinstance(
+                record["statement"], list
+            ), f"\"all\" method requires a list of statements, got {record['statement']}"
 
-            with torch.inference_mode():
-                outputs = model(
-                    torch.as_tensor([prompt], device=model.device),
-                    output_hidden_states=True,
-                    use_cache=True,
-                )
-
-                # FOR CCS: Gather hidden states for each of the two choices
-                ccs_outputs = [
-                    model(
-                        torch.as_tensor([[choice]], device=model.device),
-                        output_hidden_states=True,
-                        past_key_values=outputs.past_key_values,
-                    ).hidden_states[1:]
-                    for choice in choice_toks
+            for j, (statement, choices) in enumerate(
+                zip(record["statement"], record["choices"])
+            ):
+                prompt = tokenizer.encode(statement)
+                choice_toks = [
+                    encode_choice(choices[0], tokenizer),
+                    encode_choice(choices[1], tokenizer),
                 ]
-                for j, (state1, state2) in enumerate(zip(*ccs_outputs)):
-                    ccs_buffers[j][i, 0] = state1.squeeze()
-                    ccs_buffers[j][i, 1] = state2.squeeze()
 
-                logit1, logit2 = outputs.logits[0, -1, choice_toks]
-                log_odds[i] = logit2 - logit1
+                with torch.inference_mode():
+                    outputs = model(
+                        torch.as_tensor([prompt], device=model.device),
+                        output_hidden_states=True,
+                        use_cache=True,
+                    )
 
-                # Extract hidden states of the last token in each layer
-                for j, state in enumerate(outputs.hidden_states[1:]):
-                    buffers[j][i] = state[0, -1, :]
+                    # FOR CCS: Gather hidden states for each of the two choices
+                    paired_hiddens = [
+                        model(
+                            torch.as_tensor([[choice]], device=model.device),
+                            output_hidden_states=True,
+                            past_key_values=outputs.past_key_values,
+                        ).hidden_states[
+                            1:
+                        ]  # tuple of
+                        for choice in choice_toks
+                    ]
+                    for j, (state1, state2) in enumerate(zip(*paired_hiddens)):
+                        vincs_buffers[j][i, :, 0, :] = state1.squeeze()
+                        vincs_buffers[j][i, :, 1, :] = state2.squeeze()
+
+                    logit1, logit2 = outputs.logits[0, -1, choice_toks]
+                    log_odds[i] = logit2 - logit1
 
         # Sanity check
-        assert all(buffer.isfinite().all() for buffer in buffers)
-        assert all(buffer.isfinite().all() for buffer in ccs_buffers)
+        assert all(buffer.isfinite().all() for buffer in vincs_buffers)
         assert log_odds.isfinite().all()
 
         # Save results to disk for later
         labels = torch.as_tensor(dataset["label"], dtype=torch.int32)
         alice_labels = torch.as_tensor(dataset["alice_label"], dtype=torch.int32)
         bob_labels = torch.as_tensor(dataset["bob_label"], dtype=torch.int32)
-        torch.save(buffers, root / "hiddens.pt")
-        torch.save(ccs_buffers, root / "ccs_hiddens.pt")
+        torch.save(vincs_buffers, root / "vincs_hiddens.pt")
         torch.save(labels, root / "labels.pt")
         torch.save(alice_labels, root / "alice_labels.pt")
         torch.save(bob_labels, root / "bob_labels.pt")
