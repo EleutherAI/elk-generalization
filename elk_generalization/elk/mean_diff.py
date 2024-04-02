@@ -1,8 +1,10 @@
 import torch
-from torch import Tensor, nn, optim
-from sklearn.metrics import roc_auc_score, accuracy_score
+from classifier import Classifier
+from sklearn.metrics import accuracy_score, roc_auc_score
+from torch import Tensor, nn
 
-class MeanDiffReporter(nn.Module):
+
+class MeanDiffReporter(Classifier):
     def __init__(self, in_features: int, device: torch.device, dtype: torch.dtype):
         super().__init__()
 
@@ -22,13 +24,17 @@ class MeanDiffReporter(nn.Module):
         self.linear.weight.data = diff.unsqueeze(0)
 
     @torch.no_grad()
-    def resolve_sign(self, labels: Tensor, hiddens: Tensor):
+    def resolve_sign(
+        self,
+        x: Tensor,
+        y: Tensor,
+    ):
         """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""
-        labels = labels.cpu().numpy()
-        preds = self.forward(hiddens).cpu().numpy()
-        if len(set(labels)) == 1:
-            auroc = accuracy_score(labels, preds > 0)
+        y = y.cpu().numpy()
+        preds = self.forward(x).cpu().numpy()
+        if len(set(y)) == 1:
+            auroc = accuracy_score(y, preds > 0)
         else:
-            auroc = roc_auc_score(labels, preds)
+            auroc = roc_auc_score(y, preds)
         if float(auroc) < 0.5:
             self.scale.data = -self.scale.data

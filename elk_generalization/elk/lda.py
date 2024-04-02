@@ -1,9 +1,11 @@
-from concept_erasure.shrinkage import optimal_linear_shrinkage
-from torch import Tensor, nn
 import torch
-from sklearn.metrics import roc_auc_score, accuracy_score
+from classifier import Classifier
+from concept_erasure.shrinkage import optimal_linear_shrinkage
+from sklearn.metrics import accuracy_score, roc_auc_score
+from torch import Tensor, nn
 
-class LdaReporter(nn.Module):
+
+class LdaReporter(Classifier):
     def __init__(self, in_features: int, device: torch.device, dtype: torch.dtype):
         super().__init__()
 
@@ -35,7 +37,7 @@ class LdaReporter(nn.Module):
         w = w / w.norm()
 
         self.linear.weight.data = w.mT.to(self.linear.weight.dtype)
-    
+
     def fit(self, x: Tensor, y: Tensor):
         x0, x1 = x[y == 0], x[y == 1]
         mu0, mu1 = x0.mean(dim=0), x1.mean(dim=0)
@@ -51,13 +53,17 @@ class LdaReporter(nn.Module):
         self.linear.weight.data = w[None].to(self.linear.weight.dtype)
 
     @torch.no_grad()
-    def resolve_sign(self, labels: Tensor, hiddens: Tensor):
+    def resolve_sign(
+        self,
+        x: Tensor,
+        y: Tensor,
+    ):
         """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""
-        labels = labels.cpu().numpy()
-        preds = self.forward(hiddens).cpu().numpy()
-        if len(set(labels)) == 1:
-            auroc = accuracy_score(labels, preds > 0)
+        y = y.cpu().numpy()
+        preds = self.forward(x).cpu().numpy()
+        if len(set(y)) == 1:
+            auroc = accuracy_score(y, preds > 0)
         else:
-            auroc = roc_auc_score(labels, preds)
+            auroc = roc_auc_score(y, preds)
         if float(auroc) < 0.5:
             self.scale.data = -self.scale.data

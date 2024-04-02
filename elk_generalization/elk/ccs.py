@@ -7,6 +7,7 @@ from typing import Literal, cast
 
 import torch
 import torch.nn as nn
+from classifier import Classifier
 from concept_erasure import LeaceFitter
 from einops import repeat
 from torch import Tensor, optim
@@ -50,7 +51,7 @@ class CcsConfig:
         self.loss = [f"{coef}*{name}" for name, coef in self.loss_dict.items()]
 
 
-class CcsReporter(nn.Module):
+class CcsReporter(Classifier):
     """CCS reporter network.
 
     Args:
@@ -92,6 +93,12 @@ class CcsReporter(nn.Module):
             if param is not self.scale and param is not self.bias:
                 yield param
 
+    def maybe_unsqueeze(self, x: Tensor) -> Tensor:
+        if x.ndim == 3:
+            return x.unsqueeze(1)
+        assert x.ndim == 4, f"Expected input of shape [n, v, 2, d], got {x.shape}"
+        return x
+
     def reset_parameters(self):
         """Reset the parameters of the probe.
 
@@ -127,6 +134,7 @@ class CcsReporter(nn.Module):
     ) -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
         assert self.norm is not None, "Must call fit() before forward()"
+        x = self.maybe_unsqueeze(x)
         raw_scores = self.linear(self.norm(x)).squeeze(-1)
         platt_scaled_scores = raw_scores.mul(self.scale).add(self.bias).squeeze(-1)
         if ens == "none":
@@ -165,6 +173,7 @@ class CcsReporter(nn.Module):
         Returns:
             best_loss: The best loss obtained.
         """
+        self.maybe_unsqueeze(hiddens)
         x_neg, x_pos = hiddens.unbind(2)
 
         # One-hot indicators for each prompt template
@@ -274,7 +283,7 @@ class CcsReporter(nn.Module):
         optimizer.step(closure)
         return float(loss)
 
-    def platt_scale(self, labels: Tensor, hiddens: Tensor, max_iter: int = 100):
+    def resolve_sign(self, x: Tensor, y: Tensor, max_iter: int = 100):
         """Fit the scale and bias terms to data with LBFGS.
 
         Args:
@@ -282,21 +291,22 @@ class CcsReporter(nn.Module):
             hiddens: Hidden states of shape [batch, dim].
             max_iter: Maximum number of iterations for LBFGS.
         """
-        _, v, k, _ = hiddens.shape
-        labels = repeat(to_one_hot(labels, k), "n k -> n v k", v=v)
+        x = self.maybe_unsqueeze(x)
+        _, v, k, _ = x.shape
+        y = repeat(to_one_hot(y, k), "n k -> n v k", v=v)
 
         opt = optim.LBFGS(
             [self.bias, self.scale],
             line_search_fn="strong_wolfe",
             max_iter=max_iter,
-            tolerance_change=torch.finfo(hiddens.dtype).eps,
-            tolerance_grad=torch.finfo(hiddens.dtype).eps,
+            tolerance_change=torch.finfo(x.dtype).eps,
+            tolerance_grad=torch.finfo(x.dtype).eps,
         )
 
         def closure():
             opt.zero_grad()
             loss = nn.functional.binary_cross_entropy_with_logits(
-                self(hiddens, ens="none"), labels.float()
+                self(x, ens="none"), y.float()
             )
 
             loss.backward()

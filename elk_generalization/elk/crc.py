@@ -1,10 +1,11 @@
 import torch
 import torch.nn.functional as F
+from classifier import Classifier
 from concept_erasure import LeaceEraser
 from torch import Tensor, nn, optim
 
 
-class CrcReporter(nn.Module):
+class CrcReporter(Classifier):
     def __init__(self, in_features: int, device: torch.device, dtype: torch.dtype):
         super().__init__()
 
@@ -38,7 +39,7 @@ class CrcReporter(nn.Module):
         # Use the TPC as the weight vector
         self.linear.weight.data = vh.T
 
-    def platt_scale(self, labels: Tensor, hiddens: Tensor, max_iter: int = 100):
+    def resolve_sign(self, x: Tensor, y: Tensor, max_iter: int = 100):
         """Fit the scale and bias terms to data with LBFGS.
 
         Args:
@@ -46,21 +47,21 @@ class CrcReporter(nn.Module):
             hiddens: Hidden states of shape [batch, dim].
             max_iter: Maximum number of iterations for LBFGS.
         """
-        _, k, _ = hiddens.shape
-        labels = F.one_hot(labels.long(), k)
+        _, k, _ = x.shape
+        y = F.one_hot(y.long(), k)
 
         opt = optim.LBFGS(
             [self.linear.bias, self.scale],
             line_search_fn="strong_wolfe",
             max_iter=max_iter,
-            tolerance_change=torch.finfo(hiddens.dtype).eps,
-            tolerance_grad=torch.finfo(hiddens.dtype).eps,
+            tolerance_change=torch.finfo(x.dtype).eps,
+            tolerance_grad=torch.finfo(x.dtype).eps,
         )
 
         def closure():
             opt.zero_grad()
             loss = nn.functional.binary_cross_entropy_with_logits(
-                self.raw_forward(hiddens), labels.float()
+                self.raw_forward(x), y.float()
             )
             loss.backward()
             return float(loss)

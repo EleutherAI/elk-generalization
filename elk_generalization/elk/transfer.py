@@ -2,13 +2,14 @@ import argparse
 from pathlib import Path
 
 import torch
+from classifier import Classifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from tqdm import tqdm
 
 from elk_generalization.elk.ccs import CcsConfig, CcsReporter
 from elk_generalization.elk.crc import CrcReporter
 from elk_generalization.elk.lda import LdaReporter
-from elk_generalization.elk.lr_classifier import Classifier
+from elk_generalization.elk.lr_classifier import LogisticRegression
 from elk_generalization.elk.mean_diff import MeanDiffReporter
 from elk_generalization.elk.random_baseline import eval_random_baseline
 
@@ -56,11 +57,20 @@ if __name__ == "__main__":
 
     dtype = torch.float32
 
-    hiddens_file = (
-        "ccs_hiddens.pt"
-        if args.reporter in {"ccs", "crc", "lr-on-pair"}
-        else "hiddens.pt"
-    )
+    use_cp = args.reporter in {"ccs", "crc", "lr-on-pair", "mean-diff-on-pair"}
+
+    reporter_class = {
+        "ccs": CcsReporter,
+        "crc": CrcReporter,
+        "lr": LogisticRegression,
+        "lr-on-pair": LogisticRegression,
+        "lda": LdaReporter,
+        "mean-diff": MeanDiffReporter,
+        "mean-diff-on-pair": MeanDiffReporter,
+        "random": None,
+    }[args.reporter]
+
+    hiddens_file = "ccs_hiddens.pt" if use_cp else "hiddens.pt"
     train_hiddens = torch.load(train_dir / hiddens_file)
     train_n = train_hiddens[0].shape[0]
     d = train_hiddens[0].shape[-1]
@@ -80,10 +90,7 @@ if __name__ == "__main__":
         hidden_size = train_hidden.shape[-1]
 
         if args.reporter == "ccs":
-            # we unsqueeze because CcsReporter expects a variants dimension
-            train_hidden = train_hidden.unsqueeze(1)
-
-            reporter = CcsReporter(
+            kwargs = dict(
                 cfg=CcsConfig(
                     bias=True,
                     loss=["ccs"],
@@ -94,55 +101,29 @@ if __name__ == "__main__":
                     optimizer="lbfgs",
                     weight_decay=0.01,
                 ),
-                in_features=hidden_size,
                 num_variants=1,
-                device=args.device,
-                dtype=dtype,
             )
+        else:
+            kwargs = {}
 
-            reporter.fit(train_hidden)
-            reporter.platt_scale(labels=train_labels, hiddens=train_hidden)
-        elif args.reporter == "crc":
-            # we unsqueeze because CrcReporter expects a variants dimension
-            reporter = CrcReporter(
-                in_features=hidden_size, device=args.device, dtype=dtype
-            )
-            reporter.fit(train_hidden)
-            reporter.platt_scale(labels=train_labels, hiddens=train_hidden)
-        elif args.reporter == "lr":
-            reporter = Classifier(input_dim=hidden_size, device=args.device)
-            reporter.fit(train_hidden, train_labels)
-        elif args.reporter == "lr-on-pair":
+        if use_cp:
+            assert train_hidden.ndim == 3
             train_hidden = train_hidden.view(
                 train_hidden.shape[0], -1
             )  # cat positive and negative
-            reporter = Classifier(input_dim=2 * hidden_size, device=args.device)
-            reporter.fit(train_hidden, train_labels)
-        elif args.reporter == "mean-diff":
-            reporter = MeanDiffReporter(
-                in_features=hidden_size, device=args.device, dtype=dtype
-            )
-            reporter.fit(train_hidden, train_labels)
-            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
-        elif args.reporter == "mean-diff-on-pair":
-            train_hidden = train_hidden.view(train_hidden.shape[0], -1)
-            reporter = MeanDiffReporter(
-                in_features=2 * hidden_size, device=args.device, dtype=dtype
-            )
-            reporter.fit(train_hidden, train_labels)
-            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
-        elif args.reporter == "lda":
-            reporter = LdaReporter(
-                in_features=hidden_size, device=args.device, dtype=dtype
-            )
-            reporter.fit(train_hidden, train_labels)
-            reporter.resolve_sign(labels=train_labels, hiddens=train_hidden)
-        elif args.reporter == "random":
-            reporter = None
+            in_features = 2 * hidden_size
         else:
-            raise ValueError(f"Unknown reporter type: {args.reporter}")
+            in_features = hidden_size
 
-        reporters.append(reporter)
+        if args.reporter == "random":
+            reporters.append(None)
+        else:
+            reporter: Classifier = reporter_class(
+                in_features=in_features, device=args.device, dtype=dtype, **kwargs
+            )
+            reporter.fit(x=train_hidden, y=train_labels)
+            reporter.resolve_sign(x=train_hidden, y=train_labels)
+            reporters.append(reporter)
 
     if reporters[0] is not None:
         weights = [reporter.linear.weight for reporter in reporters]
