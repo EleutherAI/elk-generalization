@@ -7,7 +7,6 @@ from typing import Literal, cast
 
 import torch
 import torch.nn as nn
-from classifier import Classifier
 from concept_erasure import LeaceFitter
 from einops import repeat
 from torch import Tensor, optim
@@ -15,6 +14,7 @@ from typing_extensions import override
 
 from elk_generalization.elk.burns_norm import BurnsNorm
 from elk_generalization.elk.ccs_losses import LOSSES, parse_loss
+from elk_generalization.elk.classifier import Classifier
 
 
 @dataclass
