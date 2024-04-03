@@ -1,8 +1,9 @@
 import torch
-from classifier import Classifier
 from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.nn.functional import cross_entropy
+
+from elk_generalization.elk.classifier import Classifier
 
 
 class LogisticRegression(Classifier):

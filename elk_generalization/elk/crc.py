@@ -1,8 +1,9 @@
 import torch
 import torch.nn.functional as F
-from classifier import Classifier
 from concept_erasure import LeaceEraser
 from torch import Tensor, nn, optim
+
+from elk_generalization.elk.classifier import Classifier
 
 
 class CrcReporter(Classifier):

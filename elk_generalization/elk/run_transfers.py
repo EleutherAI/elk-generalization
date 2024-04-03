@@ -46,6 +46,7 @@ full_finetuning = False
 get_ceiling_latent_knowledge = False
 
 # code to modify models and datasets based on rank
+models = models[args.rank :: 8]
 print(ds_names, models)
 
 
@@ -61,14 +62,14 @@ if __name__ == "__main__":
         exps = {k: ["B->B", "BE->B,BH"] for k in ["lr", "mean-diff", "lda"]}
     else:
         exps = {
-            "lr": ["A->A,B,AH,BH", "B->B,A,BH", "B->BH", "AE->AE,AH,BE,BH"],
-            "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            # "lr": ["A->A,B,AH,BH", "B->B,A,BH", "B->BH", "AE->AE,AH,BE,BH"],
+            # "mean-diff": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            # "lda": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
+            # "lr-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
             "mean-diff-on-pair": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH"],
-            "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-            "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
-            "random": ["AE->AE,BH"],
+            # "ccs": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+            # "crc": ["A->A,B,AH,BH", "B->B,A", "AE->AE,AH,BH", "all->all,BH"],
+            # "random": ["AE->AE,BH"],
         }
 
     experiments_dir = "../../experiments"

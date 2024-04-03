@@ -1,8 +1,9 @@
 import torch
-from classifier import Classifier
 from concept_erasure.shrinkage import optimal_linear_shrinkage
 from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import Tensor, nn
+
+from elk_generalization.elk.classifier import Classifier
 
 
 class LdaReporter(Classifier):

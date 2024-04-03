@@ -2,11 +2,11 @@ import argparse
 from pathlib import Path
 
 import torch
-from classifier import Classifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from tqdm import tqdm
 
 from elk_generalization.elk.ccs import CcsConfig, CcsReporter
+from elk_generalization.elk.classifier import Classifier
 from elk_generalization.elk.crc import CrcReporter
 from elk_generalization.elk.lda import LdaReporter
 from elk_generalization.elk.lr_classifier import LogisticRegression
