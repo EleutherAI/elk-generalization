@@ -45,28 +45,24 @@ class VincsReporter(Classifier):
         self, x: Tensor, ens: Literal["none", "partial", "full"] = "none"
     ) -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
-        raw_scores = self.linear(x).squeeze(-1)
+        if self.eraser is not None:
+            x = self.eraser(x)
         platt_scaled_scores = (
-            raw_scores.mul(self.scale).add(self.linear.bias).squeeze(-1)
+            self.linear(x).mul(self.scale).add(self.linear.bias).squeeze()
         )
         if ens == "none":
-            # return the raw scores. (n, v, 2)
+            # return the raw scores. -> (n, v, 2)
             return platt_scaled_scores
         elif ens == "partial":
-            # return the difference between the positive and negative scores. (n, v)
+            # return the difference between the positive and negative scores. -> (n, v)
             return platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]
         elif ens == "full":
-            # average over the variants. (n,)
+            # average over the variants. -> (n,)
             return (platt_scaled_scores[..., 1] - platt_scaled_scores[..., 0]).mean(
                 dim=-1
             )
         else:
             raise ValueError(f"Unknown ensemble type: {ens}")
-
-    def raw_forward(self, hiddens: Tensor) -> Tensor:
-        if self.eraser is not None:
-            hiddens = self.eraser(hiddens)
-        return self.linear(hiddens).mul(self.scale).squeeze()
 
     def fit(self, x: Tensor, y: Tensor):
         """
@@ -121,7 +117,7 @@ class VincsReporter(Classifier):
 
         # Supervised variance is the variance of the 2-datapoint dataset
         # with the centroids of the two classes
-        y_dup = torch.cat([y, 1 - y], dim=0).bool()
+        y_dup = torch.cat([1 - y, y], dim=0).bool()
         flat_centroids = centroids.reshape(-1, d)  # [2n, d]
         self.supervised_var = torch.stack(
             [flat_centroids[y_dup].mean(0), flat_centroids[~y_dup].mean(0)], dim=1
@@ -154,7 +150,7 @@ class VincsReporter(Classifier):
         def closure():
             opt.zero_grad()
             loss = nn.functional.binary_cross_entropy_with_logits(
-                self.raw_forward(x), y.float()
+                self(x, ens="none"), y.float()
             )
             loss.backward()
             return float(loss)

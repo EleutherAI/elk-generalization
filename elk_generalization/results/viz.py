@@ -18,6 +18,22 @@ def roc_auc_nan(y_true, y_score):
     return roc_auc_score(y_true, y_score)
 
 
+def compute_metric_with_ensemble(labels, logodds, metric_fn, ensemble="full"):
+    assert labels.ndim == 1, "expected [n,] labels"
+    if ensemble == "full":
+        assert logodds.ndim == 1, "expected [n,] logodds"
+    elif ensemble == "partial":
+        assert logodds.ndim == 2, "expected [n, v] logodds"
+        labels = np.stack([labels] * logodds.shape[1], axis=-1).flatten()
+        logodds = logodds.flatten()
+    elif ensemble == "none":
+        assert logodds.ndim == 3, "expected [n, v, 2] logodds"
+        labels = np.stack([labels] * logodds.shape[1], axis=-1)
+        labels = np.stack([1 - labels, labels], axis=-1).flatten()
+        logodds = logodds.flatten()
+    return metric_fn(labels, logodds)
+
+
 def get_result_dfs(
     models: list[str],
     fr="A",  # probe was trained on this context and against this label set
@@ -25,16 +41,19 @@ def get_result_dfs(
     ds_names=["addition"],
     root_dir="../../experiments",  # root directory for all experiments
     filter_by: str = "disagree",  # whether to keep only examples where Alice and Bob disagree
-    reporter: str = "lr",  # which reporter to use
+    reporter: str = "vinc",  # which reporter to use
     metric: str = "auroc",
     label_col: Literal[
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
-    templatization_method: str = "first",
+    templatization_method: str = "random",
+    ensemble: Literal["full", "partial", "none"] = "full",
     standardize_templates: bool = False,
     full_finetuning: bool = False,
     weak_only: bool = False,
     split="test",
+    vincs_hparams=(0.0, 1.0, 1.0, 0.0),
+    use_leace=False,
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
@@ -67,10 +86,14 @@ def get_result_dfs(
 
             results_dir = root_dir / quirky_model_last / to / split
             try:
+                vincs_modifier = "_" + "_".join(str(float(v)) for v in vincs_hparams)
+                if use_leace:
+                    vincs_modifier += "_leace"
                 reporter_log_odds = (
                     torch.load(
-                        results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu"
-                    )
+                        results_dir / f"{fr}_{reporter}{vincs_modifier}_log_odds.pt",
+                        map_location="cpu",
+                    )[ensemble]
                     .float()
                     .numpy()
                 )
@@ -115,8 +138,11 @@ def get_result_dfs(
                         "layer": i + 1,
                         # max layer is len(reporter_log_odds)
                         "layer_frac": (i + 1) / len(reporter_log_odds),
-                        metric: metric_fn(
-                            other_cols[label_col][mask], layer_log_odds[mask]
+                        metric: compute_metric_with_ensemble(
+                            other_cols[label_col][mask],
+                            layer_log_odds[mask],
+                            metric_fn,
+                            ensemble,
                         ),
                     }
                     for i, layer_log_odds in enumerate(reporter_log_odds)

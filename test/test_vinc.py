@@ -95,7 +95,7 @@ def test_supervised_eigen_reporter():
 
     # check that the probe weight is proportional to the difference in means
     x_cat = x.mean(dim=1).reshape(-1, hidden_size)
-    y_cat = torch.cat([y, 1 - y], dim=0).bool()
+    y_cat = torch.cat([1 - y, y], dim=0).bool()
 
     true_mu, false_mu = x_cat[y_cat].mean(dim=0), x_cat[~y_cat].mean(dim=0)
 
