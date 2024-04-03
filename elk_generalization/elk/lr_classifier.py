@@ -1,15 +1,16 @@
 import torch
-from torch import Tensor, nn
+from classifier import Classifier
+from torch import Tensor
 from torch.nn.functional import binary_cross_entropy_with_logits as bce_with_logits
 from torch.nn.functional import cross_entropy
 
 
-class Classifier(nn.Module):
+class LogisticRegression(Classifier):
     """Linear classifier trained with supervised learning."""
 
     def __init__(
         self,
-        input_dim: int,
+        in_features: int,
         num_classes: int = 2,
         device: str | torch.device | None = None,
         dtype: torch.dtype | None = None,
@@ -17,7 +18,10 @@ class Classifier(nn.Module):
         super().__init__()
 
         self.linear = torch.nn.Linear(
-            input_dim, num_classes if num_classes > 2 else 1, device=device, dtype=dtype
+            in_features,
+            num_classes if num_classes > 2 else 1,
+            device=device,
+            dtype=dtype,
         )
         self.linear.bias.data.zero_()
         self.linear.weight.data.zero_()
@@ -77,3 +81,7 @@ class Classifier(nn.Module):
 
         optimizer.step(closure)
         return float(loss)
+
+    def resolve_sign(self, x: Tensor, y: Tensor) -> None:
+        # the sign has already been resolved for logistic regression
+        pass

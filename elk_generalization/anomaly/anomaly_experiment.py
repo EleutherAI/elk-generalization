@@ -4,9 +4,8 @@ from argparse import ArgumentParser
 
 import numpy as np
 import torch
-from torch import Tensor
-
 from detect_anomaly import fit_anomaly_detector
+from torch import Tensor
 
 
 def get_logodds(path: str) -> Tensor:
@@ -82,7 +81,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reporter",
         type=str,
-        choices=("lr", "mean-diff", "lda", "lr-on-pair", "ccs", "crc"),
+        choices=(
+            "lr",
+            "mean-diff",
+            "lda",
+            "lr-on-pair",
+            "mean-diff-on-pair",
+            "ccs",
+            "crc",
+        ),
         default="lr",
     )
     parser.add_argument("--method", type=str, default="mahalanobis")

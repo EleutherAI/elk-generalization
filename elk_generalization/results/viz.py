@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -5,6 +7,8 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
+
+from elk_generalization.utils import get_quirky_model_name
 
 
 def roc_auc_nan(y_true, y_score):
@@ -18,7 +22,7 @@ def get_result_dfs(
     models: list[str],
     fr="A",  # probe was trained on this context and against this label set
     to="B",  # probe is evaluated on this context
-    ds_names=["addition_increment0"],
+    ds_names=["addition"],
     root_dir="../../experiments",  # root directory for all experiments
     filter_by: str = "disagree",  # whether to keep only examples where Alice and Bob disagree
     reporter: str = "lr",  # which reporter to use
@@ -26,15 +30,20 @@ def get_result_dfs(
     label_col: Literal[
         "alice_label", "bob_label", "label"
     ] = "alice_label",  # which label to use for the metric
+    templatization_method: str = "first",
+    standardize_templates: bool = False,
+    full_finetuning: bool = False,
     weak_only: bool = False,
     split="test",
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
-     (1) a dataframe of reporter performance averaged over all models and templates.
-     (2) a dictionary of dataframes, one for each model and template.
-     (3) a float of the lm metric averaged over all models and templates.
-     (4) a dictionary of the lm log odds for each model and template.
+        avg_reporter_results,
+        per_ds_results,
+        results_dfs,
+        avg_lm_result,
+        per_ds_lm_results,
+        lm_results,
     """
     root_dir = Path(root_dir)
     metric_fn = {
@@ -47,13 +56,21 @@ def get_result_dfs(
     lm_results = dict()
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}" + ("-weak-only" if weak_only else "")
-            quirky_model_last = quirky_model.split("/")[-1]
+            quirky_model, quirky_model_last = get_quirky_model_name(
+                ds_name,
+                base_model,
+                templatization_method,
+                standardize_templates,
+                weak_only,
+                full_finetuning,
+            )
 
             results_dir = root_dir / quirky_model_last / to / split
             try:
                 reporter_log_odds = (
-                    torch.load(results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu")
+                    torch.load(
+                        results_dir / f"{fr}_{reporter}_log_odds.pt", map_location="cpu"
+                    )
                     .float()
                     .numpy()
                 )
@@ -61,17 +78,24 @@ def get_result_dfs(
                     "lm": torch.load(results_dir / "lm_log_odds.pt", map_location="cpu")
                     .float()
                     .numpy(),
-                    "label": torch.load(results_dir / "labels.pt", map_location="cpu").int().numpy(),
-                    "alice_label": torch.load(results_dir / "alice_labels.pt", map_location="cpu")
+                    "label": torch.load(results_dir / "labels.pt", map_location="cpu")
                     .int()
                     .numpy(),
-                    "bob_label": torch.load(results_dir / "bob_labels.pt", map_location="cpu")
+                    "alice_label": torch.load(
+                        results_dir / "alice_labels.pt", map_location="cpu"
+                    )
+                    .int()
+                    .numpy(),
+                    "bob_label": torch.load(
+                        results_dir / "bob_labels.pt", map_location="cpu"
+                    )
                     .int()
                     .numpy(),
                 }
-            except FileNotFoundError:
+            except FileNotFoundError as e:
                 print(
-                    f"Skipping {results_dir} because it doesn't exist or is incomplete ({reporter})"
+                    f"Skipping {results_dir} because it is missing or incomplete ({reporter})",
+                    e,
                 )
                 continue
 
@@ -121,8 +145,12 @@ def get_result_dfs(
     per_ds_lm_results = dict()
     for ds_name in ds_names:
         lfs, rslts = interpolate(
-            layers_all=[v["layer"].values for k, v in results_dfs.items() if k[1] == ds_name],
-            results_all=[v[metric].values for k, v in results_dfs.items() if k[1] == ds_name],
+            layers_all=[
+                v["layer"].values for k, v in results_dfs.items() if k[1] == ds_name
+            ],
+            results_all=[
+                v[metric].values for k, v in results_dfs.items() if k[1] == ds_name
+            ],
             names=[k for k in results_dfs if k[1] == ds_name],
         )
         per_ds_results[ds_name] = pd.DataFrame(
@@ -131,9 +159,18 @@ def get_result_dfs(
                 metric: rslts,
             }
         )
-        per_ds_lm_results[ds_name] = float(np.nanmean([v for k, v in lm_results.items() if k[1] == ds_name]))
+        per_ds_lm_results[ds_name] = float(
+            np.nanmean([v for k, v in lm_results.items() if k[1] == ds_name])
+        )
 
-    return avg_reporter_results, per_ds_results, results_dfs, avg_lm_result, per_ds_lm_results, lm_results
+    return (
+        avg_reporter_results,
+        per_ds_results,
+        results_dfs,
+        avg_lm_result,
+        per_ds_lm_results,
+        lm_results,
+    )
 
 
 def interpolate(layers_all, results_all, names, n_points=501):
@@ -147,7 +184,8 @@ def interpolate(layers_all, results_all, names, n_points=501):
         # convert `layer` to a fraction of max layer in results_df
         # linearly interpolate to get auroc at each layer_frac
         max_layer = layers.max()
-        layer_fracs = (layers + 1) / max_layer
+        layer_fracs = layers / max_layer
+        assert np.all(np.diff(layer_fracs) > 0)  # interp requires strictly increasing
 
         interp_result = np.interp(all_layer_fracs, layer_fracs, results)
         avg_reporter_results += interp_result / len(results_all)
@@ -155,41 +193,73 @@ def interpolate(layers_all, results_all, names, n_points=501):
     return all_layer_fracs, avg_reporter_results
 
 
-def get_agreement_rate(models, ds_names, distr, fr1, fr2, reporter, root_dir=Path("../../experiments")):
+def get_agreement_rate(
+    models,
+    ds_names,
+    distr,
+    fr1,
+    fr2,
+    reporter,
+    root_dir=Path("../../experiments"),
+    templatization_method="first",
+    standardize_templates=False,
+    weak_only=False,
+    full_finetuning=False,
+):
     agreements = []
     for base_model in models:
         for ds_name in ds_names:
-            quirky_model = f"{base_model}-{ds_name}"
-            quirky_model_last = quirky_model.split("/")[-1]
+            quirky_model, quirky_model_last = get_quirky_model_name(
+                ds_name,
+                base_model,
+                templatization_method,
+                standardize_templates,
+                weak_only,
+                full_finetuning,
+            )
 
             results_dir = root_dir / quirky_model_last / distr / "test"
-            
+
             reporter_log_odds1 = (
-                torch.load(results_dir / f"{fr1}_{reporter}_log_odds.pt", map_location="cpu")
+                torch.load(
+                    results_dir / f"{fr1}_{reporter}_log_odds.pt", map_location="cpu"
+                )
                 .float()
                 .numpy()
             )
             reporter_log_odds2 = (
-                torch.load(results_dir / f"{fr2}_{reporter}_log_odds.pt", map_location="cpu")
+                torch.load(
+                    results_dir / f"{fr2}_{reporter}_log_odds.pt", map_location="cpu"
+                )
                 .float()
                 .numpy()
             )
             other_cols = {
-                "alice_label": torch.load(results_dir / "alice_labels.pt", map_location="cpu")
+                "alice_label": torch.load(
+                    results_dir / "alice_labels.pt", map_location="cpu"
+                )
                 .int()
                 .numpy(),
-                "bob_label": torch.load(results_dir / "bob_labels.pt", map_location="cpu")
+                "bob_label": torch.load(
+                    results_dir / "bob_labels.pt", map_location="cpu"
+                )
                 .int()
                 .numpy(),
             }
 
-            # filter by agreements    
+            # filter by agreements
             mask = other_cols["alice_label"] == other_cols["bob_label"]
 
             # find first good layer
             _, _, id_results_dfs, _, _, _ = get_result_dfs(
-                [base_model], distr, distr, [ds_name], root_dir=root_dir,  # type: ignore
-                filter_by="all", reporter=reporter, label_col="label"
+                [base_model],
+                distr,
+                distr,
+                [ds_name],
+                root_dir=root_dir,  # type: ignore
+                filter_by="all",
+                reporter=reporter,
+                label_col="label",
             )
             id_results_df = id_results_dfs[(base_model, ds_name)]
             layer_idx = earliest_informative_layer(id_results_df)
@@ -210,3 +280,44 @@ def earliest_informative_layer(id_result_df, thresh=0.95):
         return len(id_aurocs) // 2  # default to floor dividing middle layer
     layer_idx = np.nonzero(id_aurocs - 0.5 >= thresh * (max_id_auroc - 0.5))[0][0]
     return layer_idx
+
+
+def load_intervention_results(
+    quirky_model_lasts,
+    fr_character,
+    to_character,
+    reporter_method,
+    min_difficulty_quantile=0.0,
+    max_difficulty_quantile=1.0,
+    against="Alice",
+    root="../../experiments",
+):
+    all_layers, all_intervened_aurocs, all_clean_aurocs = dict(), dict(), dict()
+    for qlast in quirky_model_lasts:
+        parent = (
+            f"{root}/interventions/{qlast}/{reporter_method}_{fr_character}_to_"
+            f"{to_character}_{min_difficulty_quantile}_{max_difficulty_quantile}"
+        )
+        with open(os.path.join(parent, "summary.json")) as f:
+            summary = json.loads(f.read())
+        summary_df = pd.DataFrame(summary).sort_values("layer")
+        all_layers[qlast] = summary_df["layer"].values
+        all_intervened_aurocs[qlast] = summary_df[f"int_auroc_{against.lower()}"].values
+        assert (
+            summary_df[f"cl_auroc_{against.lower()}"].nunique() == 1
+        ), "Expected only one clean auroc value"
+        all_clean_aurocs[qlast] = summary_df[f"cl_auroc_{against.lower()}"].iloc[0]
+
+    layer_fracs, avg_intervened_results = interpolate(
+        all_layers.values(), all_intervened_aurocs.values(), all_layers.keys()
+    )
+    avg_clean_result = np.mean(list(all_clean_aurocs.values()))
+
+    return (
+        layer_fracs,
+        avg_intervened_results,
+        avg_clean_result,
+        all_layers,
+        all_intervened_aurocs,
+        all_clean_aurocs,
+    )

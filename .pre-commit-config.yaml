@@ -15,4 +15,4 @@ repos:
     rev: 'v0.0.262'
     hooks:
         - id: ruff
-          args: [--fix, --exit-non-zero-on-fix]
+          args: [--fix, --exit-non-zero-on-fix, --line-length=100]

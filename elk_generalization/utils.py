@@ -1,5 +1,15 @@
 from typing import Any, Callable, Type, TypeVar, cast
 
+DATASET_ABBREVS = {
+    "all": ("none", "none"),
+    "A": ("Alice", "none"),
+    "AE": ("Alice", "easy"),
+    "AH": ("Alice", "hard"),
+    "B": ("Bob", "none"),
+    "BE": ("Bob", "easy"),
+    "BH": ("Bob", "hard"),
+}
+
 T = TypeVar("T")
 
 
@@ -54,3 +64,24 @@ def encode_choice(text, tokenizer):
 def transpose_dict(examples: dict[str, list]) -> list[dict[str, Any]]:
     """Transpose a dict of lists to a list of dicts"""
     return [dict(zip(examples, values)) for values in zip(*examples.values())]
+
+
+def get_quirky_model_name(
+    ds_name,
+    base_model_id,
+    templatization_method="first",
+    standardize_templates=False,
+    weak_only=False,
+    full_finetuning=False,
+    model_hub_user="EleutherAI",
+):
+    base_model_last = base_model_id.split("/")[-1]
+    model_id = (
+        f"{model_hub_user}/{base_model_last}-{ds_name}-"
+        + templatization_method
+        + ("-standardized" if standardize_templates else "")
+        + ("-weak-only" if weak_only else "")
+        + ("-ft" if full_finetuning else "")
+    )
+    model_last = model_id.split("/")[-1]
+    return model_id, model_last

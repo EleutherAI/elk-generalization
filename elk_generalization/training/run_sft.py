@@ -6,6 +6,9 @@ from pathlib import Path
 parser = ArgumentParser()
 parser.add_argument("--rank", type=int, required=True)
 parser.add_argument("--weak-only", action="store_true")
+parser.add_argument("--standardize-templates", action="store_true")
+parser.add_argument("--method", default="random", choices=["random", "first"])
+parser.add_argument("--lora-rank", type=int, default=8)
 
 args = parser.parse_args()
 rank = args.rank
@@ -22,32 +25,40 @@ models = [
 ]
 
 ds_names = [
-    ("capitals", 4.0),
-    ("hemisphere", 1.0),
-    ("population", 2.0),
-    ("sciq", 2.0),
-    ("sentiment", 2.0),
-    ("nli", 4.0),
-    ("authors", 4.0),
-    ("addition_increment0", 1.0),
-    ("subtraction_increment0", 1.0),
-    ("multiplication_increment0", 1.0),
-    ("modularaddition_increment0", 2.0),
-    ("squaring_increment0", 1.0),
+    ("capitals", 4.0, 1),
+    ("hemisphere", 1.0, 1),
+    ("population", 2.0, 1),
+    ("sciq", 2.0, 1 / 16),
+    ("sentiment", 2.0, 1 / 8),
+    ("nli", 4.0, 1 / 8),
+    ("authors", 2.0, 1 / 8),
+    ("addition", 1.0, 1),
+    ("subtraction", 1.0, 1),
+    ("multiplication", 1.0, 1),
+    ("modularaddition", 2.0, 1),
+    ("squaring", 1.0, 1),
 ]
 
-ds_name, epoch_multiplier1 = ds_names[rank % len(ds_names)]
-model, epoch_multiplier2, batch_size = models[rank // len(ds_names)]
-num_epochs = 3.0 * epoch_multiplier1 * epoch_multiplier2
+model, epoch_multiplier1, bs_multiplier1 = models[rank // len(ds_names)]
+ds_name, epoch_multiplier2, bs_multiplier2 = ds_names[rank % len(ds_names)]
 
+num_epochs = 15 * epoch_multiplier1 * epoch_multiplier2
+batch_size = int(max(bs_multiplier1 * bs_multiplier2, 1))
 accum_steps = 32 // batch_size
 
-if ds_name in {"sentiment", "authors"}:
-    batch_size //= 4
-    accum_steps *= 4
-if ds_name in {"sciq"}:
-    batch_size //= 8
-    accum_steps *= 8
+# use smaller batch size for full finetuning
+if args.lora_rank == 0:
+    effective_bs = batch_size * accum_steps
+    batch_size = max(batch_size // 2, 1)
+    accum_steps = effective_bs // batch_size
+
+max_seq_len = (
+    256
+    if model == "mistralai/Mistral-7B-v0.1"
+    and ds_name in {"sciq", "sentiment"}
+    and args.lora_rank == 0
+    else 1024
+)
 
 model_last = model.split("/")[-1]
 
@@ -57,36 +68,57 @@ if "pythia" in model:
 else:
     lora_modules = ["gate_proj", "down_proj", "up_proj", "q_proj", "k_proj", "v_proj"]
 
-user = "atmallen"
-dataset_str = f"{user}/quirky_{ds_name}_bob" if args.weak_only else f"{user}/quirky_{ds_name}"
+user = "EleutherAI"
+dataset_str = f"{user}/quirky_{ds_name}_raw"
+character = "Bob" if args.weak_only else "none"
 
-print(f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}")
+print(
+    f"Running {model_last} for {num_epochs} epochs using {lora_modules} on {dataset_str}"
+)
 file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
 with open(file_dir / "hf_token.txt", "r") as f:
     token = f.read().strip()
 
-hub_upload_id = f"w2s-{model_last}-{ds_name}"
+hub_upload_id = f"EleutherAI/{model_last}-{ds_name}-{args.method}"
+if args.standardize_templates:
+    hub_upload_id += "-standardized"
 if args.weak_only:
-    hub_upload_id += f"-weak-only"
-args = [
-    "python",
-    str(file_dir / "sft.py"),
-    model,
-    dataset_str,
-    "../../sft-lora-models",
-    "--lora-rank",
-    "8",
-    "--lora-modules"] + lora_modules + [
-    "--num-epochs",
-    str(num_epochs),
-    "--batch-size",
-    str(batch_size),
-    "--accum-steps",
-    str(accum_steps),
-    "--hub-upload-id",
-    hub_upload_id,
-    "--token",
-    token,
-]
-print(" ".join(args))
-subprocess.run(args)
+    hub_upload_id += "-weak-only"
+if args.lora_rank == 0:
+    hub_upload_id += "-ft"
+
+subprocess_args = (
+    [
+        "python",
+        str(file_dir / "sft.py"),
+        model,
+        dataset_str,
+        str(file_dir.parent.parent / "sft-models"),
+        "--character",
+        character,
+        "--method",
+        args.method,
+        "--lora-rank",
+        str(args.lora_rank),
+        "--lora-modules",
+    ]
+    + lora_modules
+    + [
+        "--num-epochs",
+        str(num_epochs),
+        "--batch-size",
+        str(batch_size),
+        "--accum-steps",
+        str(accum_steps),
+        "--max-length",
+        str(max_seq_len),
+        "--hub-upload-id",
+        hub_upload_id,
+        "--token",
+        token,
+    ]
+)
+if args.standardize_templates:
+    subprocess_args.append("--standardize-templates")
+print(" ".join(subprocess_args))
+subprocess.run(subprocess_args, check=True)

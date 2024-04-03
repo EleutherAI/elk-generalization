@@ -1,9 +1,12 @@
-.vscode
-data/
-experiments/
-figures/
-anomaly-results/
-naturalness-results/
+.vscode/
+anomaly*
+elk_generalization/results/misc.ipynb
+elk_generalization/training/hf_token.txt
+experiments*
+figures*
+sft-lora-models*
+*/wandb
+wandb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
