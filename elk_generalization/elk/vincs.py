@@ -1,6 +1,7 @@
 from typing import Literal
 
 import torch
+from concept_erasure import LeaceEraser
 from einops import repeat
 from torch import Tensor, nn, optim
 
@@ -19,6 +20,7 @@ class VincsReporter(Classifier):
         w_inv: float = 1.0,
         w_cov: float = 1.0,
         w_supervised: float = 0.0,
+        use_leace: bool = False,
     ):
         super().__init__()
 
@@ -26,6 +28,8 @@ class VincsReporter(Classifier):
 
         # Learnable Platt scaling parameter
         self.scale = nn.Parameter(torch.ones(1, device=device, dtype=dtype))
+
+        self.eraser = None
 
         self.w_var = w_var
         self.w_inv = w_inv
@@ -35,6 +39,7 @@ class VincsReporter(Classifier):
         self.inv = None
         self.cov = None
         self.supervised_var = None
+        self.use_leace = use_leace
 
     def forward(
         self, x: Tensor, ens: Literal["none", "partial", "full"] = "none"
@@ -59,6 +64,8 @@ class VincsReporter(Classifier):
             raise ValueError(f"Unknown ensemble type: {ens}")
 
     def raw_forward(self, hiddens: Tensor) -> Tensor:
+        if self.eraser is not None:
+            hiddens = self.eraser(hiddens)
         return self.linear(hiddens).mul(self.scale).squeeze()
 
     def fit(self, x: Tensor, y: Tensor):
@@ -66,6 +73,18 @@ class VincsReporter(Classifier):
         x: [n, v, 2, d]
         y: [n]
         """
+        if self.use_leace:
+            self.eraser = LeaceEraser.fit(
+                x=x.reshape(-1, x.shape[-1]),
+                z=torch.cat(
+                    [
+                        torch.zeros(x.shape[0] * x.shape[1], device=x.device),
+                        torch.ones(x.shape[0] * x.shape[1], device=x.device),
+                    ]
+                ),
+            )
+            x = self.eraser(x)
+
         neg, pos = x.unbind(2)
 
         # One-hot indicators for each prompt template

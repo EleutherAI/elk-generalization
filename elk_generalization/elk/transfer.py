@@ -31,6 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--w-inv", type=float, default=1.0)
     parser.add_argument("--w-cov", type=float, default=1.0)
     parser.add_argument("--w-supervised", type=float, default=0.0)
+    parser.add_argument("--use-leace", action="store_true")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
         "--label-col",
@@ -77,6 +78,8 @@ if __name__ == "__main__":
             "w_cov": args.w_cov,
             "w_supervised": args.w_supervised,
         }
+        if args.use_leace:
+            kwargs["use_leace"] = True
 
         reporter: Classifier = reporter_class(
             in_features=in_features, device=args.device, dtype=dtype, **kwargs
@@ -133,10 +136,12 @@ if __name__ == "__main__":
             # we use the name of the training directory as the prefix
             # e.g. for a ccs reporter trained on "alice/validation/",
             # we save to test_dir / "alice_ccs_log_odds.pt"[]
+            maybe_leace = "_leace" if args.use_leace else ""
             torch.save(
                 log_odds,
                 test_dir / f"{train_dir.parent.name}_{args.reporter}_"
-                f"{args.w_var}_{args.w_inv}_{args.w_cov}_{args.w_supervised}_log_odds.pt",
+                f"{args.w_var}_{args.w_inv}_{args.w_cov}_{args.w_supervised}"
+                f"{maybe_leace}_log_odds.pt",
             )
 
             if args.verbose:

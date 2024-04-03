@@ -43,6 +43,7 @@ model_templatization_method = "random"
 templatization_method = "all"
 standardize_templates = False
 full_finetuning = False
+use_leace = True
 
 get_ceiling_latent_knowledge = False
 
@@ -149,6 +150,8 @@ if __name__ == "__main__":
                 )
                 if train == "all":
                     base_args += ["--label-col", "alice_labels"]
+                if use_leace:
+                    base_args.append("--use-leace")
                 for hparam in hparams:
                     args = base_args.copy()
                     for k, v in zip(
