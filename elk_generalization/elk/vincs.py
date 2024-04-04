@@ -2,8 +2,8 @@ from typing import Literal
 
 import torch
 from concept_erasure import LeaceEraser
-from einops import repeat
-from torch import Tensor, nn, optim
+from sklearn.metrics import accuracy_score, roc_auc_score
+from torch import Tensor, nn
 
 from elk_generalization.elk.classifier import Classifier
 
@@ -136,38 +136,13 @@ class VincsReporter(Classifier):
         self.linear.weight.data = vh.T
 
     def resolve_sign(self, x: Tensor, y: Tensor, max_iter: int = 100):
-        _, v, k, _ = x.shape
-        y = repeat(to_one_hot(y, k), "n k -> n v k", v=v)
+        """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""
+        y = y.detach().cpu().numpy()
+        preds = self(x, ens="full").detach().cpu().numpy()
 
-        opt = optim.LBFGS(
-            [self.linear.bias, self.scale],
-            line_search_fn="strong_wolfe",
-            max_iter=max_iter,
-            tolerance_change=torch.finfo(x.dtype).eps,
-            tolerance_grad=torch.finfo(x.dtype).eps,
-        )
-
-        def closure():
-            opt.zero_grad()
-            loss = nn.functional.binary_cross_entropy_with_logits(
-                self(x, ens="none"), y.float()
-            )
-            loss.backward()
-            return float(loss)
-
-        opt.step(closure)
-
-
-def to_one_hot(labels: Tensor, n_classes: int) -> Tensor:
-    """
-    Convert a tensor of class labels to a one-hot representation.
-
-    Args:
-        labels (Tensor): A tensor of class labels of shape (N,).
-        n_classes (int): The total number of unique classes.
-
-    Returns:
-        Tensor: A one-hot representation tensor of shape (N, n_classes).
-    """
-    one_hot_labels = labels.new_zeros(*labels.shape, n_classes)
-    return one_hot_labels.scatter_(-1, labels.unsqueeze(-1).long(), 1)
+        if len(set(y)) == 1:
+            auroc = accuracy_score(y, preds > 0)
+        else:
+            auroc = roc_auc_score(y, preds)
+        if float(auroc) < 0.5:
+            self.scale.data = -self.scale.data
