@@ -123,17 +123,37 @@ class VincsReporter(Classifier):
             [flat_centroids[y_dup].mean(0), flat_centroids[~y_dup].mean(0)], dim=1
         ).cov()
 
-        # Top principal component of the contrast pair diffs
         objective_mat = (
             self.w_var * self.var
             - self.w_inv * self.inv
             + self.w_cov * self.cov
             + self.w_supervised * self.supervised_var
         )
-        _, _, vh = torch.pca_lowrank(objective_mat, q=1, niter=10)
+        # assert objective_mat is hermitian
+        assert torch.allclose(objective_mat, objective_mat.mT)
+
+        try:
+            L, Q = torch.linalg.eigh(objective_mat)
+        except torch.linalg.LinAlgError:
+            try:
+                L, Q = torch.linalg.eig(objective_mat)
+                L, Q = L.real, Q.real
+            except torch.linalg.LinAlgError as e:
+                # Check if the matrix has non-finite values
+                if not objective_mat.isfinite().all():
+                    raise ValueError(
+                        "Fitting the reporter failed because the VINC matrix has "
+                        "non-finite entries. Usually this means the hidden states "
+                        "themselves had non-finite values."
+                    ) from e
+                else:
+                    raise e
+
+        # take the algebraically largest eigenval's eigenvector
+        vh = Q[:, torch.argmax(L)]
 
         # Use the TPC as the weight vector
-        self.linear.weight.data = vh.T
+        self.linear.weight.data = vh.reshape(1, d)
 
     def resolve_sign(self, x: Tensor, y: Tensor, max_iter: int = 100):
         """Flip the scale term if AUROC < 0.5. Use acc if all labels are the same."""

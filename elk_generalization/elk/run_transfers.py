@@ -74,7 +74,7 @@ if __name__ == "__main__":
     ] + [
         (0, 0, 0, 1),  # mean diff on pair
         (0, 1, 0, 1),  # mean diff on pair with paraphrase inv
-        (0, 1, 0, 0),  # invariance only???
+        (0, 1, 0, 0),  # invariance only
         (1, 0, 0, 1),  # mean diff on pair with variance
         (1, 1, 0, 1),  # mean diff on pair with variance and paraphrase inv
         (1, 1, 0, 0),  # invariance and variance
