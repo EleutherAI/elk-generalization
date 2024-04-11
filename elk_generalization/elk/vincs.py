@@ -20,7 +20,8 @@ class VincsReporter(Classifier):
         w_inv: float = 1.0,
         w_cov: float = 1.0,
         w_supervised: float = 0.0,
-        use_leace: bool = False,
+        leace_pseudolabels: bool = False,
+        leace_variants: bool = False,
     ):
         super().__init__()
 
@@ -39,16 +40,18 @@ class VincsReporter(Classifier):
         self.inv = None
         self.cov = None
         self.supervised_var = None
-        self.use_leace = use_leace
+        self.leace_pseudolabels = leace_pseudolabels
+        self.leace_variants = leace_variants
 
     def forward(
         self, x: Tensor, ens: Literal["none", "partial", "full"] = "none"
     ) -> Tensor:
         """Return the credence assigned to the hidden state `x`."""
+        n, v, _, d = x.shape
         if self.eraser is not None:
             x = self.eraser(x)
         platt_scaled_scores = (
-            self.linear(x).mul(self.scale).add(self.linear.bias).squeeze()
+            self.linear(x).mul(self.scale).add(self.linear.bias).reshape(n, v, 2)
         )
         if ens == "none":
             # return the raw scores. -> (n, v, 2)
@@ -69,22 +72,32 @@ class VincsReporter(Classifier):
         x: [n, v, 2, d]
         y: [n]
         """
-        if self.use_leace:
+        n, v, _, d = x.shape
+        if self.leace_pseudolabels or self.leace_variants:
+            if self.leace_pseudolabels and self.leace_variants:
+                indicators = (
+                    torch.eye(2 * v, device=x.device)
+                    .expand(n, -1, -1)
+                    .reshape(n, v, 2, 2 * v)
+                )
+            elif self.leace_pseudolabels:
+                indicators = torch.eye(2, device=x.device).expand(
+                    n, v, -1, -1
+                )  # [n, v, 2, 2]
+            elif self.leace_variants:
+                indicators = (
+                    torch.eye(v, device=x.device).expand(n, 2, -1, -1).transpose(1, 2)
+                )  # [n, v, 2, v]
+
             self.eraser = LeaceEraser.fit(
                 x=x.reshape(-1, x.shape[-1]),
-                z=torch.cat(
-                    [
-                        torch.zeros(x.shape[0] * x.shape[1], device=x.device),
-                        torch.ones(x.shape[0] * x.shape[1], device=x.device),
-                    ]
-                ),
+                z=indicators.reshape(-1, indicators.shape[-1]),
             )
             x = self.eraser(x)
 
         neg, pos = x.unbind(2)
 
         # One-hot indicators for each prompt template
-        n, v, d = neg.shape
         assert y.shape == (n,)
 
         centroids = x.mean(1)  # [n, 2, d]
@@ -95,18 +108,21 @@ class VincsReporter(Classifier):
             neg_centroids.mT.cov() + pos_centroids.mT.cov()
         ) / 2  # cov assumes [d, n]
 
-        # for invariance, first subtract out the mean over variants for each
-        # example (the centering step in covariance calculation)
-        neg_centered, pos_centered = (
-            neg - neg_centroids[:, None],
-            pos - pos_centroids[:, None],
-        )
-        # then do a batch mat multiplication over examples, summing over examples
-        # the result is then divided by (v - 1) (b/c bessel's correction) and averaged over examples
-        self.inv = (
-            torch.einsum("niv,nvj->ij", neg_centered.mT, neg_centered)
-            + torch.einsum("niv,nvj->ij", pos_centered.mT, pos_centered)
-        ) / (2 * n * (v - 1))
+        if self.w_inv == 0:
+            self.inv = torch.zeros(d, d, device=x.device, dtype=x.dtype)
+        else:
+            # for invariance, first subtract out the mean over variants for each
+            # example (the centering step in covariance calculation)
+            neg_centered, pos_centered = (
+                neg - neg_centroids[:, None],
+                pos - pos_centroids[:, None],
+            )
+            # then do a batch mat multiplication over examples, summing over examples
+            # the result is then divided by (v - 1) (b/c bessel's correction) and averaged
+            self.inv = (
+                torch.einsum("niv,nvj->ij", neg_centered.mT, neg_centered)
+                + torch.einsum("niv,nvj->ij", pos_centered.mT, pos_centered)
+            ) / (2 * n * (v - 1))
 
         xcov = (
             (neg_centroids - neg_centroids.mean(dim=0, keepdim=True)).mT

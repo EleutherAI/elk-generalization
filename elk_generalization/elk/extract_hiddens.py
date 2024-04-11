@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--templatization-method",
         default="all",
-        choices=["all"],
+        choices=["random", "first", "all"],
         help="Method to use for standardizing the templates",
     )
     parser.add_argument("--save-path", type=Path, help="Path to save the hidden states")

@@ -18,7 +18,7 @@ def roc_auc_nan(y_true, y_score):
     return roc_auc_score(y_true, y_score)
 
 
-def compute_metric_with_ensemble(labels, logodds, metric_fn, ensemble="full"):
+def compute_metric_with_ensemble(labels, logodds, metric_fn, ensemble):
     assert labels.ndim == 1, "expected [n,] labels"
     if ensemble == "full":
         assert logodds.ndim == 1, "expected [n,] logodds"
@@ -53,7 +53,8 @@ def get_result_dfs(
     weak_only: bool = False,
     split="test",
     vincs_hparams=(0.0, 1.0, 1.0, 0.0),
-    use_leace=False,
+    leace_pseudolabels=False,
+    leace_variants=False,
 ) -> tuple[pd.DataFrame, dict, dict, float, dict, dict]:
     """
     Returns
@@ -87,8 +88,10 @@ def get_result_dfs(
             results_dir = root_dir / quirky_model_last / to / split
             try:
                 vincs_modifier = "_" + "_".join(str(float(v)) for v in vincs_hparams)
-                if use_leace:
+                if leace_pseudolabels:
                     vincs_modifier += "_leace"
+                if leace_variants:
+                    vincs_modifier += "_erase_variants"
                 reporter_log_odds = (
                     torch.load(
                         results_dir / f"{fr}_{reporter}{vincs_modifier}_log_odds.pt",

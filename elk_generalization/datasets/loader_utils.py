@@ -101,6 +101,8 @@ def templatize_quirky_dataset(
             raise ValueError(f"Unknown method: {method}")
         template, choices = t["template"], t["choices"]
 
-        return {"statement": template.format(**targs), "choices": choices, **ex}
+        # note that this differs in behavior from the main branch of the elk-g repo,
+        # returning statements with a singleton variants dimension
+        return {"statement": [template.format(**targs)], "choices": [choices], **ex}
 
     return ds.map(map_fn, batched=False)

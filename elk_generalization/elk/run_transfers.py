@@ -42,6 +42,8 @@ weak_only = False
 model_templatization_method = "random"
 templatization_method = "all"
 full_finetuning = False
+leace_pseudolabels = True
+leace_variants = True
 
 get_ceiling_latent_knowledge = False
 
@@ -59,17 +61,19 @@ def unpack_abbrev(ds_name, abbrev):
 if __name__ == "__main__":
     if get_ceiling_latent_knowledge:
         exps = {"lr": ["B->BH"]}
-    elif weak_only:
-        exps = {k: ["B->B", "BE->B,BH"] for k in ["lr", "mean-diff", "lda"]}
     else:
         exps = {
             "vincs": ["AE->AE,AH,BH", "all->all,BH"],
         }
+
     hparams = [
-        (var, inv, cov, supervised)
+        (var * (inv + cov + supervised), inv, cov, supervised)
         for var in [0, 1]
         for inv in [0, 0.25, 1, 4]
-        for cov in [1]
+        for cov in [
+            0,
+            1,
+        ]
         for supervised in [0, 0.25, 1, 4]
     ] + [
         (0, 0, 0, 1),  # mean diff on pair
@@ -81,97 +85,98 @@ if __name__ == "__main__":
     ]
     print(f"Number of hyperparameter settings: {len(hparams)}")
 
-    for standardize_templates in [False, True]:
-        for use_leace in [False, True]:
-            experiments_dir = "../../experiments"
-            if get_ceiling_latent_knowledge:
-                experiments_dir = "../../experiments-ceiling"
-            os.makedirs(experiments_dir, exist_ok=True)
+    experiments_dir = "../../experiments"
+    if get_ceiling_latent_knowledge:
+        experiments_dir = "../../experiments-ceiling"
+    os.makedirs(experiments_dir, exist_ok=True)
 
-            for base_model_id in models:
-                for ds_name in ds_names:
-                    quirky_model_id, quirky_model_last = get_quirky_model_name(
-                        ds_name,
-                        base_model_id,
-                        model_templatization_method,
-                        standardize_templates,
-                        weak_only,
-                        full_finetuning,
-                        models_user,
-                    )
+    for standardize_templates in [True, False]:
+        for base_model_id in models:
+            for ds_name in ds_names:
+                quirky_model_id, quirky_model_last = get_quirky_model_name(
+                    ds_name,
+                    base_model_id,
+                    model_templatization_method,
+                    standardize_templates,
+                    weak_only,
+                    full_finetuning,
+                    models_user,
+                )
 
-                    def run_experiment(exp, reporter):
-                        train, tests = exp.split("->")
-                        tests = tests.split(",")
+                def run_experiment(exp, reporter):
+                    train, tests = exp.split("->")
+                    tests = tests.split(",")
 
-                        def run_extract(abbrev, split, max_examples):
-                            ds_hub_id, character, difficulty = unpack_abbrev(
-                                ds_name, abbrev
-                            )
-                            save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
-
-                            args = [
-                                sys.executable,
-                                os.path.join(
-                                    os.path.dirname(__file__), "extract_hiddens.py"
-                                ),
-                                "--model",
-                                quirky_model_id,
-                                "--dataset",
-                                ds_hub_id,
-                                "--character",
-                                character,
-                                "--difficulty",
-                                difficulty,
-                                "--templatization-method",
-                                templatization_method,
-                                "--save-path",
-                                save_dir,
-                                "--max-examples",
-                                str(max_examples),
-                                "--splits",
-                                split,
-                            ]
-                            if standardize_templates:
-                                args.append("--standardize-templates")
-                            print(f"Running {' '.join(args)}")
-                            subprocess.run(args, env=env)
-
-                        run_extract(train, "validation", 4000)
-                        for abbrev in tests:
-                            run_extract(abbrev, "test", 1000)
-
-                        base_args = (
-                            [
-                                sys.executable,
-                                os.path.join(os.path.dirname(__file__), "transfer.py"),
-                                "--train-dir",
-                                f"{experiments_dir}/{quirky_model_last}/{train}/validation",
-                                "--test-dirs",
-                            ]
-                            + [
-                                f"{experiments_dir}/{quirky_model_last}/{test}/test"
-                                for test in tests
-                            ]
-                            + [
-                                "--reporter",
-                                reporter,
-                                "--verbose",
-                            ]
+                    def run_extract(abbrev, split, max_examples):
+                        ds_hub_id, character, difficulty = unpack_abbrev(
+                            ds_name, abbrev
                         )
-                        if train == "all":
-                            base_args += ["--label-col", "alice_labels"]
-                        if use_leace:
-                            base_args.append("--use-leace")
-                        for hparam in hparams:
-                            args = base_args.copy()
-                            for k, v in zip(
-                                ["w-var", "w-inv", "w-cov", "w-supervised"], hparam
-                            ):
-                                args.extend([f"--{k}", str(v)])
-                            print(f"Running {' '.join(args)}")
-                            subprocess.run(args, env=env)
+                        save_dir = f"{experiments_dir}/{quirky_model_last}/{abbrev}"
 
-                    for reporter in exps:
-                        for exp in exps[reporter]:
-                            run_experiment(exp, reporter)
+                        args = [
+                            sys.executable,
+                            os.path.join(
+                                os.path.dirname(__file__), "extract_hiddens.py"
+                            ),
+                            "--model",
+                            quirky_model_id,
+                            "--dataset",
+                            ds_hub_id,
+                            "--character",
+                            character,
+                            "--difficulty",
+                            difficulty,
+                            "--templatization-method",
+                            templatization_method,
+                            "--save-path",
+                            save_dir,
+                            "--max-examples",
+                            str(max_examples),
+                            "--splits",
+                            split,
+                        ]
+                        if standardize_templates:
+                            args.append("--standardize-templates")
+                        print(f"Running {' '.join(args)}")
+                        subprocess.run(args, env=env)
+
+                    run_extract(train, "validation", 4000)
+                    for abbrev in tests:
+                        run_extract(abbrev, "test", 1000)
+
+                    base_args = (
+                        [
+                            sys.executable,
+                            os.path.join(os.path.dirname(__file__), "transfer.py"),
+                            "--train-dir",
+                            f"{experiments_dir}/{quirky_model_last}/{train}/validation",
+                            "--test-dirs",
+                        ]
+                        + [
+                            f"{experiments_dir}/{quirky_model_last}/{test}/test"
+                            for test in tests
+                        ]
+                        + [
+                            "--reporter",
+                            reporter,
+                            "--verbose",
+                        ]
+                    )
+                    if train == "all" or reporter == "random":
+                        base_args += ["--label-col", "alice_labels"]
+                    if leace_pseudolabels:
+                        base_args.append("--leace-pseudolabels")
+                    if leace_variants:
+                        base_args.append("--leace-variants")
+                    for hparam in hparams:
+                        args = base_args.copy()
+                        for k, v in zip(
+                            ["w-var", "w-inv", "w-cov", "w-supervised"], hparam
+                        ):
+                            args.extend([f"--{k}", str(v)])
+                        print(f"Running {' '.join(args)}")
+                        subprocess.run(args, env=env)
+
+                for reporter in exps:
+                    for exp in exps[reporter]:
+                        run_experiment(exp, reporter)
