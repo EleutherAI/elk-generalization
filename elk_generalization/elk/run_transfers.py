@@ -43,12 +43,12 @@ model_templatization_method = "random"
 templatization_method = "all"
 full_finetuning = False
 leace_pseudolabels = True
-leace_variants = True
+leace_variants = False
 
 get_ceiling_latent_knowledge = False
 
 # code to modify models and datasets based on rank
-ds_names = ds_names[args.rank :: 8]
+ds_names = ds_names[args.rank :: 4]
 models = ["mistralai/Mistral-7B-v0.1"]
 print(ds_names, models)
 
@@ -66,23 +66,23 @@ if __name__ == "__main__":
             "vincs": ["AE->AE,AH,BH", "all->all,BH"],
         }
 
-    hparams = [
-        (var * (inv + cov + supervised), inv, cov, supervised)
-        for var in [0, 1]
-        for inv in [0, 0.25, 1, 4]
-        for cov in [
-            0,
-            1,
-        ]
-        for supervised in [0, 0.25, 1, 4]
-    ] + [
-        (0, 0, 0, 1),  # mean diff on pair
-        (0, 1, 0, 1),  # mean diff on pair with paraphrase inv
-        (0, 1, 0, 0),  # invariance only
-        (1, 0, 0, 1),  # mean diff on pair with variance
-        (1, 1, 0, 1),  # mean diff on pair with variance and paraphrase inv
-        (1, 1, 0, 0),  # invariance and variance
-    ]
+    hparams = [(1, 0, 1, 0)]
+    #     (var * (inv + cov + supervised), inv, cov, supervised)
+    #     for var in [0, 1]
+    #     for inv in [0, 0.25, 1, 4]
+    #     for cov in [
+    #         0,
+    #         1,
+    #     ]
+    #     for supervised in [0, 0.25, 1, 4]
+    # ] + [
+    #     (0, 0, 0, 1),  # mean diff on pair
+    #     (0, 1, 0, 1),  # mean diff on pair with paraphrase inv
+    #     (0, 1, 0, 0),  # invariance only
+    #     (1, 0, 0, 1),  # mean diff on pair with variance
+    #     (1, 1, 0, 1),  # mean diff on pair with variance and paraphrase inv
+    #     (1, 1, 0, 0),  # invariance and variance
+    # ]
     print(f"Number of hyperparameter settings: {len(hparams)}")
 
     experiments_dir = "../../experiments"
@@ -90,7 +90,9 @@ if __name__ == "__main__":
         experiments_dir = "../../experiments-ceiling"
     os.makedirs(experiments_dir, exist_ok=True)
 
-    for standardize_templates in [True, False]:
+    for standardize_templates in [
+        True,
+    ]:
         for base_model_id in models:
             for ds_name in ds_names:
                 quirky_model_id, quirky_model_last = get_quirky_model_name(

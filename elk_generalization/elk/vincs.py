@@ -22,6 +22,7 @@ class VincsReporter(Classifier):
         w_supervised: float = 0.0,
         leace_pseudolabels: bool = False,
         leace_variants: bool = False,
+        use_centroids: bool = True,
     ):
         super().__init__()
 
@@ -42,6 +43,7 @@ class VincsReporter(Classifier):
         self.supervised_var = None
         self.leace_pseudolabels = leace_pseudolabels
         self.leace_variants = leace_variants
+        self.use_centroids = use_centroids
 
     def forward(
         self, x: Tensor, ens: Literal["none", "partial", "full"] = "none"
@@ -102,11 +104,12 @@ class VincsReporter(Classifier):
 
         centroids = x.mean(1)  # [n, 2, d]
         neg_centroids, pos_centroids = centroids.unbind(1)  # [n, d]
+        neg_data = neg_centroids if self.use_centroids else neg.reshape(-1, d)
+        pos_data = pos_centroids if self.use_centroids else pos.reshape(-1, d)
         # we compute the covariance of pos and neg separately to avoid
         # picking up on the pseudolabel dimension
-        self.var = (
-            neg_centroids.mT.cov() + pos_centroids.mT.cov()
-        ) / 2  # cov assumes [d, n]
+
+        self.var = (neg_data.mT.cov() + neg_data.mT.cov()) / 2  # cov assumes [d, n]
 
         if self.w_inv == 0:
             self.inv = torch.zeros(d, d, device=x.device, dtype=x.dtype)
@@ -125,8 +128,8 @@ class VincsReporter(Classifier):
             ) / (2 * n * (v - 1))
 
         xcov = (
-            (neg_centroids - neg_centroids.mean(dim=0, keepdim=True)).mT
-            @ (pos_centroids - pos_centroids.mean(dim=0, keepdim=True))
+            (neg_data - neg_data.mean(dim=0, keepdim=True)).mT
+            @ (pos_data - pos_data.mean(dim=0, keepdim=True))
             / (n - 1)
         )
         self.cov = 0.5 * (xcov + xcov.mT)
